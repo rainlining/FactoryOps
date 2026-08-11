@@ -78,7 +78,6 @@ def validate_result(
                 ),
             )
         )
-
     validator = Draft202012Validator(
         _schema_for(version),
         format_checker=FormatChecker(),
@@ -133,3 +132,30 @@ def validate_result(
                 ),
             )
         )
+
+
+def canonicalize_result(payload: Mapping[str, object]) -> bytes:
+    validate_result(payload)
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def classify_result_relation(
+    first: Mapping[str, object],
+    second: Mapping[str, object],
+) -> str:
+    first_canonical = canonicalize_result(first)
+    second_canonical = canonicalize_result(second)
+
+    if first["result_id"] == second["result_id"]:
+        if first_canonical == second_canonical:
+            return "duplicate-identical"
+        return "duplicate-conflicting"
+    if first["inspection_id"] == second["inspection_id"]:
+        return "same-inspection-new-result"
+    return "unrelated-result"

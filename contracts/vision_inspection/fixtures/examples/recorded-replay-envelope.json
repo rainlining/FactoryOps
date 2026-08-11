@@ -1,0 +1,36 @@
+{
+  "input_mode": "recorded",
+  "vision_result": {
+    "contract_version": "1.0",
+    "inspection_id": "inspection-00731",
+    "result_id": "result-1001",
+    "input": {
+      "image_uri": "artifact://images/sheet-metal-00731",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "origin": {
+      "kind": "vision-service",
+      "producer_name": "factoryops-vision",
+      "producer_version": "0.1.0"
+    },
+    "model": {
+      "name": "sheet-metal-anomaly-detector",
+      "version": "vision-v1"
+    },
+    "observation": {
+      "is_anomaly": true,
+      "anomaly_score": 0.93,
+      "decision_threshold": 0.6
+    },
+    "artifacts": {
+      "defect_mask": {
+        "uri": "artifact://masks/00731",
+        "media_type": "image/png"
+      }
+    },
+    "timing": {
+      "produced_at": "2026-08-10T10:00:00Z",
+      "inference_ms": 37
+    }
+  }
+}

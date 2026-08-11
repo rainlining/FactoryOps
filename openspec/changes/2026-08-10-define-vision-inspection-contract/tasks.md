@@ -377,7 +377,7 @@ Stage 2 尚未获实施批准；此处不勾选任何 Stage 2 任务。
 - Consumes: `validate_result(...)`。
 - Produces: 与真实结果同形的 fake fixture；不改写 Vision Result 的 recorded envelope 示例。
 
-- [ ] **Step 4.1：添加 Fake shape 与 recorded immutability tests**
+- [x] **Step 4.1：添加 Fake shape 与 recorded immutability tests**
 
 测试必须断言：
 
@@ -391,9 +391,9 @@ self.assertEqual(recorded_envelope["input_mode"], "recorded")
 self.assertNotEqual(recorded_envelope["vision_result"]["origin"]["kind"], "recorded")
 ```
 
-- [ ] **Step 4.2：运行测试确认 fixture 尚不存在导致失败**
+- [x] **Step 4.2：运行测试确认 fixture 尚不存在导致失败**
 
-- [ ] **Step 4.3：添加最小 fixtures 并确认测试通过**
+- [x] **Step 4.3：添加最小 fixtures 并确认测试通过**
 
 Recorded envelope 只用于说明外层关系，不纳入 Vision Result Schema。
 
@@ -407,7 +407,7 @@ Recorded envelope 只用于说明外层关系，不纳入 Vision Result Schema�
 - Consumes: 两份通过 `validate_result` 的 payload。
 - Produces: `canonicalize_result(...)` 与 `classify_result_relation(...)`。
 
-- [ ] **Step 5.1：先添加四种关系的失败测试**
+- [x] **Step 5.1：先添加四种关系的失败测试**
 
 覆盖：
 
@@ -418,7 +418,7 @@ Recorded envelope 只用于说明外层关系，不纳入 Vision Result Schema�
 inspection_id 与 result_id 都不同     → unrelated-result
 ```
 
-- [ ] **Step 5.2：实现规范化**
+- [x] **Step 5.2：实现规范化**
 
 ```python
 json.dumps(
@@ -430,7 +430,7 @@ json.dumps(
 ).encode("utf-8")
 ```
 
-- [ ] **Step 5.3：实现固定优先级的关系分类**
+- [x] **Step 5.3：实现固定优先级的关系分类**
 
 1. 两份输入先分别通过 `validate_result`；
 2. `result_id` 相同且 canonical bytes 相同 → `duplicate-identical`；
@@ -438,7 +438,7 @@ json.dumps(
 4. `inspection_id` 相同 → `same-inspection-new-result`；
 5. 否则 → `unrelated-result`。
 
-- [ ] **Step 5.4：运行全套测试并提交 Stage 2**
+- [x] **Step 5.4：运行全套测试并提交 Stage 2**
 
 ```powershell
 python -m unittest contracts.vision_inspection.tests.test_validator -v

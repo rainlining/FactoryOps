@@ -6,6 +6,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from contracts.vision_inspection.validator import (
     VisionContractValidationError,
+    canonicalize_result,
+    classify_result_relation,
     validate_result,
 )
 
@@ -116,6 +118,83 @@ class VisionInspectionSemanticValidationTest(unittest.TestCase):
         self.assert_schema_issue_path(
             "unknown-field.json",
             "$.recommended_action",
+        )
+
+
+class VisionInspectionFixtureBoundaryTest(unittest.TestCase):
+    def test_fake_result_uses_the_same_contract_with_fake_provenance(self) -> None:
+        payload = load_fixture("valid", "fake-result.json")
+
+        validate_result(payload)
+
+        origin = payload["origin"]
+        assert isinstance(origin, dict)
+        self.assertEqual(origin["kind"], "fake")
+        self.assertIn("model", payload)
+
+    def test_recorded_mode_wraps_without_rewriting_the_original_result(self) -> None:
+        envelope = load_fixture("examples", "recorded-replay-envelope.json")
+        payload = envelope["vision_result"]
+        assert isinstance(payload, dict)
+
+        validate_result(payload)
+
+        origin = payload["origin"]
+        assert isinstance(origin, dict)
+        self.assertEqual(envelope["input_mode"], "recorded")
+        self.assertEqual(origin["kind"], "vision-service")
+
+
+class VisionInspectionResultRelationTest(unittest.TestCase):
+    def test_canonical_form_ignores_json_object_key_order(self) -> None:
+        payload = load_fixture("valid", "vision-service-result.json")
+        reordered = dict(reversed(list(payload.items())))
+
+        self.assertEqual(
+            canonicalize_result(payload),
+            canonicalize_result(reordered),
+        )
+
+    def test_same_result_id_and_same_content_is_identical_duplicate(self) -> None:
+        first = load_fixture("valid", "vision-service-result.json")
+        second = dict(reversed(list(first.items())))
+
+        self.assertEqual(
+            classify_result_relation(first, second),
+            "duplicate-identical",
+        )
+
+    def test_same_result_id_with_different_content_is_conflicting_duplicate(self) -> None:
+        first = load_fixture("valid", "vision-service-result.json")
+        second = json.loads(json.dumps(first))
+        observation = second["observation"]
+        assert isinstance(observation, dict)
+        observation["anomaly_score"] = 0.8
+
+        self.assertEqual(
+            classify_result_relation(first, second),
+            "duplicate-conflicting",
+        )
+
+    def test_same_inspection_with_new_result_id_is_new_result(self) -> None:
+        first = load_fixture("valid", "vision-service-result.json")
+        second = json.loads(json.dumps(first))
+        second["result_id"] = "result-1002"
+
+        self.assertEqual(
+            classify_result_relation(first, second),
+            "same-inspection-new-result",
+        )
+
+    def test_different_inspection_and_result_ids_are_unrelated(self) -> None:
+        first = load_fixture("valid", "vision-service-result.json")
+        second = json.loads(json.dumps(first))
+        second["inspection_id"] = "inspection-00732"
+        second["result_id"] = "result-2001"
+
+        self.assertEqual(
+            classify_result_relation(first, second),
+            "unrelated-result",
         )
 
 

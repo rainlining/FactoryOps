@@ -3,14 +3,69 @@
 ## 验证元数据
 
 - `status`: `partially-verified`
-- `verified_at`: `2026-08-10 Asia/Shanghai（仅设计工件）`
+- `verified_at`: `2026-08-11 Asia/Shanghai（Stage 2）`
 - `verified_by`: `Codex`
 
 ## 当前阶段
 
-本 Change 已通过 design review 和 Learning Preflight，正在执行 Stage 1。Executable Schema、vision-service fixture、semantic validator 和负向 fixtures 已实现；Stage 2 的 Fake 正向 fixture、recorded 外层示例和结果关系分类尚未开始。
+本 Change 已通过 design review、Learning Preflight 和 Stage 1 review。Stage 2 的 Fake 正向 fixture、recorded 外层示例、canonical form 和结果关系分类已经实现，当前等待 Stage 2 review。
 
 2026-08-11：项目所有者已完成并接受 Stage 1 diff review。当前停在 Stage 1/Stage 2 边界；只有项目所有者批准 Stage 2 后，生命周期状态才进入 `applying-stage-2`。
+
+## Stage 2 TDD 证据
+
+### RED 1：Fake 与 Recorded fixtures 尚不存在
+
+```text
+Command: python -m unittest contracts.vision_inspection.tests.test_validator.VisionInspectionFixtureBoundaryTest -v
+Actual: 2 个 FileNotFoundError，分别指向 fake-result.json 与 recorded-replay-envelope.json
+Result: EXPECTED FAIL
+```
+
+### GREEN 1：Fake 与 Recorded 边界
+
+```text
+Tests: 9
+Result: PASS
+```
+
+### RED 2：结果关系 API 尚不存在
+
+```text
+Command: python -m unittest contracts.vision_inspection.tests.test_validator -v
+Actual: ImportError: cannot import name 'canonicalize_result'
+Result: EXPECTED FAIL
+```
+
+### GREEN 中发现并修复的回归
+
+```text
+Symptom: 5 个 Stage 1 负向测试未抛出异常
+Root cause: 新函数被插入 validate_result 中间，使后半段校验成为 return 后的不可达代码
+Fix: 只把两个新函数移动到 validate_result 完整结束之后
+Regression evidence: Stage 1 的 7 项测试重新全部通过
+```
+
+这个过程说明全套回归测试保护的是旧不变量；只运行 5 个新增关系测试无法发现该问题。
+
+### Stage 2 完整验证
+
+```text
+Command: python -m unittest discover -s contracts/vision_inspection/tests -v
+Actual: Ran 14 tests
+Result: PASS
+
+Command: python -m compileall -q contracts
+Result: PASS
+
+Command: 解析 schema.json 与 fixtures 下全部 JSON 文件
+Result: PASS
+
+Command: git diff --check
+Result: PASS
+
+dataset changes: 0
+```
 
 ## Stage 1 TDD 证据
 
