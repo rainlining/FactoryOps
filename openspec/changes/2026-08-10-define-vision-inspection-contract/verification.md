@@ -12,6 +12,31 @@
 
 2026-08-11：项目所有者已完成并接受 Stage 2 diff review。当前停在 Stage 2/Stage 3 边界；只有项目所有者批准 Stage 3 后，生命周期状态才进入 `applying-stage-3`。
 
+2026-08-11：项目所有者批准 Stage 3。Codex 已完成中文 Contract README，并加入 threshold equality 基础测试；当前停在所有者亲自修改任务之前。
+
+## Stage 3 基线验证
+
+```text
+Command: python -m unittest contracts.vision_inspection.tests.test_validator.VisionInspectionSemanticValidationTest.test_score_equal_to_threshold_is_anomaly -v
+Actual: Ran 1 test
+Result: PASS
+
+Command: python -m unittest discover -s contracts/vision_inspection/tests -v
+Actual: Ran 15 tests
+Result: PASS
+
+Command: python -m compileall -q contracts
+Result: PASS
+
+Command: python -m json.tool contracts/vision_inspection/v1.0/schema.json
+Result: PASS
+
+Command: git diff --check
+Result: PASS
+
+dataset changes: 0
+```
+
 2026-08-11：项目所有者已完成并接受 Stage 1 diff review。当前停在 Stage 1/Stage 2 边界；只有项目所有者批准 Stage 2 后，生命周期状态才进入 `applying-stage-2`。
 
 ## Stage 2 TDD 证据

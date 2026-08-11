@@ -72,6 +72,16 @@ class VisionInspectionSemanticValidationTest(unittest.TestCase):
             "$.observation.is_anomaly",
         )
 
+    def test_score_equal_to_threshold_is_anomaly(self) -> None:
+        payload = load_fixture("valid", "vision-service-result.json")
+        observation = payload["observation"]
+        assert isinstance(observation, dict)
+        observation["anomaly_score"] = 0.6
+        observation["decision_threshold"] = 0.6
+        observation["is_anomaly"] = True
+
+        validate_result(payload)
+
     def test_rejects_minor_version_that_consumer_did_not_list(self) -> None:
         payload = load_fixture("invalid", "unsupported-version.json")
 

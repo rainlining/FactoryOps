@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-10-define-vision-inspection-contract`
-- `status`: `applying-stage-2`
+- `status`: `applying-stage-3`
 - `stage_1_review`: `accepted`
 - `stage_2_review`: `accepted`
 - `next_transition`: `applying-stage-3（需项目所有者批准 Stage 3 后）`

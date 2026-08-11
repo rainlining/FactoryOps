@@ -476,7 +476,7 @@ Stage 3 尚未获实施批准；此处不勾选任何 Stage 3 任务。
 - Consumes: Schema、validator、fixtures 和 tests。
 - Produces: Producer/Consumer 使用说明与真实验证证据。
 
-- [ ] **Step 6.1：编写 README**
+- [x] **Step 6.1：编写 README**
 
 README 必须包含：
 
@@ -488,7 +488,7 @@ README 必须包含：
 - 四种 ResultRelation；
 - 测试命令。
 
-- [ ] **Step 6.2：运行完整验证并记录实际输出**
+- [x] **Step 6.2：运行完整验证并记录实际输出**
 
 ```powershell
 python -m unittest discover -s contracts/vision_inspection/tests -v
@@ -543,7 +543,7 @@ python -m unittest contracts.vision_inspection.tests.test_validator -v
 - Consumes: threshold equality test 和 conflict fixture。
 - Produces: 故障证据、恢复证据、Code Walkthrough 和 Learning Gate 结果。
 
-- [ ] **Step 8.1：确认正常实现的边界测试通过**
+- [x] **Step 8.1：确认正常实现的边界测试通过**
 
 使用 `anomaly_score == decision_threshold` 且 `is_anomaly == true` 的 fixture，确认 `>=` 行为通过。
 
