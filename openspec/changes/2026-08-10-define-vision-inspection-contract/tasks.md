@@ -448,6 +448,20 @@ git commit -m "add vision contract fixtures and replay semantics"
 
 Codex 推送后停止，讲解 Fake/recorded 边界与关系分类调用链，等待项目所有者批准 Stage 3。
 
+- [x] **Step 5.5：项目所有者完成 Stage 2 diff review**
+
+Review 证据（2026-08-11）：
+
+- 能说明相同 `result_id`、不同内容必须判为 `duplicate-conflicting`；
+- 能说明 JSON object 字段顺序不同不构成内容冲突；
+- 能说明非法 Contract 必须先拒绝，不能参与结果关系分类；
+- 能区分新增关系测试与既有负向回归测试的职责；
+- 能解释 recorded replay 不得改写原始 `origin.kind`；
+- 能说明 fake 结果保留 model provenance 对可解释性和复现的意义；
+- 项目所有者已明确接受 Stage 2。
+
+Stage 3 尚未获实施批准；此处不勾选任何 Stage 3 任务。
+
 ---
 
 ## Stage 3：文档、所有者修改与故障实验

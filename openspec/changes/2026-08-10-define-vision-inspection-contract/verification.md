@@ -10,6 +10,8 @@
 
 本 Change 已通过 design review、Learning Preflight 和 Stage 1 review。Stage 2 的 Fake 正向 fixture、recorded 外层示例、canonical form 和结果关系分类已经实现，当前等待 Stage 2 review。
 
+2026-08-11：项目所有者已完成并接受 Stage 2 diff review。当前停在 Stage 2/Stage 3 边界；只有项目所有者批准 Stage 3 后，生命周期状态才进入 `applying-stage-3`。
+
 2026-08-11：项目所有者已完成并接受 Stage 1 diff review。当前停在 Stage 1/Stage 2 边界；只有项目所有者批准 Stage 2 后，生命周期状态才进入 `applying-stage-2`。
 
 ## Stage 2 TDD 证据
@@ -215,6 +217,7 @@ runtime_service_scaffold_in_scope=False
 - 技术验收：`pending`
 - Code Walkthrough：`pending`
 - Stage 1 diff review：`accepted（2026-08-11）`
+- Stage 2 diff review：`accepted（2026-08-11）`
 - 所有者修改任务：`pending`
 - Failure/Debug Exercise：`pending`
 - Learning Gate：`pending`
