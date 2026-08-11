@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: factoryops-business-service
+  datasource:
+    hikari:
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+  flyway:
+    enabled: true
