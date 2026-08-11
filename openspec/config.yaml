@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  FactoryOps 是面向工业视觉质检异常的 Multi-Agent 生产处置系统。
+  项目同时服务于工程实践与个人学习。
+  顶层规格为 FactoryOps_Project_Spec_v0.2_MultiAgent_Architecture.md。
+  面向项目所有者的 OpenSpec 工件、讲解和验收材料使用中文。
+  项目远端为 https://github.com/rainlining/FactoryOps.git，由 Codex 负责经过验证的提交与推送。
+
+rules:
+  proposal:
+    - change_id 和目录名使用 YYYY-MM-DD-修改内容；修改内容使用小写英文 kebab-case。
+    - 声明 learning_level: deep、standard 或 delegated。
+    - 一个 Change 只解决一个核心业务能力或核心工程问题。
+    - 列出范围、非目标、依赖和对顶层规格的影响。
+    - 重复模式降级时引用首次 deep Change，并说明相同与新增语义。
+  specs:
+    - 使用可验证的 MUST/SHALL 要求和 Given/When/Then 场景。
+    - 明确成功、拒绝、失败和恢复行为。
+  design:
+    - 说明边界、数据流、关键不变量、失败路径、测试策略和取舍。
+    - Deep Change 在 design review 和学习预讲解完成前不得编码。
+  tasks:
+    - 按可独立验证的小阶段拆分。
+    - 每个阶段写明验证方式和 review 停顿点。
+  apply:
+    - 遵守根目录 AGENTS.md。
+    - 不得实现当前 Change 范围外的能力。
+    - Deep Change 必须保留所有者修改任务与 failure/debug exercise。
