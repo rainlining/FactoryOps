@@ -2,8 +2,8 @@
 
 ## 验证元数据
 
-- `status`: `partially-verified`
-- `verified_at`: `2026-08-11 Asia/Shanghai（Stage 2）`
+- `status`: `accepted`
+- `verified_at`: `2026-08-11 Asia/Shanghai（最终验证与 Learning Gate）`
 - `verified_by`: `Codex`
 
 ## 当前阶段
@@ -239,11 +239,11 @@ runtime_service_scaffold_in_scope=False
 
 ## 验收状态
 
-- 技术验收：`pending`
-- Code Walkthrough：`pending`
+- 技术验收：`passed（17 tests）`
+- Code Walkthrough：`passed（2026-08-11）`
 - Stage 1 diff review：`accepted（2026-08-11）`
 - Stage 2 diff review：`accepted（2026-08-11）`
 - 所有者修改任务：`passed（2026-08-11，17 tests PASS）`
 - Failure/Debug Exercise：`passed（2026-08-11，> 注入失败，>= 恢复后 17 tests PASS）`
-- Learning Gate：`pending`
-- Change 最终状态：`learning-preflight-passed`
+- Learning Gate：`passed（2026-08-11）`
+- Change 最终状态：`archived（2026-08-11）`

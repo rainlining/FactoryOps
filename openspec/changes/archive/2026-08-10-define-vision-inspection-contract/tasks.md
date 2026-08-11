@@ -569,11 +569,11 @@ Expected: threshold equality test FAIL；项目所有者说明失败如何证明
 
 恢复 `>=`，运行完整测试，确认全部通过。
 
-- [ ] **Step 8.5：Codex 提供真实 Code Walkthrough**
+- [x] **Step 8.5：Codex 提供真实 Code Walkthrough**
 
 必须沿真实文件说明：Schema 入口、版本分派、Schema errors 转换、跨字段判断、Fake/recorded fixtures、关系分类和失败测试。
 
-- [ ] **Step 8.6：完成 Learning Gate 与最终提交**
+- [x] **Step 8.6：完成 Learning Gate 与最终提交**
 
 只有项目所有者完成修改、故障实验、Walkthrough review 和最终 diff review 后，才能将 Change 标记为 `completed` 并归档。
 

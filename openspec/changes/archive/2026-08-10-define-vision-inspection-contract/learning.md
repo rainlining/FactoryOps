@@ -6,7 +6,7 @@
 - `pattern_stage`: `first-deep`
 - `first_deep_reference`: `N/A`
 - `preflight_status`: `passed`
-- `gate_status`: `in-progress`
+- `gate_status`: `passed`
 
 ## 这次真正需要学会什么
 
@@ -114,13 +114,13 @@ is_anomaly = false
 
 ## Learning Gate
 
-- [ ] 能解释 Contract 边界和字段分类。
-- [ ] 能解释 version compatibility 规则。
-- [ ] 能沿真实校验调用链定位代码。
-- [ ] 能解释至少一个 validation failure path。
+- [x] 能解释 Contract 边界和字段分类。
+- [x] 能解释 version compatibility 规则。
+- [x] 能沿真实校验调用链定位代码。
+- [x] 能解释至少一个 validation failure path。
 - [x] 已完成非法 score fixture 修改任务。
 - [x] 已完成 boolean/threshold 冲突实验。
-- [ ] 已 review 最终 diff 并明确接受。
+- [x] 已 review 最终 diff 并明确接受。
 
 当前只完成学习预讲解材料，尚未通过 Learning Gate，也未获编码批准。
 
@@ -135,7 +135,7 @@ is_anomaly = false
 - 观察 threshold equality test 从 PASS 变为 ERROR，并沿堆栈定位到 `validate_result`；
 - 恢复 `>=` 后运行完整测试，17 项全部通过。
 
-尚未完成：最终真实 Code Walkthrough review、剩余解释确认和最终 diff 接受。
+2026-08-11，项目所有者已完成真实 Code Walkthrough review，能够定位版本检查、Schema 校验、跨字段校验、关系分类和 score 越界失败路径，并明确接受最终 diff。Learning Gate 通过。
 
 ## Learning Preflight 通过记录
 
