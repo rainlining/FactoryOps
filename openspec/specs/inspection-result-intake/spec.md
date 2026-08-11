@@ -1,6 +1,6 @@
 # Inspection Result Intake 规格
 
-## 新增需求
+## 需求
 
 ### Requirement: Java API 接收 Contract 1.0
 

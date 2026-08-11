@@ -12,7 +12,7 @@
 - [x] 填写 verification 与 review-handoff，状态改为 review-handoff-ready。
 
 ## 独立 Review/Learning 会话
-- [ ] 核对 branch/worktree/base/head。
-- [ ] 完成真实 Code Walkthrough。
-- [ ] 完成 owner 修改与 failure exercise。
-- [ ] Learning Gate 后归档并合并 main。
+- [x] 核对 branch/worktree/base/head。
+- [x] 完成真实 Code Walkthrough。
+- [x] 完成 owner 修改与 failure exercise。
+- [x] Learning Gate 后归档并合并 main。

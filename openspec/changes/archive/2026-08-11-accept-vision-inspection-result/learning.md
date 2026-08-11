@@ -4,7 +4,7 @@
 - `learning_level`: `deep`
 - `pattern_stage`: `first-deep`
 - `first_deep_reference`: `N/A`
-- `gate_status`: `not-started`
+- `gate_status`: `passed`
 
 ## Review/Learning 目标
 - 沿 Controller→Validator→Domain→Application→Transaction→Repository→MySQL 定位代码。
@@ -20,9 +20,11 @@
 临时把 DuplicateKeyException 恢复查询放回失败事务，或临时移除 DB unique constraint，运行并发测试，观察 rollback-only/重复行/未处理异常；恢复后全套测试必须通过。
 
 ## Learning Gate
-- [ ] 能解释真实设计和事务取舍。
-- [ ] 能沿成功调用链定位核心代码。
-- [ ] 能定位并解释并发失败路径。
-- [ ] 已完成 owner 修改。
-- [ ] 已完成故障实验并恢复。
-- [ ] 已 review 最终 diff。
+- [x] 能解释真实设计和事务取舍。
+- [x] 能沿成功调用链定位核心代码。
+- [x] 能定位并解释并发失败路径。
+- [x] 已完成 owner 修改。
+- [x] 已完成故障实验并恢复。
+- [x] 已 review 最终 diff。
+
+2026-08-12：项目所有者确认已在独立 Review/Learning 会话完成真实调用链 Walkthrough、owner 修改、failure/debug exercise、最终 diff 接受和 Learning Gate。

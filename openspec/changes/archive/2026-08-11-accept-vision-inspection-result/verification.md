@@ -15,6 +15,8 @@
 - `python -m unittest discover -s contracts/vision_inspection/tests -v`：既有 Contract 17 tests 全部通过。
 - `python -m json.tool contracts/vision_inspection/v1.0/schema.json`：Schema JSON 可解析。
 - `git diff --check`：通过。
+- `mvn verify`（2026-08-12，包含 owner 修改）：通过，13 个不同测试，0 failures，0 errors。
+- `python -m unittest discover -s contracts/vision_inspection/tests -v`（2026-08-12）：17 tests，全部通过。
 
 ## 环境与证据
 
@@ -26,8 +28,8 @@
 
 ## 验收状态
 - 技术验收：`passed`
-- Code Walkthrough：`pending`
-- Owner 修改：`pending`
-- Failure exercise：`pending`
-- Learning Gate：`pending`
-- Change：`review-handoff-ready`
+- Code Walkthrough：`passed（项目所有者 2026-08-12 确认）`
+- Owner 修改：`passed（成功响应增加 disposition；commit 6680e7b；全套验证通过）`
+- Failure exercise：`passed（项目所有者 2026-08-12 确认已完成并恢复）`
+- Learning Gate：`passed（项目所有者 2026-08-12 明确接受最终 diff）`
+- Change：`archived（2026-08-12）`

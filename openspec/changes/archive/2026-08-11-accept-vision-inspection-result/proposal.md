@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-11-accept-vision-inspection-result`
-- `status`: `review-handoff-ready`
+- `status`: `archived`
 - `learning_level`: `deep`
 - `first_deep_reference`: `N/A`
 - `depends_on`: `[2026-08-10-define-vision-inspection-contract, 2026-08-11-streamline-change-implementation-learning-handoff]`
