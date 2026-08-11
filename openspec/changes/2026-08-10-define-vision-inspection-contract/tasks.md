@@ -349,6 +349,19 @@ git diff --cached --name-only
 
 Codex 提交并推送后停止，提供 Stage 1 Code Walkthrough，等待项目所有者批准 Stage 2。
 
+- [x] **Step 3.5：项目所有者完成 Stage 1 diff review**
+
+Review 证据（2026-08-11）：
+
+- 能沿 `validate_result(...)` 说明版本检查、Schema 校验和跨字段语义校验的顺序；
+- 能判断嵌套未知字段的精确路径 `$.observation.explanation`；
+- 能解释 `anomaly_score`、`decision_threshold`、`is_anomaly` 的关系和等于阈值的边界；
+- 能说明负向 fixture test 如何阻止 `recommended_action` 被意外放行；
+- 能说明只做 Schema 校验会让跨字段矛盾进入下游；
+- 项目所有者已明确接受 Stage 1。
+
+Stage 2 尚未获实施批准；此处不勾选任何 Stage 2 任务。
+
 ---
 
 ## Stage 2：Fixtures、版本与结果关系

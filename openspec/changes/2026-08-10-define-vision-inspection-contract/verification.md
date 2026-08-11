@@ -10,6 +10,8 @@
 
 本 Change 已通过 design review 和 Learning Preflight，正在执行 Stage 1。Executable Schema、vision-service fixture、semantic validator 和负向 fixtures 已实现；Stage 2 的 Fake 正向 fixture、recorded 外层示例和结果关系分类尚未开始。
 
+2026-08-11：项目所有者已完成并接受 Stage 1 diff review。当前停在 Stage 1/Stage 2 边界；只有项目所有者批准 Stage 2 后，生命周期状态才进入 `applying-stage-2`。
+
 ## Stage 1 TDD 证据
 
 ### RED 1：Schema 尚不存在
@@ -157,6 +159,7 @@ runtime_service_scaffold_in_scope=False
 
 - 技术验收：`pending`
 - Code Walkthrough：`pending`
+- Stage 1 diff review：`accepted（2026-08-11）`
 - 所有者修改任务：`pending`
 - Failure/Debug Exercise：`pending`
 - Learning Gate：`pending`

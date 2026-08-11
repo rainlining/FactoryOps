@@ -4,6 +4,8 @@
 
 - `change_id`: `2026-08-10-define-vision-inspection-contract`
 - `status`: `applying-stage-1`
+- `stage_1_review`: `accepted`
+- `next_transition`: `applying-stage-2（需项目所有者批准 Stage 2 后）`
 - `learning_level`: `deep`
 - `first_deep_reference`: `N/A`
 - `depends_on`: `[2026-08-10-establish-openspec-learning-governance]`
