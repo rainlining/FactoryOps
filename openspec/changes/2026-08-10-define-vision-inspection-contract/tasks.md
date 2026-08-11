@@ -122,7 +122,7 @@ preflight_status: passed
 - Consumes: Vision Inspection Contract 1.0 字段与边界。
 - Produces: Draft 2020-12 Schema；合法 vision-service fixture。
 
-- [ ] **Step 1.1：添加会因 Schema 尚不存在而失败的测试**
+- [x] **Step 1.1：添加会因 Schema 尚不存在而失败的测试**
 
 在 `test_validator.py` 中先添加：
 
@@ -145,7 +145,7 @@ class VisionInspectionSchemaTest(unittest.TestCase):
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(payload)
 ```
 
-- [ ] **Step 1.2：运行测试并确认失败原因正确**
+- [x] **Step 1.2：运行测试并确认失败原因正确**
 
 Run:
 
@@ -155,7 +155,7 @@ python -m unittest contracts.vision_inspection.tests.test_validator -v
 
 Expected: FAIL，错误是 `schema.json` 或 fixture 不存在，而不是测试导入或语法错误。
 
-- [ ] **Step 1.3：添加最小合法 fixture**
+- [x] **Step 1.3：添加最小合法 fixture**
 
 Fixture 必须包含以下实际结构，不使用省略字段：
 
@@ -195,7 +195,7 @@ Fixture 必须包含以下实际结构，不使用省略字段：
 }
 ```
 
-- [ ] **Step 1.4：实现严格 Schema**
+- [x] **Step 1.4：实现严格 Schema**
 
 Schema 必须：
 
@@ -209,7 +209,7 @@ Schema 必须：
 - SHA-256 使用 `^[0-9a-f]{64}$`；
 - Artifact 内容只允许 URI 与媒体类型，不允许二进制字段。
 
-- [ ] **Step 1.5：运行测试确认通过**
+- [x] **Step 1.5：运行测试确认通过**
 
 Run:
 
@@ -232,7 +232,7 @@ Expected: 1 test PASS。
 - Consumes: `v1.0/schema.json`。
 - Produces: `validate_result(...)`、`ValidationIssue`、`VisionContractValidationError`。
 
-- [ ] **Step 2.1：先添加跨字段与精确版本失败测试**
+- [x] **Step 2.1：先添加跨字段与精确版本失败测试**
 
 测试必须断言：
 
@@ -248,7 +248,7 @@ self.assertEqual(caught.exception.issues[0].code, "unsupported_contract_version"
 self.assertEqual(caught.exception.issues[0].path, "$.contract_version")
 ```
 
-- [ ] **Step 2.2：运行测试确认因 API 尚不存在而失败**
+- [x] **Step 2.2：运行测试确认因 API 尚不存在而失败**
 
 Run:
 
@@ -258,7 +258,7 @@ python -m unittest contracts.vision_inspection.tests.test_validator -v
 
 Expected: FAIL，错误指向无法导入 validator API。
 
-- [ ] **Step 2.3：实现最小 public API**
+- [x] **Step 2.3：实现最小 public API**
 
 `validator.py` 必须定义：
 
@@ -285,7 +285,7 @@ class VisionContractValidationError(ValueError):
 5. 使用 `math.isfinite` 检查 score 与 threshold；
 6. 检查 `is_anomaly == (anomaly_score >= decision_threshold)`。
 
-- [ ] **Step 2.4：运行测试确认通过**
+- [x] **Step 2.4：运行测试确认通过**
 
 Run:
 
@@ -307,7 +307,7 @@ Expected: vision fixture、冲突判断和 unsupported 1.1 tests 全部 PASS。
 - Consumes: `validate_result(...)`。
 - Produces: Fake model、未知字段和答案泄漏的回归保护。
 
-- [ ] **Step 3.1：添加三个负向 fixture tests**
+- [x] **Step 3.1：添加三个负向 fixture tests**
 
 测试分别断言以下字段路径被拒绝：
 
@@ -317,7 +317,7 @@ ground-truth-leak.json         → $.ground_truth
 unknown-field.json             → $.recommended_action
 ```
 
-- [ ] **Step 3.2：运行测试并确认至少一个测试先失败**
+- [x] **Step 3.2：运行测试并确认至少一个测试先失败**
 
 如果当前严格 Schema 已让全部新测试直接通过，临时复制合法 payload 并加入一个尚未被 Schema 拒绝的嵌套未知字段 `observation.explanation`，确认测试先失败，再将相应 object 的 `additionalProperties: false` 补齐。
 
@@ -327,11 +327,11 @@ Run:
 python -m unittest contracts.vision_inspection.tests.test_validator -v
 ```
 
-- [ ] **Step 3.3：完成最小 Schema 修正并运行全套测试**
+- [x] **Step 3.3：完成最小 Schema 修正并运行全套测试**
 
 Expected: 全部测试 PASS，且错误 issue 含稳定 JSON path。
 
-- [ ] **Step 3.4：提交 Stage 1 并停下来 review**
+- [x] **Step 3.4：提交 Stage 1 并停下来 review**
 
 只暂存 Stage 1 文件与本 Change 记录，明确排除 `dataset/`：
 

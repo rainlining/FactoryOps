@@ -8,7 +8,82 @@
 
 ## 当前阶段
 
-本 Change 已通过 design review 和 Learning Preflight，尚未开始 Stage 1 apply，因此没有 Schema、fixture 或测试结果。不得把设计示例视为已验证实现。
+本 Change 已通过 design review 和 Learning Preflight，正在执行 Stage 1。Executable Schema、vision-service fixture、semantic validator 和负向 fixtures 已实现；Stage 2 的 Fake 正向 fixture、recorded 外层示例和结果关系分类尚未开始。
+
+## Stage 1 TDD 证据
+
+### RED 1：Schema 尚不存在
+
+```text
+Command: python -m unittest contracts.vision_inspection.tests.test_validator -v
+Actual: FileNotFoundError 指向 contracts/vision_inspection/v1.0/schema.json
+Result: EXPECTED FAIL
+```
+
+### GREEN 1：合法 Vision Result
+
+```text
+Tests: 1
+Result: PASS
+```
+
+### RED 2：Semantic Validator 尚不存在
+
+```text
+Actual: ModuleNotFoundError: contracts.vision_inspection.validator
+Result: EXPECTED FAIL
+```
+
+### GREEN 2：精确版本与判断一致性
+
+```text
+Tests: 3
+Result: PASS
+```
+
+### RED 3：Schema 错误路径过于宽泛
+
+```text
+Expected: $.model / $.ground_truth / $.recommended_action
+Actual: $
+Failures: 3
+Result: EXPECTED FAIL
+```
+
+### GREEN 3：严格字段与可定位错误
+
+```text
+Tests: 6
+Result: PASS
+```
+
+### TDD 修正：有限数值
+
+```text
+RED: NaN 被错误分类为 inconsistent_anomaly_decision
+GREEN: NaN 被分类为 non_finite_number，path=$.observation.anomaly_score
+Final tests: 7
+Result: PASS
+```
+
+### Stage 1 完整验证
+
+```text
+Command: python -m unittest discover -s contracts/vision_inspection/tests -v
+Actual: Ran 7 tests
+Result: PASS
+
+Command: python -m compileall -q contracts
+Result: PASS
+
+Command: python -m json.tool contracts/vision_inspection/v1.0/schema.json
+Result: PASS
+
+Command: git diff --check
+Result: PASS
+
+dataset changes: 0
+```
 
 ## 设计阶段范围检查
 

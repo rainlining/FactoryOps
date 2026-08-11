@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://factoryops.dev/contracts/vision-inspection/1.0/schema.json",
+  "title": "FactoryOps Vision Inspection Result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "inspection_id",
+    "result_id",
+    "input",
+    "origin",
+    "model",
+    "observation",
+    "timing"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "inspection_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_uri", "sha256"],
+      "properties": {
+        "image_uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "producer_name", "producer_version"],
+      "properties": {
+        "kind": {
+          "enum": ["vision-service", "fake"]
+        },
+        "producer_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producer_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_anomaly", "anomaly_score", "decision_threshold"],
+      "properties": {
+        "is_anomaly": {
+          "type": "boolean"
+        },
+        "anomaly_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "decision_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defect_mask": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uri", "media_type"],
+          "properties": {
+            "uri": {
+              "type": "string",
+              "format": "uri"
+            },
+            "media_type": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+            }
+          }
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["produced_at", "inference_ms"],
+      "properties": {
+        "produced_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "inference_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

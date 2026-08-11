@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-10-define-vision-inspection-contract`
-- `status`: `learning-preflight-passed`
+- `status`: `applying-stage-1`
 - `learning_level`: `deep`
 - `first_deep_reference`: `N/A`
 - `depends_on`: `[2026-08-10-establish-openspec-learning-governance]`

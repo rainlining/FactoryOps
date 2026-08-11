@@ -1,0 +1,1 @@
+"""FactoryOps cross-service contracts."""
