@@ -9,13 +9,13 @@
 - [x] 修改 proposal、design、tasks、learning、verification 模板。
 - [x] 新增 `review-handoff.md` 模板。
 - [x] 执行结构、术语、范围和 diff 验证。
-- [ ] 填写真实 verification 与 review handoff。
-- [ ] 提交并推送 feature branch，状态更新为 `review-handoff-ready`。
+- [x] 填写真实 verification 与 review handoff。
+- [x] 形成 technically-verified implementation commit。
 
 ## 独立 Review/Learning 会话
 
-- [ ] 核对 handoff 中的 branch、worktree、base/head commit。
-- [ ] review 生命周期和两个会话的职责边界。
-- [ ] 确认 Deep Learning Gate 与合并门禁没有被取消。
-- [ ] review 最终 diff 并明确接受。
-- [ ] 完成后合并 active spec、归档 Change 并合并 `main`。
+- [x] 核对 handoff 中的 branch、worktree、base/head commit。
+- [x] 项目所有者已提出并接受生命周期和两个会话的职责边界。
+- [x] Codex 验证 Deep Learning Gate 与合并门禁没有被取消。
+- [x] 项目所有者明确授权本纯治理 Change 由 Codex 自行完成，无需等待 review。
+- [x] 合并 active spec 并归档 Change；合并 `main` 在归档 commit 验证后执行。

@@ -3,13 +3,13 @@
 ## 元数据
 
 - `change_id`: `2026-08-11-streamline-change-implementation-learning-handoff`
-- `status`: `technically-verified`
+- `status`: `archived`
 - `learning_level`: `standard`
 - `first_deep_reference`: `N/A`
 - `depends_on`: `[2026-08-10-establish-openspec-learning-governance]`
 - `spec_refs`: `[development-governance]`
 - `implementation_session`: `current Codex task`
-- `review_session`: `pending`
+- `review_session`: `waived-by-owner-for-pure-governance-change`
 
 ## 为什么要做
 

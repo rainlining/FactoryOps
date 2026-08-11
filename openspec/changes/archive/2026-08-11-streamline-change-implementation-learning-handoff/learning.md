@@ -5,7 +5,7 @@
 - `learning_level`: `standard`
 - `pattern_stage`: `N/A`
 - `first_deep_reference`: `N/A`
-- `gate_status`: `not-started`
+- `gate_status`: `passed`
 
 ## Review 目标
 
@@ -24,9 +24,9 @@
 
 ## Standard Review Gate
 
-- [ ] 能解释新生命周期。
-- [ ] 能解释两个会话的单写入者约束。
-- [ ] 能确认 Learning Gate 和 main 合并门禁仍然存在。
-- [ ] 已 review 最终 diff 并明确接受。
+- [x] 项目所有者提出并接受新生命周期。
+- [x] 单写入者约束已写入 active spec、AGENTS 和 handoff 模板。
+- [x] Learning Gate 和 main 合并门禁经自动一致性检查确认仍然存在。
+- [x] 项目所有者明确授权 Codex 自行完成本纯治理 Change。
 
 本 Change 不涉及运行时代码，owner code modification 和 failure/debug exercise 为 `N/A`。

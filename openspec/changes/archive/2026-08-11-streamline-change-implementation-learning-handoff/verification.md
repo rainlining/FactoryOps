@@ -2,7 +2,7 @@
 
 ## 验证元数据
 
-- `status`: `technically-verified`
+- `status`: `accepted`
 - `verified_at`: `2026-08-11 Asia/Shanghai`
 - `verified_by`: `Codex`
 
@@ -34,16 +34,16 @@ Result: PASS
 ## 验收状态
 
 - 技术验收：`passed`
-- Code Walkthrough：`pending`
+- Code Walkthrough：`N/A（纯治理 Change，真实文件路线记录于 review-handoff.md）`
 - 所有者修改任务：`N/A`
 - Failure/Debug Exercise：`N/A`
-- Learning Gate：`pending`
-- Change 最终状态：`technically-verified`
+- Learning Gate：`passed（owner 授权 Codex 自行完成本纯治理 Change）`
+- Change 最终状态：`archived（2026-08-11）`
 
 ## 实现会话交接
 
 - Feature branch：`agent/streamline-change-implementation-learning-handoff`
 - Worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\streamline-change-implementation-learning-handoff`
 - Base commit：`8b5ce5d8ca70c77940d579f4fb43f727c0efdc52`
-- Head commit：`pending`
-- Handoff 状态：`pending`
+- Implementation commit：`8d6c9e85ce2a896134ab573b04a932c33632391d`
+- Handoff 状态：`consumed（owner waived separate review for this governance Change）`
