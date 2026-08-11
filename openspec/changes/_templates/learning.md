@@ -61,3 +61,9 @@ Standard 或 Delegated Change 可以标注不适用项及原因。
 - [ ] 已 review 最终 diff 并明确接受。
 
 `gate_status`: `not-started | in-progress | passed | N/A`
+
+## 会话边界
+
+- 实现会话：只准备本文件中的真实路线、任务和实验，不代替项目所有者完成。
+- Review/Learning 会话：读取 `review-handoff.md` 后执行 Walkthrough、所有者修改、故障实验和最终 diff review。
+- 两个会话不得同时修改同一 Change 或 worktree。

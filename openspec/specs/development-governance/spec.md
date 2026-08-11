@@ -56,9 +56,9 @@
 - **Then** 不得自动降级
 - **And** 必须根据新增风险重新标记，必要时恢复为 `deep`
 
-### Requirement: Deep Change 必须分阶段实施
+### Requirement: Deep Change 采用连续实现与内部小任务
 
-Deep Change 必须在编码前完成设计讲解，并按可独立验证的小阶段 apply。
+Deep Change 必须在编码前完成设计讲解。项目所有者一次性接受范围与设计后，Codex 可以在同一实现会话按可独立验证的内部小任务连续实施，无需逐任务等待项目所有者批准。
 
 #### Scenario: Deep Change 准备编码
 
@@ -67,11 +67,48 @@ Deep Change 必须在编码前完成设计讲解，并按可独立验证的小�
 - **Then** Codex 必须先解释设计、数据流、状态或事务、不变量、失败路径和测试策略
 - **And** 项目所有者必须先 review 设计
 
+#### Scenario: 已接受设计后连续实现
+
+- **Given** 项目所有者已经接受 Deep Change 的范围与设计
+- **When** Codex 开始 apply
+- **Then** Codex 可以连续完成 `tasks.md` 中全部内部实现任务
+- **And** 不得把每个内部任务变成项目所有者 review 停顿点
+- **And** 每个关键语义或事务边界仍必须具有清晰 commit 和验证证据
+
 #### Scenario: Apply 将产生过大核心 diff
 
 - **Given** 一个 apply 同时改变多个关键不变量或多个系统 Contract
 - **When** Codex 规划实现任务
-- **Then** 必须拆分 apply 阶段或拆分 Change
+- **Then** 必须拆分内部任务、commit 或拆分 Change
+
+### Requirement: 实现与学习通过 Review Handoff 分离
+
+实现会话必须负责把 Change 连续推进到技术验证完成，并生成可由独立 Review/Learning 会话接手的 `review-handoff.md`。Deep Change 在 Learning Gate 通过前不得归档或合并 `main`。
+
+#### Scenario: 实现会话完成技术验证
+
+- **Given** Change 范围内实现和测试已经完成
+- **When** 实现会话准备结束
+- **Then** 必须把状态更新为 `technically-verified` 和 `review-handoff-ready`
+- **And** 必须推送 feature branch
+- **And** `review-handoff.md` 必须记录 branch、worktree、base/head commit、真实调用链、验证证据、所有者修改任务和故障实验
+- **And** 实现会话不得代替项目所有者完成 Deep Learning Gate
+
+#### Scenario: 独立 Review/Learning 会话接手
+
+- **Given** 一个状态为 `review-handoff-ready` 的 Change
+- **When** Review/Learning 会话开始
+- **Then** 必须先核对 branch、worktree 和 head commit
+- **And** 必须沿 handoff 中的真实文件完成 Walkthrough、所有者修改、故障实验和最终 diff review
+- **And** 实现会话与 Review 会话不得同时修改同一 Change 或 worktree
+
+#### Scenario: 技术通过但学习门禁未通过
+
+- **Given** Deep Change 已 technically verified 并生成 handoff
+- **But** Learning Gate 尚未通过
+- **When** 判断是否可以集成
+- **Then** Change 必须保持 `awaiting-learning-gate`
+- **And** 不得归档或合并 `main`
 
 ### Requirement: Deep Change 必须包含真实学习活动
 

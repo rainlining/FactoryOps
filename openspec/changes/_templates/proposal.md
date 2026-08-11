@@ -10,6 +10,8 @@
 - `first_deep_reference`: `N/A | <change-id>`
 - `depends_on`: `[]`
 - `spec_refs`: `[]`
+- `implementation_session`: `<task/thread reference>`
+- `review_session`: `pending | <task/thread reference>`
 
 ## 为什么要做
 

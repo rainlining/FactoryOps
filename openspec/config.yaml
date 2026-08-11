@@ -21,9 +21,12 @@ rules:
     - 说明边界、数据流、关键不变量、失败路径、测试策略和取舍。
     - Deep Change 在 design review 和学习预讲解完成前不得编码。
   tasks:
-    - 按可独立验证的小阶段拆分。
-    - 每个阶段写明验证方式和 review 停顿点。
+    - 按 Codex 内部可独立验证的小任务拆分。
+    - 每个任务写明验证方式和 commit 边界，不要求项目所有者逐任务批准。
   apply:
     - 遵守根目录 AGENTS.md。
     - 不得实现当前 Change 范围外的能力。
     - Deep Change 必须保留所有者修改任务与 failure/debug exercise。
+    - 项目所有者一次性接受设计后，Codex 连续实现到 technically-verified。
+    - 实现会话必须生成 review-handoff.md 并停在 review-handoff-ready。
+    - Deep Change 未通过独立 Review/Learning 会话的 Learning Gate 前不得合并 main。

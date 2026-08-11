@@ -8,7 +8,7 @@
 - 项目发布到 `https://github.com/rainlining/FactoryOps.git`。
 - 项目所有者已长期授权 Codex 负责本项目的 Git 初始化、分支、提交、推送及必要的 Pull Request 操作；项目所有者不需要手动完成 GitHub 提交。
 - 每次提交前，Codex 必须确认 Change 范围、检查 diff，并运行与风险相称的验证；不得提交无关修改或虚构验证结果。
-- 一个已接受的 OpenSpec Change 原则上形成边界清晰的提交；若 Deep Change 需要多个阶段提交，提交边界必须与 `tasks.md` 的 apply 阶段对应。
+- 一个已接受的 OpenSpec Change 可以包含多个边界清晰的内部提交；提交边界必须与 `tasks.md` 的可独立验证任务对应，但不要求项目所有者逐提交或逐阶段批准。
 - `dataset/` 保存评测图片数据；除非当前 Evaluation 或 Vision Change 明确纳入范围，不得修改或混入无关提交。
 
 ## 2. 事实来源与范围
@@ -28,7 +28,7 @@
 - 一个 Change 原则上只解决一个核心业务能力或一个核心工程问题。
 - 禁止创建 `implement-backend`、`implement-multi-agent-system`、`implement-reliability` 等过大 Change。
 - 工程初始化、配置和脚手架只能在当前能力确实需要时引入。
-- 如果一个核心 diff 无法在一次专注 review 中解释清楚，必须拆分 Change 或拆分 apply 阶段。
+- 如果一个核心 diff 无法在一次专注 review 中解释清楚，必须拆分 Change 或拆分内部实现任务与 commit。
 - 同一次核心 apply 不应同时发明数据库模型、API Contract、Kafka Contract 和 Agent Contract。
 
 ## 4. 学习等级
@@ -56,9 +56,10 @@
 - `proposal.md`：动机、范围、非目标、依赖、学习等级。
 - `specs/<capability>/spec.md`：可验证的新增或变更需求及场景。
 - `design.md`：边界、数据流、状态、失败路径、测试策略和设计取舍。
-- `tasks.md`：按可独立验证阶段拆分的任务清单。
+- `tasks.md`：按 Codex 内部可独立验证任务拆分的实施清单。
 - `learning.md`：学习目标、Code Walkthrough 要求、亲自修改任务、故障实验和 Learning Gate。
 - `verification.md`：实际执行的验证命令、结果证据、限制和验收状态。
+- `review-handoff.md`：实现会话向独立 Review/Learning 会话移交的分支、commit、调用链、验证、学习任务和恢复信息。
 
 纯治理或文档 Change 可以没有运行时代码测试，但仍必须验证结构、链接、范围和工件一致性。
 
@@ -70,9 +71,9 @@ Change 按以下状态推进：
 proposed
 → design-reviewed
 → learning-preflight-passed
-→ applying-stage-1 ... applying-stage-N
+→ applying
 → technically-verified
-→ walkthrough-completed
+→ review-handoff-ready
 → awaiting-learning-gate
 → completed
 → archived
@@ -81,14 +82,14 @@ proposed
 - `proposed`：proposal 和规格增量可供 review。
 - `design-reviewed`：项目所有者接受设计与边界。
 - `learning-preflight-passed`：Deep Change 的编码前讲解已经完成并被理解。
-- `applying-stage-N`：只实施当前已同意的小阶段。
+- `applying`：Codex 按 `tasks.md` 连续实施整个 Change；内部小任务不形成项目所有者停顿点。
 - `technically-verified`：测试和验证通过，但不表示 Deep Change 已完成。
-- `walkthrough-completed`：已基于真实文件和符号讲解调用链。
+- `review-handoff-ready`：实现会话已推送分支并生成可由另一会话独立接手的 `review-handoff.md`。
 - `awaiting-learning-gate`：等待项目所有者完成亲自修改与故障实验。
 - `completed`：技术验收和对应学习门禁均通过。
 - `archived`：规格增量已经合并到 `openspec/specs/`，Change 历史被归档。
 
-未经项目所有者 review，不得从设计阶段直接进入实现。Deep Change 未通过 Learning Gate 时不得标记为 `completed`。
+未经项目所有者一次性接受 Change 的范围与设计，不得进入实现。接受后，实现会话可以连续完成全部编码与技术验证，无需逐阶段等待。Deep Change 未通过 Learning Gate 时不得标记为 `completed`，不得归档或合并到 `main`。
 
 ## 7. Deep Change 编码前讲解
 
@@ -106,14 +107,22 @@ Deep Change 在编写实现代码前，Codex 必须用中文解释：
 
 讲解的目标是建立实现所需的心智模型，不要求背诵框架或 API。
 
-## 8. 分阶段 Apply 与 diff 控制
+## 8. 连续 Apply 与 diff 控制
 
-- Deep Change 必须分阶段 apply。
-- 每个阶段只能有一个可独立验证的目标。
-- 每个阶段应优先从失败测试或可执行规格开始。
-- 改变关键不变量、事务边界或并发语义后，应先停下来 review，再继续下一阶段。
+- Deep Change 必须在 `tasks.md` 中拆成内部可独立验证的小任务，但项目所有者批准设计后，Codex 可以在同一实现会话连续完成这些任务。
+- 每个内部任务只能有一个可独立验证的目标，并应优先从失败测试或可执行规格开始。
+- 改变关键不变量、事务边界或并发语义时，Codex 必须记录独立 commit 和验证证据；只有发现设计歧义、范围扩张或需要新授权时才暂停询问。
+- 禁止把“取消逐阶段停顿”解释为允许一次生成不可 review 的巨大核心 diff。
 - Deep Change 单次核心 apply 建议控制在约 200～400 行生产代码；这是拆分提醒，不是机械验收指标。
 - 生成文件、迁移和测试夹具可以单独评估，但仍必须可解释、可验证、可回退。
+
+### 8.1 双会话职责
+
+- 实现会话负责：OpenSpec 工件、实现、测试、内部 commits、`verification.md`、推送 feature branch 和 `review-handoff.md`。
+- 实现会话在 `review-handoff-ready` 停止，不执行逐题教学、所有者修改或故障实验。
+- Review/Learning 会话负责：读取 handoff、真实 Code Walkthrough、项目所有者修改、failure/debug exercise、最终 diff review 和 Learning Gate。
+- 两个会话不得同时修改同一 Change 或 worktree；handoff 必须标明唯一分支、worktree、base commit 和 head commit。
+- Deep Change 在 Review/Learning 会话通过前保留在 feature branch，不得合并 `main`。
 
 ## 9. FactoryOps 不可破坏的架构边界
 
@@ -152,7 +161,7 @@ Deep Change 在编写实现代码前，Codex 必须用中文解释：
 
 ## 12. 真实 Code Walkthrough
 
-Change 技术验证完成后，Codex 必须基于真实文件、类、函数和测试提供中文 Code Walkthrough，至少覆盖：
+Change 技术验证完成后，实现会话必须在 `review-handoff.md` 提供真实 Walkthrough 路线；Review/Learning 会话再基于真实文件、类、函数和测试完成中文 Code Walkthrough，至少覆盖：
 
 - 入口；
 - 应用层编排；
@@ -204,7 +213,18 @@ Learning Gate 的核心不是背诵框架、注解或 API，而是项目所有�
 
 Deep Change 在上述条件满足前必须保持 `awaiting-learning-gate`，不得标记为最终完成。
 
-## 16. Change 完成报告
+## 16. Review Handoff 与 Change 完成报告
+
+实现会话结束前，`review-handoff.md` 必须包含：
+
+- Change ID、学习等级、feature branch、worktree、base commit 和 head commit；
+- 已实现范围、非目标和关键设计决定；
+- 修改文件、真实入口、核心符号、成功与失败调用链；
+- 实际验证命令与结果、已知限制和剩余风险；
+- Deep Change 的所有者修改任务与 failure/debug exercise；
+- Review 会话的恢复命令、建议阅读顺序和禁止并发修改说明。
+
+Review/Learning 会话完成后的最终报告必须包含：
 
 每个 Change 的最终报告必须包含：
 

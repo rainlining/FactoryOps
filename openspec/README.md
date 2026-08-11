@@ -26,6 +26,7 @@ openspec/
 ├── design.md
 ├── tasks.md
 ├── learning.md
+├── review-handoff.md
 └── verification.md
 ```
 
@@ -50,9 +51,9 @@ YYYY-MM-DD-修改内容
 proposed
 → design-reviewed
 → learning-preflight-passed
-→ applying-stage-1 ... applying-stage-N
+→ applying
 → technically-verified
-→ walkthrough-completed
+→ review-handoff-ready
 → awaiting-learning-gate
 → completed
 → archived
@@ -66,12 +67,14 @@ Standard 或 Delegated Change 可以把不适用的学习阶段标记为 `N/A`�
 2. 先完成 `proposal.md` 和规格增量。
 3. 完成 `design.md`；Deep Change 同时完成编码前学习说明。
 4. 项目所有者 review 范围和设计。
-5. 将 `tasks.md` 拆成可独立验证的 apply 阶段。
-6. 分阶段实现，每阶段记录验证证据。
-7. 完成真实 Code Walkthrough。
-8. Deep Change 进入 `awaiting-learning-gate`，等待所有者修改任务与故障实验。
+5. 将 `tasks.md` 拆成 Codex 内部可独立验证的小任务；它们不是 owner review 停顿点。
+6. 实现会话连续完成整个 Change、内部 commits 和技术验证。
+7. 生成 `review-handoff.md`、推送 feature branch，并停在 `review-handoff-ready`。
+8. 独立 Review/Learning 会话完成真实 Code Walkthrough、所有者修改和故障实验。
 9. 技术验收和学习门禁都通过后，标记 `completed`。
-10. 将规格增量合并到 `openspec/specs/`，随后归档 Change。
+10. 将规格增量合并到 `openspec/specs/`，随后归档并合并 `main`。
+
+实现会话与 Review/Learning 会话不得同时修改同一 Change 或 worktree。Deep Change 在 Learning Gate 通过前不得归档或合并 `main`。
 
 ## 特殊长期规则
 

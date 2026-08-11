@@ -44,3 +44,11 @@ Evidence:
 - Failure/Debug Exercise：`pending | passed | N/A`
 - Learning Gate：`pending | passed | N/A`
 - Change 最终状态：`proposed | technically-verified | awaiting-learning-gate | completed`
+
+## 实现会话交接
+
+- Feature branch：
+- Worktree：
+- Base commit：
+- Head commit：
+- Handoff 状态：`pending | review-handoff-ready | consumed`
