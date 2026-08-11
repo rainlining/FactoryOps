@@ -2,14 +2,14 @@
 
 ## 连续实现
 - [x] 完成 scope/design 与技术选型。
-- [ ] 建立 Maven/Spring Boot baseline 和共享 Schema resource。
-- [ ] TDD 实现 Contract validation、Domain 和 canonicalizer。
-- [ ] TDD 实现 HTTP API 与稳定错误响应。
-- [ ] TDD 实现 Flyway Schema 和 JdbcTemplate Repository。
-- [ ] TDD 实现 TransactionTemplate 重复/冲突恢复。
-- [ ] 完成真实 MySQL 并发集成测试。
-- [ ] 运行完整验证、提交内部 commits、推送 branch。
-- [ ] 填写 verification 与 review-handoff，状态改为 review-handoff-ready。
+- [x] 建立 Maven/Spring Boot baseline 和共享 Schema resource。
+- [x] TDD 实现 Contract validation、Domain 和 canonicalizer。
+- [x] TDD 实现 HTTP API 与稳定错误响应。
+- [x] TDD 实现 Flyway Schema 和 JdbcTemplate Repository。
+- [x] TDD 实现 TransactionTemplate 重复/冲突恢复。
+- [x] 完成真实 MySQL 并发集成测试。
+- [x] 运行完整验证、提交内部 commits、推送 branch。
+- [x] 填写 verification 与 review-handoff，状态改为 review-handoff-ready。
 
 ## 独立 Review/Learning 会话
 - [ ] 核对 branch/worktree/base/head。
