@@ -53,9 +53,9 @@ class InspectionResultHttpIT {
     void creates_then_replays_identical_result_without_extra_row() throws Exception {
         var body = fixture("valid/fake-result.json");
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.replayed").value(false));
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.replayed").value(false)).andExpect(jsonPath("$.disposition").value("CREATED"));
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true)).andExpect(jsonPath("$.disposition").value("REPLAYED"));
         assertThat(jdbc.queryForObject("select count(*) from vision_inspection_results", Integer.class)).isEqualTo(1);
     }
 

@@ -1,4 +1,5 @@
 package com.factoryops.business.inspection.api;
 
-public record InspectionResultResponse(boolean replayed) {
+public record InspectionResultResponse(boolean replayed, String disposition) {
+
 }

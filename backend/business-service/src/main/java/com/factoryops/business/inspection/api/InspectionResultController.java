@@ -24,6 +24,6 @@ public class InspectionResultController {
         var disposition = intake.accept(payload);
         var status = disposition == IntakeDisposition.CREATED ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status)
-                .body(new InspectionResultResponse(disposition == IntakeDisposition.REPLAYED));
+                .body(new InspectionResultResponse(disposition == IntakeDisposition.REPLAYED, disposition.name()));
     }
 }
