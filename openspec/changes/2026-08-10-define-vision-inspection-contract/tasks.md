@@ -507,7 +507,7 @@ python -m json.tool contracts/vision_inspection/v1.0/schema.json > $null
 - Consumes: `validate_result(...)` 和现有 fixture loader。
 - Produces: `1.01` 被拒绝、`1.0` 被接受的边界测试。
 
-- [ ] **Step 7.1：项目所有者创建非法 fixture**
+- [x] **Step 7.1：项目所有者创建非法 fixture**
 
 从合法 fake fixture 复制，保持其他字段不变，仅将：
 
@@ -515,7 +515,7 @@ python -m json.tool contracts/vision_inspection/v1.0/schema.json > $null
 "anomaly_score": 1.01
 ```
 
-- [ ] **Step 7.2：项目所有者添加测试**
+- [x] **Step 7.2：项目所有者添加测试**
 
 测试必须检查异常 issue 的 path 为：
 
@@ -525,7 +525,7 @@ $.observation.anomaly_score
 
 并增加或保留 `anomaly_score = 1.0` 的合法边界断言。
 
-- [ ] **Step 7.3：项目所有者运行测试并解释结果**
+- [x] **Step 7.3：项目所有者运行测试并解释结果**
 
 ```powershell
 python -m unittest contracts.vision_inspection.tests.test_validator -v
@@ -547,7 +547,7 @@ python -m unittest contracts.vision_inspection.tests.test_validator -v
 
 使用 `anomaly_score == decision_threshold` 且 `is_anomaly == true` 的 fixture，确认 `>=` 行为通过。
 
-- [ ] **Step 8.2：项目所有者临时注入故障**
+- [x] **Step 8.2：项目所有者临时注入故障**
 
 把 validator 中的：
 
@@ -561,11 +561,11 @@ score >= threshold
 score > threshold
 ```
 
-- [ ] **Step 8.3：运行测试并定位失败**
+- [x] **Step 8.3：运行测试并定位失败**
 
 Expected: threshold equality test FAIL；项目所有者说明失败如何证明 Java/Python 等 Consumer 不能各自发明边界规则。
 
-- [ ] **Step 8.4：恢复正确实现并重新验证**
+- [x] **Step 8.4：恢复正确实现并重新验证**
 
 恢复 `>=`，运行完整测试，确认全部通过。
 

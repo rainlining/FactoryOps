@@ -1,0 +1,29 @@
+{
+    "contract_version": "1.0",
+    "inspection_id": "inspection-fake-0001",
+    "result_id": "result-fake-0001",
+    "input": {
+      "image_uri": "artifact://images/fake-sheet-metal-0001",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "origin": {
+      "kind": "fake",
+      "producer_name": "factoryops-contract-fixture",
+      "producer_version": "1.0.0"
+    },
+    "model": {
+      "name": "fake-sheet-metal-anomaly-detector",
+      "version": "fake-v1"
+    },
+    "observation": {
+      "is_anomaly": false,
+      "anomaly_score": 1.01,
+      "decision_threshold": 0.6
+    },
+    "artifacts": {},
+    "timing": {
+      "produced_at": "2026-08-10T10:05:00Z",
+      "inference_ms": 0
+    }
+  }
+  

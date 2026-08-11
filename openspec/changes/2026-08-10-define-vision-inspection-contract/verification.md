@@ -243,7 +243,7 @@ runtime_service_scaffold_in_scope=False
 - Code Walkthrough：`pending`
 - Stage 1 diff review：`accepted（2026-08-11）`
 - Stage 2 diff review：`accepted（2026-08-11）`
-- 所有者修改任务：`pending`
-- Failure/Debug Exercise：`pending`
+- 所有者修改任务：`passed（2026-08-11，17 tests PASS）`
+- Failure/Debug Exercise：`passed（2026-08-11，> 注入失败，>= 恢复后 17 tests PASS）`
 - Learning Gate：`pending`
 - Change 最终状态：`learning-preflight-passed`

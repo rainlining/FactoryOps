@@ -130,6 +130,21 @@ class VisionInspectionSemanticValidationTest(unittest.TestCase):
             "$.recommended_action",
         )
 
+    def test_rejects_anomaly_score_above_one(self) -> None:
+        self.assert_schema_issue_path(
+            "anomaly-score-out-of-range.json",
+            "$.observation.anomaly_score",
+        )
+
+    def test_accepts_anomaly_score_at_upper_boundary(self) -> None:
+        payload = load_fixture("valid", "fake-result.json")
+        observation = payload["observation"]
+        assert isinstance(observation, dict)
+        observation["anomaly_score"] = 1.0
+        observation["is_anomaly"] = True
+
+        validate_result(payload)
+
 
 class VisionInspectionFixtureBoundaryTest(unittest.TestCase):
     def test_fake_result_uses_the_same_contract_with_fake_provenance(self) -> None:

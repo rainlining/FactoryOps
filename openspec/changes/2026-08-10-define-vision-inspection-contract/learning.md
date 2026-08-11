@@ -6,7 +6,7 @@
 - `pattern_stage`: `first-deep`
 - `first_deep_reference`: `N/A`
 - `preflight_status`: `passed`
-- `gate_status`: `not-started`
+- `gate_status`: `in-progress`
 
 ## 这次真正需要学会什么
 
@@ -118,11 +118,24 @@ is_anomaly = false
 - [ ] 能解释 version compatibility 规则。
 - [ ] 能沿真实校验调用链定位代码。
 - [ ] 能解释至少一个 validation failure path。
-- [ ] 已完成非法 score fixture 修改任务。
-- [ ] 已完成 boolean/threshold 冲突实验。
+- [x] 已完成非法 score fixture 修改任务。
+- [x] 已完成 boolean/threshold 冲突实验。
 - [ ] 已 review 最终 diff 并明确接受。
 
 当前只完成学习预讲解材料，尚未通过 Learning Gate，也未获编码批准。
+
+## 所有者实践记录
+
+2026-08-11，项目所有者亲自完成：
+
+- 创建 `anomaly-score-out-of-range.json`，并保持除 `anomaly_score = 1.01` 外与合法 fake fixture 一致；
+- 添加 `1.01` 被拒绝且 path 为 `$.observation.anomaly_score` 的负向测试；
+- 添加合法上边界 `1.0` 的正向测试，并使 `is_anomaly = true` 保持跨字段一致；
+- 临时把 `score >= threshold` 改为 `score > threshold`；
+- 观察 threshold equality test 从 PASS 变为 ERROR，并沿堆栈定位到 `validate_result`；
+- 恢复 `>=` 后运行完整测试，17 项全部通过。
+
+尚未完成：最终真实 Code Walkthrough review、剩余解释确认和最终 diff 接受。
 
 ## Learning Preflight 通过记录
 
