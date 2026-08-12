@@ -7,9 +7,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
+import java.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class InspectionTransactionConfiguration {
+    @Bean Clock factoryOpsClock(@Value("${factoryops.clock.fixed:}") String fixed) { return fixed.isBlank()?Clock.systemUTC():Clock.fixed(java.time.Instant.parse(fixed),java.time.ZoneOffset.UTC); }
     @Bean
     VisionInspectionContractValidator visionInspectionContractValidator(JsonMapper mapper) {
         return new VisionInspectionContractValidator(mapper);
