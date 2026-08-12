@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class InspectionExceptionHandler {
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<ApiErrorResponse> invalidInspectionInput(IllegalArgumentException error) { return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse("invalid_inspection_input","$.input",error.getMessage())); }
     @ExceptionHandler(InspectionIdentityConflictException.class)
     ResponseEntity<ApiErrorResponse> inspectionConflict(InspectionIdentityConflictException error) { return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse("inspection_identity_conflict","$.inspection_id",error.getMessage())); }
     @ExceptionHandler(InspectionNotFoundException.class)

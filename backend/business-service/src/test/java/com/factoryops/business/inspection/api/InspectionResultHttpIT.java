@@ -164,6 +164,35 @@ class InspectionResultHttpIT {
         mvc.perform(get("/api/v1/inspections/inspection-fake-0001")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
+    @Test
+    void different_results_concurrently_complete_once_and_both_persist() throws Exception {
+        var first=mapper.readTree(fixture("valid/fake-result.json")); createInspection(first.toString());
+        var second=first.deepCopy(); ((tools.jackson.databind.node.ObjectNode)second).put("result_id","result-fake-0002");
+        var start=new CountDownLatch(1); var executor=Executors.newFixedThreadPool(2);
+        try {
+            var futures=List.of(executor.submit(()->{start.await();return intake.accept(first);}),executor.submit(()->{start.await();return intake.accept(second);}));
+            start.countDown(); assertThat(futures).extracting(f->f.get().name()).containsOnly("CREATED");
+        } finally { executor.shutdownNow(); }
+        assertThat(jdbc.queryForObject("select count(*) from vision_inspection_results",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select status from inspections",String.class)).isEqualTo("COMPLETED");
+        assertThat(jdbc.queryForObject("select completed_at from inspections",java.sql.Timestamp.class)).isNotNull();
+    }
+
+    @Test
+    void result_insert_failure_rolls_back_inspection_completion() throws Exception {
+        var payload = mapper.readTree(fixture("valid/fake-result.json"));
+        createInspection(payload.toString());
+        jdbc.execute("ALTER TABLE vision_inspection_results ADD CONSTRAINT chk_injected_result_failure CHECK (origin_kind = 'never')");
+        try {
+            assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> intake.accept(payload))).isNotNull();
+        } finally {
+            jdbc.execute("ALTER TABLE vision_inspection_results DROP CHECK chk_injected_result_failure");
+        }
+        assertThat(jdbc.queryForObject("select status from inspections", String.class)).isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("select completed_at from inspections", java.sql.Timestamp.class)).isNull();
+        assertThat(jdbc.queryForObject("select count(*) from vision_inspection_results", Integer.class)).isZero();
+    }
+
     private void createInspection(String resultJson) throws Exception {
         var result = mapper.readTree(resultJson);
         var request = mapper.createObjectNode().put("inspection_id", result.get("inspection_id").asText());

@@ -40,7 +40,7 @@ public class InspectionResultIntakeService implements InspectionResultIntake {
             var mismatch=inspection.input().firstMismatch(new InspectionInput(result.imageUri(),result.imageSha256()));
             if(mismatch.isPresent()) throw new InspectionInputMismatchException(mismatch.get());
             var existing=repository.findByResultId(result.resultId()); if(existing.isPresent()) return compare(result,existing.get());
-            repository.insert(result); inspections.completePending(result.inspectionId(),clock.instant()); return IntakeDisposition.CREATED;
+            inspections.completePending(result.inspectionId(),clock.instant()); repository.insert(result); return IntakeDisposition.CREATED;
         }); } catch (DuplicateKeyException duplicate) {
             var winner = readTransaction.execute(status -> repository.findByResultId(result.resultId()))
                     .orElseThrow(() -> duplicate);

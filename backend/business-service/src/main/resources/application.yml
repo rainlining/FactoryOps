@@ -6,3 +6,6 @@ spring:
       transaction-isolation: TRANSACTION_READ_COMMITTED
   flyway:
     enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true

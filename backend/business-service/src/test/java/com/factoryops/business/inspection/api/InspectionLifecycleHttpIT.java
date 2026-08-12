@@ -6,6 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.factoryops.business.inspection.application.InspectionApplicationService;
+import com.factoryops.business.inspection.domain.InspectionInput;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +32,7 @@ class InspectionLifecycleHttpIT {
     @DynamicPropertySource static void mysql(DynamicPropertyRegistry r) {
         r.add("spring.datasource.url", MYSQL::getJdbcUrl); r.add("spring.datasource.username", MYSQL::getUsername); r.add("spring.datasource.password", MYSQL::getPassword);
     }
-    @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc;
+    @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired InspectionApplicationService service;
     @BeforeEach void clean() { jdbc.update("DELETE FROM vision_inspection_results"); jdbc.update("DELETE FROM inspections"); }
 
     @Test void creates_replays_and_queries_pending_inspection() throws Exception {
@@ -44,6 +49,30 @@ class InspectionLifecycleHttpIT {
         mvc.perform(post("/api/v1/inspections").contentType("application/json").content(request("inspection-1", "artifact://images/b", "b".repeat(64))))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("inspection_identity_conflict"));
         mvc.perform(get("/api/v1/inspections/missing")).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("inspection_not_found"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inspections", Integer.class)).isEqualTo(1);
+    }
+
+    @Test void rejects_invalid_or_unknown_input() throws Exception {
+        mvc.perform(post("/api/v1/inspections").contentType("application/json").content(request("inspection-1", "not-a-uri", "ABC")))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("invalid_inspection_input"));
+        mvc.perform(post("/api/v1/inspections").contentType("application/json").content("{\"inspection_id\":\"i\",\"input\":{\"image_uri\":\"artifact://images/a\",\"sha256\":\""+"a".repeat(64)+"\",\"extra\":1}}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void concurrent_identical_creates_choose_one_row_and_replay_the_other() throws Exception {
+        var input = new InspectionInput("artifact://images/a", "a".repeat(64));
+        var start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var futures = List.of(
+                    executor.submit(() -> { start.await(); return service.create("inspection-1", input); }),
+                    executor.submit(() -> { start.await(); return service.create("inspection-1", input); }));
+            start.countDown();
+            assertThat(futures).extracting(future -> future.get().replayed())
+                    .containsExactlyInAnyOrder(false, true);
+        } finally {
+            executor.shutdownNow();
+        }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inspections", Integer.class)).isEqualTo(1);
     }
 
