@@ -6,6 +6,8 @@ public record ValidatedVisionResult(
         String inspectionId,
         String resultId,
         String originKind,
+        String imageUri,
+        String imageSha256,
         BigDecimal anomalyScore,
         BigDecimal decisionThreshold,
         byte[] canonicalPayload,

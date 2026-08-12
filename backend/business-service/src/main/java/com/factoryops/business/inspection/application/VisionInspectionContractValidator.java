@@ -46,7 +46,7 @@ public final class VisionInspectionContractValidator {
         var canonical = CanonicalJson.canonicalize(payload);
         return new ValidatedVisionResult(
                 payload.get("inspection_id").asText(), payload.get("result_id").asText(),
-                payload.get("origin").get("kind").asText(), score, threshold,
+                payload.get("origin").get("kind").asText(), payload.get("input").get("image_uri").asText(), payload.get("input").get("sha256").asText(), score, threshold,
                 canonical, CanonicalJson.sha256(payload));
     }
 
