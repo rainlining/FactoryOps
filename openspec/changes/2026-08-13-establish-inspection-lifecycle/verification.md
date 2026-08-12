@@ -1,28 +1,29 @@
 # Change 验证记录：2026-08-13-establish-inspection-lifecycle
 
-- `status`: `not-run`
-- `verified_at`: `pending`
+- `status`: `technically-verified`
+- `verified_at`: `2026-08-13`
 - `verified_by`: `Codex`
 
-## 待验证
+## 实际验证
 
-- Domain、HTTP Contract、Flyway V1→V2、真实 MySQL 原子性和并发测试。
-- 现有 Java Intake 与 Python Vision Contract 回归。
-- diff、scope、OpenSpec 一致性与 `dataset/` 隔离。
+- `mvn -q verify`：退出码 0；Java 17 + MySQL 8.4 Testcontainers 完整构建通过。
+- `mvn -q "-Dit.test=InspectionLifecycleHttpIT,InspectionResultHttpIT" verify`：退出码 0；13 个 HTTP/MySQL 场景通过，包含创建竞争、不同 Result 并发、插入故障事务回滚。
+- `mvn -q "-Dit.test=InspectionMigrationIT" verify`：退出码 0；一致历史成功回填，冲突历史按预期使 V2 外键步骤失败。
+- 最终 `mvn -q verify`：退出码 0；Surefire/Failsafe XML 合计 35 个测试，0 failure、0 error、0 skipped。
+- `python -m unittest discover -s contracts/vision_inspection/tests -t .`：退出码 0；17 个 Vision Contract 回归测试通过。
+- `git diff --check`：退出码 0；`git diff --name-only 2caf1c9..HEAD | Select-String '^dataset/'` 无输出，未混入 dataset。
 
-## 验收状态
+## 已验证不变量
 
-- 技术验收：`pending`
-- Code Walkthrough：`pending`
-- 所有者修改任务：`pending`
-- Failure/Debug Exercise：`pending`
-- Learning Gate：`pending`
-- Change 最终状态：`design-reviewed`
+- 同一 Inspection 身份并发创建只有一行，相同输入一方为 replay。
+- Result 必须引用存在且图片 URI/SHA 精确匹配的 Inspection。
+- 父行条件完成和子 Result 插入属于同一事务；注入子表 CHECK 失败后 Inspection 保持 PENDING、结果表保持空。
+- 不同 Result 并发均可保存，`completed_at` 只写入一次。
+- V2 不会静默挑选互相冲突的历史图片身份。
 
-## 实现会话交接
+## 限制与验收状态
 
-- Feature branch：`agent/establish-inspection-lifecycle`
-- Worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\establish-inspection-lifecycle`
-- Base commit：`2caf1c9e0af36d5624af02db0b0493e85c9b8911`
-- Head commit：`pending`
-- Handoff 状态：`pending`
+- 未实现取消、重开、权威 Result、Kafka/Outbox、权限或自动数据库重试。
+- 技术验收：`passed`
+- Code Walkthrough / owner 修改 / failure exercise / Learning Gate：`pending in review session`
+- Change 最终状态：`review-handoff-ready`（尚非 completed）

@@ -18,14 +18,14 @@
 
 查询：`GET inspection → hash 查询 → 原始 ID 碰撞防御比较 → DTO`；不存在返回 404。
 
-结果：事务外依次执行 JSON、Schema、Domain 校验；写事务内读取 Inspection、比较原始 ID 与图片身份、处理 result replay/conflict、插入新 Result、条件更新状态并提交。
+结果：事务外依次执行 JSON、Schema、Domain 校验；写事务内读取 Inspection、比较原始 ID 与图片身份、处理 result replay/conflict、条件更新父 Inspection、插入新 Result 并提交。父行条件更新先于子行插入，可避免两个不同 Result 先取得外键共享锁后再同时升级父行写锁所形成的死锁；任何后续插入失败仍由同一事务回滚父行更新。
 
 ## 状态、事务与不变量
 
 - 状态只有 `PENDING → COMPLETED`，不可取消、重开或回退。
 - Result 插入与首次完成必须同事务提交，禁止半完成状态。
 - `completed_at` 由注入的应用 UTC `Clock` 产生；只有 `WHERE status='PENDING'` 更新成功者可写入。
-- 不同 Result 并发都可保存；后到事务更新 0 行后必须确认已 COMPLETED。
+- 不同 Result 并发都可保存；父行条件更新使竞争串行化，后到事务更新 0 行但仍可插入自己的 Result。
 - 相同 Result replay 不重复推进状态。
 - 图片 URI 与 SHA 按原始字符串精确比较，不自动规范化。
 

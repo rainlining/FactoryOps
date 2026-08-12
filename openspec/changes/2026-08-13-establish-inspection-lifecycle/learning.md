@@ -26,7 +26,7 @@
 
 ## 真实 Code Walkthrough 路线
 
-实现后填写创建/查询 Controller、应用编排、Inspection Domain、事务、Repository/Flyway、错误恢复和对应测试的真实文件与符号。
+按 `review-handoff.md` 的阅读顺序，覆盖 `InspectionLifecycleController`、`InspectionApplicationService`、`InspectionResultIntakeService`、`Inspection`、`InspectionJdbcRepository`、Flyway V2 与三组集成测试。
 
 ## 项目所有者亲自修改任务
 
