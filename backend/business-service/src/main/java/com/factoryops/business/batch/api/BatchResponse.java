@@ -18,4 +18,5 @@ public record BatchResponse(
     @JsonProperty("released_at") Instant releasedAt,
     @JsonProperty("release_reason_code") String releaseReasonCode,
     @JsonProperty("release_reason_detail") String releaseReasonDetail,
+    @JsonProperty("inspection_count") long inspectionCount,
     boolean replayed) {}

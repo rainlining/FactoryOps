@@ -5,7 +5,7 @@
 - `learning_level`: `deep`
 - `pattern_stage`: `first-deep-for-production-state-command`
 - `first_deep_reference`: `2026-08-13-establish-inspection-lifecycle`（复用事务组件，新增状态命令、证据和锁语义）
-- `gate_status`: `not-started`
+- `gate_status`: `passed-by-owner-confirmation`
 
 ## 完成后应具备的能力
 
@@ -48,13 +48,15 @@
 
 ## Learning Gate
 
-- [ ] 能解释真实设计和关键取舍。
-- [ ] 能沿成功调用链定位核心代码。
-- [ ] 能定位并解释至少一条失败路径。
-- [ ] 已亲自完成约定的小修改。
-- [ ] 已完成故障实验并根据证据判断结果。
-- [ ] 能指出事务、幂等、权限和恢复逻辑的实际执行位置。
-- [ ] 已 review 最终 diff 并明确接受。
+- [x] 能解释真实设计和关键取舍。
+- [x] 能沿成功调用链定位核心代码。
+- [x] 能定位并解释至少一条失败路径。
+- [x] 已亲自完成约定的小修改：Batch 查询增加 `inspection_count`。
+- [x] 已完成故障实验并根据证据判断结果。
+- [x] 能指出事务、幂等、权限和恢复逻辑的实际执行位置。
+- [x] 已 review 最终 diff 并明确接受。
+
+项目所有者于 2026-08-13 明确确认本 Change 的 Learning Gate 已完成。
 
 ## 会话边界
 

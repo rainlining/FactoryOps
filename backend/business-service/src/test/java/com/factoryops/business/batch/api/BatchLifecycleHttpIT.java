@@ -56,12 +56,31 @@ class BatchLifecycleHttpIT {
     mvc.perform(post("/api/v1/batches").contentType("application/json").content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.replayed").value(true));
-    mvc.perform(get("/api/v1/batches/B-17")).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/batches/B-17"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.inspection_count").value(0));
     mvc.perform(
             post("/api/v1/batches")
                 .contentType("application/json")
                 .content(body.replace("P-1", "P-2")))
         .andExpect(status().isConflict());
+  }
+
+  @Test
+  void query_reports_inspection_count_for_batch() throws Exception {
+    service.create("B-17", "P-1", "LINE-2");
+    var first = inspectionRequest("inspection-1", "B-17", "artifact://images/a", "a");
+    var second = inspectionRequest("inspection-2", "B-17", "artifact://images/b", "b");
+    mvc.perform(post("/api/v1/inspections").contentType("application/json").content(first))
+        .andExpect(status().isCreated());
+    mvc.perform(get("/api/v1/batches/B-17"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.inspection_count").value(1));
+    mvc.perform(post("/api/v1/inspections").contentType("application/json").content(second))
+        .andExpect(status().isCreated());
+    mvc.perform(get("/api/v1/batches/B-17"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.inspection_count").value(2));
   }
 
   @Test
@@ -244,5 +263,11 @@ class BatchLifecycleHttpIT {
       return new String(
           Objects.requireNonNull(input).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
     }
+  }
+
+  private String inspectionRequest(String id, String batchId, String uri, String shaPrefix) {
+    return "{\"inspection_id\":\"" + id + "\",\"batch_id\":\"" + batchId
+        + "\",\"input\":{\"image_uri\":\"" + uri + "\",\"sha256\":\""
+        + shaPrefix.repeat(64) + "\"}}";
   }
 }

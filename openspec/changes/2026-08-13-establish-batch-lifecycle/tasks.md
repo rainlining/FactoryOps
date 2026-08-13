@@ -22,4 +22,4 @@
 
 ## 独立 Review/Learning
 
-- [ ] Walkthrough、owner 修改、failure exercise、最终 diff 和 Learning Gate。
+- [x] Walkthrough、owner 修改、failure exercise、最终 diff 和 Learning Gate。

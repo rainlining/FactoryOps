@@ -26,7 +26,7 @@ public class BatchController {
 
   @GetMapping("/{id}")
   BatchResponse get(@PathVariable String id) {
-    return response(new BatchApplicationService.Outcome(service.get(id), false));
+    return response(service.get(id));
   }
 
   @PostMapping("/{id}/hold")
@@ -76,6 +76,6 @@ public class BatchController {
         b.releasedAt(),
         rel == null ? null : rel.reasonCode().name(),
         rel == null ? null : rel.reasonDetail(),
-        o.replayed());
+        o.inspectionCount(), o.replayed());
   }
 }

@@ -61,6 +61,19 @@ public class InspectionJdbcRepository {
         id);
   }
 
+  public long countByBatchId(String batchId) {
+    return jdbc.queryForObject(
+        """
+        SELECT COUNT(*)
+        FROM inspections
+        WHERE batch_id_hash = ?
+          AND batch_id = ?
+        """,
+        Long.class,
+        hash(batchId),
+        batchId);
+  }
+
   public static byte[] hash(String value) {
     try {
       return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));

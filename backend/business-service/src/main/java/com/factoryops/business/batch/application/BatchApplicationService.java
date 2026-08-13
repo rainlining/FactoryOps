@@ -44,8 +44,11 @@ public class BatchApplicationService {
     }
   }
 
-  public Batch get(String id) {
-    return read.execute(s -> batches.find(id)).orElseThrow(BatchNotFoundException::new);
+  public Outcome get(String id) {
+    return read.execute(s -> {
+      var batch = batches.find(id).orElseThrow(BatchNotFoundException::new);
+      return new Outcome(batch, false, inspections.countByBatchId(id));
+    });
   }
 
   public Outcome hold(String id, HoldCommand command) {
@@ -93,5 +96,9 @@ public class BatchApplicationService {
     throw new BatchIdentityConflictException();
   }
 
-  public record Outcome(Batch batch, boolean replayed) {}
+  public record Outcome(Batch batch, boolean replayed, long inspectionCount) {
+    public Outcome(Batch batch, boolean replayed) {
+      this(batch, replayed, 0);
+    }
+  }
 }
