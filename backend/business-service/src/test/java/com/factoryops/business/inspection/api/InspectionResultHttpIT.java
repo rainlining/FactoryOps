@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
+import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
@@ -46,6 +47,7 @@ class InspectionResultHttpIT {
 
   @BeforeEach
   void cleanDatabase() {
+    jdbc.update("DELETE FROM quality_incidents");
     jdbc.update("DELETE FROM vision_inspection_results");
     jdbc.update("DELETE FROM inspections");
     jdbc.update("DELETE FROM batches WHERE kind='PRODUCTION'");
@@ -53,6 +55,106 @@ class InspectionResultHttpIT {
         "INSERT INTO"
             + " batches(batch_id_hash,batch_id,kind,product_code,production_line,status,created_at)"
             + " VALUES(UNHEX(SHA2('B-TEST',256)),'B-TEST','PRODUCTION','P-TEST','LINE-1','OPEN',CURRENT_TIMESTAMP(6))");
+  }
+
+  @Test
+  void anomaly_result_creates_incident_and_replay_returns_same_id() throws Exception {
+    var body = fixture("valid/vision-service-result.json");
+    createInspection(body);
+    var first =
+        mvc.perform(
+                post("/api/v1/inspection-results").contentType("application/json").content(body))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.incident_id").isNotEmpty())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    var incidentId = mapper.readTree(first).get("incident_id").asText();
+    mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.incident_id").value(incidentId));
+    mvc.perform(get("/api/v1/quality-incidents/" + incidentId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("OPEN"))
+        .andExpect(jsonPath("$.result_id").value("result-1001"))
+        .andExpect(jsonPath("$.result_origin_kind").value("vision-service"));
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='B-TEST'", String.class))
+        .isEqualTo("OPEN");
+  }
+
+  @Test
+  void normal_result_has_no_incident() throws Exception {
+    var body = fixture("valid/fake-result.json");
+    createInspection(body);
+    mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.incident_id").doesNotExist());
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void incident_query_returns_origin_kind_for_fake_anomaly() throws Exception {
+    var payload = (ObjectNode) mapper.readTree(fixture("valid/fake-result.json"));
+    payload.put("inspection_id", "inspection-fake-anomaly-0001");
+    payload.put("result_id", "result-fake-anomaly-0001");
+    payload.withObject("input")
+        .put("image_uri", "artifact://images/fake-anomaly-0001")
+        .put("sha256", "c".repeat(64));
+    payload.withObject("observation").put("is_anomaly", true).put("anomaly_score", 0.9);
+
+    createInspection(payload.toString());
+    var response =
+        mvc.perform(
+                post("/api/v1/inspection-results")
+                    .contentType("application/json")
+                    .content(payload.toString()))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.incident_id").isNotEmpty())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    var incidentId = mapper.readTree(response).get("incident_id").asText();
+
+    mvc.perform(get("/api/v1/quality-incidents/" + incidentId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result_id").value("result-fake-anomaly-0001"))
+        .andExpect(jsonPath("$.result_origin_kind").value("fake"));
+  }
+
+  @Test
+  void incident_insert_failure_rolls_back_result_and_completion() throws Exception {
+    var payload = mapper.readTree(fixture("valid/vision-service-result.json"));
+    createInspection(payload.toString());
+    jdbc.execute(
+        "ALTER TABLE quality_incidents ADD CONSTRAINT chk_injected_incident_failure CHECK"
+            + " (status='NEVER')");
+    try {
+      assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> intake.accept(payload)))
+          .isNotNull();
+    } finally {
+      jdbc.execute("ALTER TABLE quality_incidents DROP CHECK chk_injected_incident_failure");
+    }
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
+        .isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM vision_inspection_results", Integer.class))
+        .isZero();
+    assertThat(jdbc.queryForObject("SELECT status FROM inspections", String.class))
+        .isEqualTo("PENDING");
+    assertThat(
+            jdbc.queryForObject("SELECT completed_at FROM inspections", java.sql.Timestamp.class))
+        .isNull();
+  }
+
+  @Test
+  void missing_incident_returns_stable_not_found() throws Exception {
+    mvc.perform(get("/api/v1/quality-incidents/QI-" + "A".repeat(64)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("quality_incident_not_found"))
+        .andExpect(jsonPath("$.path").value("$.incident_id"));
   }
 
   @Test
