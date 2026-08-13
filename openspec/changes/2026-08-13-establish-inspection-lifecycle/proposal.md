@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-13-establish-inspection-lifecycle`
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `learning_level`: `deep`
 - `first_deep_reference`: `2026-08-11-accept-vision-inspection-result`
 - `depends_on`: `[2026-08-10-define-vision-inspection-contract, 2026-08-11-accept-vision-inspection-result]`
@@ -19,6 +19,7 @@
 
 - 本 Change 唯一核心能力：建立 Inspection 的创建、查询与不可逆完成生命周期。
 - `POST /api/v1/inspections` 和 `GET /api/v1/inspections/{inspection_id}`。
+- 查询响应包含已保存 Result 数量 `result_count`。
 - `PENDING → COMPLETED` 聚合状态迁移。
 - Result 必须关联已存在且图片身份匹配的 Inspection。
 - Result 插入与首次完成状态在同一 MySQL 事务提交。

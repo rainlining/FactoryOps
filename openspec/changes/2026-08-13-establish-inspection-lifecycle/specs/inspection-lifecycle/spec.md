@@ -26,7 +26,12 @@
 
 ### Requirement: 查询 Inspection 当前状态
 
-系统必须通过 `GET /api/v1/inspections/{inspection_id}` 返回输入身份、状态、创建时间和完成时间；不存在时返回 404 `inspection_not_found`。
+系统必须通过 `GET /api/v1/inspections/{inspection_id}` 返回输入身份、状态、创建时间、完成时间和已保存 Result 数量 `result_count`；不存在时返回 404 `inspection_not_found`。
+
+#### Scenario: Result 数量随已保存结果变化
+- **Given** 一个已创建的 Inspection
+- **When** 分别在尚无 Result、保存一份 Result 和保存两份 Result 后查询
+- **Then** `result_count` 分别为 0、1 和 2
 
 ### Requirement: 合法 Result 原子完成 Inspection
 

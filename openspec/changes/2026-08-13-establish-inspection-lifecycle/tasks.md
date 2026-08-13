@@ -16,4 +16,4 @@
 - [x] 填写真实 review-handoff，推送分支并停在 review-handoff-ready。
 
 ## 独立 Review/Learning
-- [ ] Walkthrough、owner 修改、failure exercise、最终 diff 和 Learning Gate。
+- [x] Walkthrough、owner 修改、failure exercise、最终 diff 和 Learning Gate（带已记录偏差，由项目所有者明确接受）。

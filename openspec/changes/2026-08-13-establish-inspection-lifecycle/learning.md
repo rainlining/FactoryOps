@@ -5,7 +5,7 @@
 - `learning_level`: `deep`
 - `pattern_stage`: `first-deep`
 - `first_deep_reference`: `2026-08-11-accept-vision-inspection-result`（复用组件模式，但新增聚合、跨表事务与并发语义）
-- `gate_status`: `not-started`
+- `gate_status`: `accepted-with-documented-variance`
 
 ## 完成后应具备的能力
 
@@ -47,13 +47,15 @@
 
 ## Learning Gate
 
-- [ ] 能解释真实设计和关键取舍。
-- [ ] 能沿成功调用链定位核心代码。
-- [ ] 能定位并解释至少一条失败路径。
-- [ ] 已亲自完成约定的小修改。
-- [ ] 已完成故障实验并根据证据判断结果。
-- [ ] 能指出事务、幂等和恢复逻辑的实际执行位置。
-- [ ] 已 review 最终 diff 并明确接受。
+- [x] 能解释真实设计和关键取舍。
+- [x] 能沿成功调用链定位核心代码。
+- [x] 能定位并解释至少一条失败路径。
+- [ ] 已亲自完成约定的小修改（`result_count` 由 Review 会话代写；项目所有者完成语义和 diff review）。
+- [x] 已完成故障注入与复位（Docker 不可用，未实际观察数据库时间覆盖）。
+- [x] 能指出事务、幂等和恢复逻辑的实际执行位置。
+- [x] 已 review 最终 diff 并明确接受。
+
+2026-08-13：项目所有者确认调用链、失败路径和最终 diff review 已完成，并基于“能够理解并知道如何 review”的本次学习目标明确接受 Change。上述两项执行偏差保留为真实学习记录，不伪装为完整实验通过。
 
 ## 会话边界
 
