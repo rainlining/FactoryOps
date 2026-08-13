@@ -6,4 +6,5 @@ package com.factoryops.business.batch.api;import com.factoryops.business.batch.a
  @ExceptionHandler(InvalidBatchTransitionException.class)ResponseEntity<ApiErrorResponse>transition(){return ResponseEntity.status(409).body(new ApiErrorResponse("invalid_batch_transition","$.status","Invalid batch transition"));}
  @ExceptionHandler(BatchNotActionableException.class)ResponseEntity<ApiErrorResponse>actionable(){return ResponseEntity.status(409).body(new ApiErrorResponse("batch_not_actionable","$.batch_id","Batch is not actionable"));}
  @ExceptionHandler(HoldEvidenceException.class)ResponseEntity<ApiErrorResponse>evidence(HoldEvidenceException e){return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse(e.code(),"$.result_id","Invalid hold evidence"));}
+ @ExceptionHandler(BatchRequestException.class)ResponseEntity<ApiErrorResponse>request(BatchRequestException e){return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse(e.code(),e.path(),e.getMessage()));}
 }
