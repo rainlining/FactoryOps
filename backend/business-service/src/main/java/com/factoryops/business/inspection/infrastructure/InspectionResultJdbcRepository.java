@@ -34,6 +34,8 @@ public class InspectionResultJdbcRepository {
                 """, (rs, row) -> new StoredInspectionResult(rs.getString(1), rs.getBytes(2)), hash(resultId));
         return rows.stream().filter(row -> row.resultId().equals(resultId)).findFirst();
     }
+    public Optional<ResultEvidence> findEvidence(String resultId){return jdbc.query("SELECT result_id,inspection_id,JSON_EXTRACT(canonical_payload,'$.observation.is_anomaly') FROM vision_inspection_results WHERE result_id_hash=?",(rs,n)->new ResultEvidence(rs.getString(1),rs.getString(2),rs.getBoolean(3)),hash(resultId)).stream().filter(r->r.resultId().equals(resultId)).findFirst();}
+    public record ResultEvidence(String resultId,String inspectionId,boolean anomaly){}
 
     private static String normalize(java.math.BigDecimal value) {
         var normalized = value.stripTrailingZeros();

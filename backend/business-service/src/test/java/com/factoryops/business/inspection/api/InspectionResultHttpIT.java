@@ -48,7 +48,7 @@ class InspectionResultHttpIT {
     @BeforeEach
     void cleanDatabase() {
         jdbc.update("DELETE FROM vision_inspection_results");
-        jdbc.update("DELETE FROM inspections");
+        jdbc.update("DELETE FROM inspections");jdbc.update("DELETE FROM batches WHERE kind='PRODUCTION'");jdbc.update("INSERT INTO batches(batch_id_hash,batch_id,kind,product_code,production_line,status,created_at) VALUES(UNHEX(SHA2('B-TEST',256)),'B-TEST','PRODUCTION','P-TEST','LINE-1','OPEN',CURRENT_TIMESTAMP(6))");
     }
 
     @Test
@@ -144,7 +144,7 @@ class InspectionResultHttpIT {
         var body = fixture("valid/fake-result.json");
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("inspection_not_found"));
-        var result=mapper.readTree(body); var request=mapper.createObjectNode().put("inspection_id",result.get("inspection_id").asText());
+        var result=mapper.readTree(body); var request=mapper.createObjectNode().put("inspection_id",result.get("inspection_id").asText()).put("batch_id","B-TEST");
         request.set("input",mapper.createObjectNode().put("image_uri","artifact://images/other").put("sha256",result.get("input").get("sha256").asText()));
         mvc.perform(post("/api/v1/inspections").contentType("application/json").content(request.toString())).andExpect(status().isCreated());
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body))
@@ -200,7 +200,7 @@ class InspectionResultHttpIT {
 
     private void createInspection(String resultJson) throws Exception {
         var result = mapper.readTree(resultJson);
-        var request = mapper.createObjectNode().put("inspection_id", result.get("inspection_id").asText());
+        var request = mapper.createObjectNode().put("inspection_id", result.get("inspection_id").asText()).put("batch_id","B-TEST");
         request.set("input", result.get("input"));
         mvc.perform(post("/api/v1/inspections").contentType("application/json").content(request.toString()))
                 .andExpect(status().isCreated());

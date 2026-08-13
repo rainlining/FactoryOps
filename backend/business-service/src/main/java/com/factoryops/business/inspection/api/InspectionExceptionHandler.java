@@ -14,6 +14,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class InspectionExceptionHandler {
+    @ExceptionHandler(com.factoryops.business.inspection.application.BatchIdRequiredException.class)
+    ResponseEntity<ApiErrorResponse>batchRequired() { return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse("batch_id_required","$.batch_id","batch_id is required")); }
+    @ExceptionHandler(com.factoryops.business.inspection.application.BatchReferenceNotFoundException.class)
+    ResponseEntity<ApiErrorResponse>batchMissing() { return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse("batch_not_found","$.batch_id","Batch not found")); }
+    @ExceptionHandler(com.factoryops.business.inspection.application.BatchNotAcceptingInspectionsException.class)
+    ResponseEntity<ApiErrorResponse>batchClosed() { return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse("batch_not_accepting_inspections","$.batch_id","Batch is not accepting inspections")); }
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ApiErrorResponse> invalidInspectionInput(IllegalArgumentException error) { return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse("invalid_inspection_input","$.input",error.getMessage())); }
     @ExceptionHandler(InspectionIdentityConflictException.class)

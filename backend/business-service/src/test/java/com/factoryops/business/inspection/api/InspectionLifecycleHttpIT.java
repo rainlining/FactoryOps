@@ -33,7 +33,7 @@ class InspectionLifecycleHttpIT {
         r.add("spring.datasource.url", MYSQL::getJdbcUrl); r.add("spring.datasource.username", MYSQL::getUsername); r.add("spring.datasource.password", MYSQL::getPassword);
     }
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired InspectionApplicationService service;
-    @BeforeEach void clean() { jdbc.update("DELETE FROM vision_inspection_results"); jdbc.update("DELETE FROM inspections"); }
+    @BeforeEach void clean() { jdbc.update("DELETE FROM vision_inspection_results"); jdbc.update("DELETE FROM inspections"); jdbc.update("DELETE FROM batches WHERE kind='PRODUCTION'");jdbc.update("INSERT INTO batches(batch_id_hash,batch_id,kind,product_code,production_line,status,created_at) VALUES(UNHEX(SHA2('B-TEST',256)),'B-TEST','PRODUCTION','P-TEST','LINE-1','OPEN',CURRENT_TIMESTAMP(6))"); }
 
     @Test void creates_replays_and_queries_pending_inspection() throws Exception {
         var body = request("inspection-1", "artifact://images/a", "a".repeat(64));
@@ -68,8 +68,8 @@ class InspectionLifecycleHttpIT {
         var executor = Executors.newFixedThreadPool(2);
         try {
             var futures = List.of(
-                    executor.submit(() -> { start.await(); return service.create("inspection-1", input); }),
-                    executor.submit(() -> { start.await(); return service.create("inspection-1", input); }));
+                    executor.submit(() -> { start.await(); return service.create("inspection-1", "B-TEST",input); }),
+                    executor.submit(() -> { start.await(); return service.create("inspection-1", "B-TEST",input); }));
             start.countDown();
             assertThat(futures).extracting(future -> future.get().replayed())
                     .containsExactlyInAnyOrder(false, true);
@@ -80,6 +80,6 @@ class InspectionLifecycleHttpIT {
     }
 
     private String request(String id, String uri, String sha) {
-        return "{\"inspection_id\":\""+id+"\",\"input\":{\"image_uri\":\""+uri+"\",\"sha256\":\""+sha+"\"}}";
+        return "{\"inspection_id\":\""+id+"\",\"batch_id\":\"B-TEST\",\"input\":{\"image_uri\":\""+uri+"\",\"sha256\":\""+sha+"\"}}";
     }
 }

@@ -10,7 +10,7 @@ class InspectionTest {
     private final InspectionInput input = new InspectionInput("artifact://images/a", "a".repeat(64));
 
     @Test void completes_once_and_keeps_first_time() {
-        var inspection = Inspection.pending("i-1", input, Instant.parse("2026-08-13T00:00:00Z"));
+        var inspection = Inspection.pending("i-1", "B-TEST", input, Instant.parse("2026-08-13T00:00:00Z"));
         var first = Instant.parse("2026-08-13T01:00:00Z");
         inspection.complete(first);
         inspection.complete(Instant.parse("2026-08-13T02:00:00Z"));

@@ -13,7 +13,7 @@ public class InspectionLifecycleController {
     @PostMapping
     ResponseEntity<InspectionLifecycleResponse> create(@RequestBody InspectionCreateRequest r){
         if(r.input()==null)throw new IllegalArgumentException("input is required");
-        var c=service.create(r.inspectionId(),new InspectionInput(r.input().imageUri(),r.input().sha256()));
+        var c=service.create(r.inspectionId(),r.batchId(),new InspectionInput(r.input().imageUri(),r.input().sha256()));
         return ResponseEntity.status(c.replayed()?HttpStatus.OK:HttpStatus.CREATED)
                 .body(response(c.inspection(),c.resultCount(),c.replayed()));
     }
@@ -23,6 +23,6 @@ public class InspectionLifecycleController {
         return response(details.inspection(),details.resultCount(),false);
     }
     private InspectionLifecycleResponse response(Inspection i,long resultCount,boolean replayed){
-        return new InspectionLifecycleResponse(i.id(),i.status().name(),new InspectionLifecycleResponse.Input(i.input().imageUri(),i.input().sha256()),i.createdAt(),i.completedAt(),resultCount,replayed);
+        return new InspectionLifecycleResponse(i.id(),i.batchId(),i.status().name(),new InspectionLifecycleResponse.Input(i.input().imageUri(),i.input().sha256()),i.createdAt(),i.completedAt(),resultCount,replayed);
     }
 }

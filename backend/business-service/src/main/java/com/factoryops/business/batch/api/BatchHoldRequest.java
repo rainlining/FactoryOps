@@ -1,0 +1,1 @@
+package com.factoryops.business.batch.api;import com.fasterxml.jackson.annotation.JsonProperty;public record BatchHoldRequest(@JsonProperty("reason_code")String reasonCode,@JsonProperty("reason_detail")String reasonDetail,@JsonProperty("inspection_id")String inspectionId,@JsonProperty("result_id")String resultId){}
