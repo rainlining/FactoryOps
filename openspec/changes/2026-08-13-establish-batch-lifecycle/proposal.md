@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-13-establish-batch-lifecycle`
-- `status`: `design-reviewed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `first_deep_reference`: `2026-08-13-establish-inspection-lifecycle`
 - `depends_on`: `[2026-08-13-establish-inspection-lifecycle]`
