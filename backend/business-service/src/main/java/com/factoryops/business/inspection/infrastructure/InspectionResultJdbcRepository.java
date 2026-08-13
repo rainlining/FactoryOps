@@ -46,6 +46,20 @@ public class InspectionResultJdbcRepository {
     return rows.stream().filter(row -> row.resultId().equals(resultId)).findFirst();
   }
 
+  public Optional<String> findOriginKindByResultId(String resultId) {
+    return jdbc
+        .query(
+            "SELECT result_id, origin_kind FROM vision_inspection_results"
+                + " WHERE result_id_hash = ? AND result_id = ?",
+            (rs, row) -> new OriginKindRow(rs.getString(1), rs.getString(2)),
+            hash(resultId),
+            resultId)
+        .stream()
+        .filter(row -> row.resultId().equals(resultId))
+        .map(OriginKindRow::originKind)
+        .findFirst();
+  }
+
   public Optional<ResultEvidence> findEvidence(String resultId) {
     return jdbc
         .query(
@@ -60,6 +74,8 @@ public class InspectionResultJdbcRepository {
   }
 
   public record ResultEvidence(String resultId, String inspectionId, boolean anomaly) {}
+
+  private record OriginKindRow(String resultId, String originKind) {}
 
   private static String normalize(java.math.BigDecimal value) {
     var normalized = value.stripTrailingZeros();

@@ -10,4 +10,5 @@ public record QualityIncidentResponse(
     @JsonProperty("batch_id") String batchId,
     @JsonProperty("inspection_id") String inspectionId,
     @JsonProperty("result_id") String resultId,
+    @JsonProperty("result_origin_kind") String resultOriginKind,
     @JsonProperty("created_at") Instant createdAt) {}

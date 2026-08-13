@@ -3,13 +3,13 @@
 ## 元数据
 
 - `change_id`: `2026-08-13-establish-quality-incident`
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `learning_level`: `deep`
 - `first_deep_reference`: `2026-08-13-establish-inspection-lifecycle`
 - `depends_on`: `[2026-08-13-establish-batch-lifecycle]`
 - `spec_refs`: `[inspection-result-intake, inspection-lifecycle, batch-lifecycle]`
 - `implementation_session`: `current Codex task`
-- `review_session`: `pending`
+- `review_session`: `completed`
 
 ## 为什么要做
 

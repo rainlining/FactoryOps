@@ -19,7 +19,13 @@ public class QualityIncidentController {
   QualityIncidentResponse get(@PathVariable String id) {
     var incident = service.get(id);
     return new QualityIncidentResponse(
-        incident.schemaVersion(), incident.id(), incident.status(), incident.batchId(),
-        incident.inspectionId(), incident.resultId(), incident.createdAt());
+        incident.incident().schemaVersion(),
+        incident.incident().id(),
+        incident.incident().status(),
+        incident.incident().batchId(),
+        incident.incident().inspectionId(),
+        incident.incident().resultId(),
+        incident.resultOriginKind(),
+        incident.incident().createdAt());
   }
 }

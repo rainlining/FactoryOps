@@ -1,6 +1,6 @@
 # Change 验证记录：2026-08-13-establish-quality-incident
 
-- `status`: `technically-verified`
+- `status`: `completed`
 - `verified_at`: `2026-08-13`
 - `verified_by`: `Codex`
 
@@ -12,6 +12,8 @@
 - V1→V4 实际迁移成功；异常 Result 创建/replay、正常跳过、Incident 查询/404、Batch 状态不变和三对象原子回滚均有真实 MySQL 断言。
 - 本 Change Java 文件已用 google-java-format 格式化；超长行扫描未发现压缩的类、方法或 import。
 - `dataset/` 未修改或提交。
+- Review 后 owner 修改为查询响应增加 `result_origin_kind`，在只读 Query Service 中组合 Result Repository，未复制到 Incident 表。
+- Review 后最终 `mvn verify`：Java 单元测试 16 项、MySQL 集成测试 30 项，共 46 项，0 failure、0 error。
 
 ## 限制
 
@@ -21,5 +23,8 @@
 ## 状态
 
 - 技术验收：`passed`
-- Walkthrough、owner 修改、failure exercise、Learning Gate：`pending-review-session`
-- Change：`review-handoff-ready`
+- Walkthrough：`passed（项目所有者确认）`
+- Owner 修改：`passed（result_origin_kind 查询组合）`
+- Failure exercise：`passed（项目所有者确认）`
+- Learning Gate：`passed（项目所有者明确确认）`
+- Change：`completed`

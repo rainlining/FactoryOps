@@ -5,7 +5,7 @@
 - `learning_level`: `deep`
 - `pattern_stage`: `first-deep-for-multi-fact-atomic-transaction`
 - `first_deep_reference`: `2026-08-13-establish-inspection-lifecycle`（复用事务组件，新增三对象原子事实）
-- `gate_status`: `not-started`
+- `gate_status`: `passed-by-owner-confirmation`
 
 ## 编码前必须理解
 
@@ -47,13 +47,15 @@
 
 ## Learning Gate
 
-- [ ] 能解释三对象原子事务和关键取舍。
-- [ ] 能沿成功链定位真实代码。
-- [ ] 能定位 Incident INSERT 失败路径。
-- [ ] 已完成 `result_origin_kind` 修改。
-- [ ] 已完成故障实验并依据数据库证据判断。
-- [ ] 能指出事务、唯一键、外键、派生 ID 和 replay 的执行位置。
-- [ ] 已 review 最终 diff 并明确接受。
+- [x] 能解释三对象原子事务和关键取舍。
+- [x] 能沿成功链定位真实代码。
+- [x] 能定位 Incident INSERT 失败路径。
+- [x] 已完成 `result_origin_kind` 修改。
+- [x] 已完成故障实验并依据数据库证据判断。
+- [x] 能指出事务、唯一键、外键、派生 ID 和 replay 的执行位置。
+- [x] 已 review 最终 diff 并明确接受。
+
+项目所有者于 2026-08-13 明确确认本 Change 的学习与 Learning Gate 已完成。
 
 ## 会话边界
 
