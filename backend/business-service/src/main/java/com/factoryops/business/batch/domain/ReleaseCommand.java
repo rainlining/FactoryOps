@@ -1,0 +1,2 @@
+package com.factoryops.business.batch.domain;
+public record ReleaseCommand(ReleaseReasonCode reasonCode,String reasonDetail) { public ReleaseCommand {if(reasonCode==null||reasonCode==ReleaseReasonCode.MIGRATED_LEGACY_DATA)throw new IllegalArgumentException("invalid release reason");if(reasonDetail!=null){reasonDetail=reasonDetail.trim();if(reasonDetail.isEmpty()||reasonDetail.length()>500)throw new IllegalArgumentException("invalid reason_detail");}} }
