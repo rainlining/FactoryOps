@@ -1,5 +1,54 @@
 package com.factoryops.business.batch.infrastructure;
-import static org.assertj.core.api.Assertions.assertThat;import java.sql.DriverManager;import org.flywaydb.core.Flyway;import org.junit.jupiter.api.Test;import org.testcontainers.junit.jupiter.*;import org.testcontainers.mysql.MySQLContainer;
-@Testcontainers class BatchMigrationIT {@Container static final MySQLContainer MYSQL=new MySQLContainer("mysql:8.4");
- @Test void v3_assigns_historical_inspection_to_legacy_batch()throws Exception{var f=flyway("2");f.clean();f.migrate();try(var c=connection();var s=c.prepareStatement("INSERT INTO inspections VALUES(UNHEX(SHA2('I-1',256)),'I-1','artifact://a',?,'PENDING',CURRENT_TIMESTAMP(6),NULL)")){s.setString(1,"a".repeat(64));s.executeUpdate();}flyway("3").migrate();try(var c=connection();var s=c.createStatement();var r=s.executeQuery("SELECT i.batch_id,b.kind,b.status FROM inspections i JOIN batches b ON i.batch_id_hash=b.batch_id_hash")){assertThat(r.next()).isTrue();assertThat(r.getString(1)).isEqualTo("SYS-LEGACY-UNASSIGNED");assertThat(r.getString(2)).isEqualTo("LEGACY_UNASSIGNED");assertThat(r.getString(3)).isEqualTo("RELEASED");}}
- private Flyway flyway(String t){return Flyway.configure().dataSource(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword()).cleanDisabled(false).target(t).load();}private java.sql.Connection connection()throws Exception{return DriverManager.getConnection(MYSQL.getJdbcUrl(),MYSQL.getUsername(),MYSQL.getPassword());}}
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.DriverManager;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.mysql.MySQLContainer;
+
+@Testcontainers
+class BatchMigrationIT {
+  @Container static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4");
+
+  @Test
+  void v3_assigns_historical_inspection_to_legacy_batch() throws Exception {
+    var f = flyway("2");
+    f.clean();
+    f.migrate();
+    try (var c = connection();
+        var s =
+            c.prepareStatement(
+                "INSERT INTO inspections"
+                    + " VALUES(UNHEX(SHA2('I-1',256)),'I-1','artifact://a',?,'PENDING',CURRENT_TIMESTAMP(6),NULL)")) {
+      s.setString(1, "a".repeat(64));
+      s.executeUpdate();
+    }
+    flyway("3").migrate();
+    try (var c = connection();
+        var s = c.createStatement();
+        var r =
+            s.executeQuery(
+                "SELECT i.batch_id,b.kind,b.status FROM inspections i JOIN batches b ON"
+                    + " i.batch_id_hash=b.batch_id_hash")) {
+      assertThat(r.next()).isTrue();
+      assertThat(r.getString(1)).isEqualTo("SYS-LEGACY-UNASSIGNED");
+      assertThat(r.getString(2)).isEqualTo("LEGACY_UNASSIGNED");
+      assertThat(r.getString(3)).isEqualTo("RELEASED");
+    }
+  }
+
+  private Flyway flyway(String t) {
+    return Flyway.configure()
+        .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+        .cleanDisabled(false)
+        .target(t)
+        .load();
+  }
+
+  private java.sql.Connection connection() throws Exception {
+    return DriverManager.getConnection(
+        MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+  }
+}

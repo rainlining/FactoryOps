@@ -1,11 +1,114 @@
 package com.factoryops.business.batch.infrastructure;
-import com.factoryops.business.batch.domain.*;import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;import java.time.Instant;import java.util.Optional;import org.springframework.jdbc.core.JdbcTemplate;import org.springframework.stereotype.Repository;
-@Repository public class BatchJdbcRepository {
- private final JdbcTemplate jdbc; public BatchJdbcRepository(JdbcTemplate j){jdbc=j;}
- public void insert(Batch b){jdbc.update("INSERT INTO batches(batch_id_hash,batch_id,kind,product_code,production_line,status,created_at) VALUES(?,?,?,?,?,?,?)",InspectionJdbcRepository.hash(b.id()),b.id(),b.kind().name(),b.productCode(),b.productionLine(),b.status().name(),b.createdAt());}
- public Optional<Batch> find(String id){return query(id,"");} public Optional<Batch> findForUpdate(String id){return query(id," FOR UPDATE");}
- private Optional<Batch> query(String id,String suffix){return jdbc.query("SELECT batch_id,kind,product_code,production_line,status,created_at,held_at,hold_reason_code,hold_reason_detail,hold_inspection_id,hold_result_id,released_at,release_reason_code,release_reason_detail FROM batches WHERE batch_id_hash=?"+suffix,(rs,n)->{var hc=rs.getString(8)==null?null:new HoldCommand(HoldReasonCode.valueOf(rs.getString(8)),rs.getString(9),rs.getString(10),rs.getString(11));var rc=rs.getString(13)==null?null:new ReleaseCommand(ReleaseReasonCode.valueOf(rs.getString(13)),rs.getString(14));return Batch.restore(rs.getString(1),rs.getString(3),rs.getString(4),BatchKind.valueOf(rs.getString(2)),BatchStatus.valueOf(rs.getString(5)),rs.getTimestamp(6).toInstant(),instant(rs.getTimestamp(7)),hc,instant(rs.getTimestamp(12)),rc);},InspectionJdbcRepository.hash(id)).stream().filter(b->b.id().equals(id)).findFirst();}
- public int holdOpen(String id,HoldCommand c,Instant at){return jdbc.update("UPDATE batches SET status='HELD',held_at=?,hold_reason_code=?,hold_reason_detail=?,hold_inspection_id_hash=?,hold_inspection_id=?,hold_result_id_hash=?,hold_result_id=? WHERE batch_id_hash=? AND batch_id=? AND kind='PRODUCTION' AND status='OPEN'",at,c.reasonCode().name(),c.reasonDetail(),hash(c.inspectionId()),c.inspectionId(),hash(c.resultId()),c.resultId(),InspectionJdbcRepository.hash(id),id);}
- public int releaseHeld(String id,ReleaseCommand c,Instant at){return jdbc.update("UPDATE batches SET status='RELEASED',released_at=?,release_reason_code=?,release_reason_detail=? WHERE batch_id_hash=? AND batch_id=? AND kind='PRODUCTION' AND status='HELD'",at,c.reasonCode().name(),c.reasonDetail(),InspectionJdbcRepository.hash(id),id);}
- private byte[] hash(String s){return s==null?null:InspectionJdbcRepository.hash(s);} private Instant instant(java.sql.Timestamp t){return t==null?null:t.toInstant();}
+
+import com.factoryops.business.batch.domain.*;
+import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;
+import java.time.Instant;
+import java.util.Optional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class BatchJdbcRepository {
+  private final JdbcTemplate jdbc;
+
+  public BatchJdbcRepository(JdbcTemplate j) {
+    jdbc = j;
+  }
+
+  public void insert(Batch b) {
+    jdbc.update(
+        "INSERT INTO"
+            + " batches(batch_id_hash,batch_id,kind,product_code,production_line,status,created_at)"
+            + " VALUES(?,?,?,?,?,?,?)",
+        InspectionJdbcRepository.hash(b.id()),
+        b.id(),
+        b.kind().name(),
+        b.productCode(),
+        b.productionLine(),
+        b.status().name(),
+        b.createdAt());
+  }
+
+  public Optional<Batch> find(String id) {
+    return query(id, "");
+  }
+
+  public Optional<Batch> findForUpdate(String id) {
+    return query(id, " FOR UPDATE");
+  }
+
+  private Optional<Batch> query(String id, String suffix) {
+    return jdbc
+        .query(
+            "SELECT"
+                + " batch_id,kind,product_code,production_line,status,created_at,held_at,hold_reason_code,hold_reason_detail,hold_inspection_id,hold_result_id,released_at,release_reason_code,release_reason_detail"
+                + " FROM batches WHERE batch_id_hash=?"
+                + suffix,
+            (rs, n) -> {
+              var hc =
+                  rs.getString(8) == null
+                      ? null
+                      : new HoldCommand(
+                          HoldReasonCode.valueOf(rs.getString(8)),
+                          rs.getString(9),
+                          rs.getString(10),
+                          rs.getString(11));
+              var rc =
+                  rs.getString(13) == null
+                      ? null
+                      : new ReleaseCommand(
+                          ReleaseReasonCode.valueOf(rs.getString(13)), rs.getString(14));
+              return Batch.restore(
+                  rs.getString(1),
+                  rs.getString(3),
+                  rs.getString(4),
+                  BatchKind.valueOf(rs.getString(2)),
+                  BatchStatus.valueOf(rs.getString(5)),
+                  rs.getTimestamp(6).toInstant(),
+                  instant(rs.getTimestamp(7)),
+                  hc,
+                  instant(rs.getTimestamp(12)),
+                  rc);
+            },
+            InspectionJdbcRepository.hash(id))
+        .stream()
+        .filter(b -> b.id().equals(id))
+        .findFirst();
+  }
+
+  public int holdOpen(String id, HoldCommand c, Instant at) {
+    return jdbc.update(
+        "UPDATE batches SET"
+            + " status='HELD',held_at=?,hold_reason_code=?,hold_reason_detail=?,hold_inspection_id_hash=?,hold_inspection_id=?,hold_result_id_hash=?,hold_result_id=?"
+            + " WHERE batch_id_hash=? AND batch_id=? AND kind='PRODUCTION' AND status='OPEN'",
+        at,
+        c.reasonCode().name(),
+        c.reasonDetail(),
+        hash(c.inspectionId()),
+        c.inspectionId(),
+        hash(c.resultId()),
+        c.resultId(),
+        InspectionJdbcRepository.hash(id),
+        id);
+  }
+
+  public int releaseHeld(String id, ReleaseCommand c, Instant at) {
+    return jdbc.update(
+        "UPDATE batches SET"
+            + " status='RELEASED',released_at=?,release_reason_code=?,release_reason_detail=? WHERE"
+            + " batch_id_hash=? AND batch_id=? AND kind='PRODUCTION' AND status='HELD'",
+        at,
+        c.reasonCode().name(),
+        c.reasonDetail(),
+        InspectionJdbcRepository.hash(id),
+        id);
+  }
+
+  private byte[] hash(String s) {
+    return s == null ? null : InspectionJdbcRepository.hash(s);
+  }
+
+  private Instant instant(java.sql.Timestamp t) {
+    return t == null ? null : t.toInstant();
+  }
 }

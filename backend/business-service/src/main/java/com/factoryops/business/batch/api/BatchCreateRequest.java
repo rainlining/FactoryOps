@@ -1,1 +1,8 @@
-package com.factoryops.business.batch.api;import com.fasterxml.jackson.annotation.JsonProperty;public record BatchCreateRequest(@JsonProperty("batch_id")String batchId,@JsonProperty("product_code")String productCode,@JsonProperty("production_line")String productionLine){}
+package com.factoryops.business.batch.api;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record BatchCreateRequest(
+    @JsonProperty("batch_id") String batchId,
+    @JsonProperty("product_code") String productCode,
+    @JsonProperty("production_line") String productionLine) {}

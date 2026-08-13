@@ -1,2 +1,18 @@
 package com.factoryops.business.batch.domain;
-public record ReleaseCommand(ReleaseReasonCode reasonCode,String reasonDetail) { public ReleaseCommand {if(reasonCode==null)throw new IllegalArgumentException("invalid release reason");if(reasonDetail!=null){reasonDetail=reasonDetail.trim();if(reasonDetail.isEmpty()||reasonDetail.length()>500)throw new IllegalArgumentException("invalid reason_detail");}} public static ReleaseCommand external(ReleaseReasonCode code,String detail){if(code==ReleaseReasonCode.MIGRATED_LEGACY_DATA)throw new IllegalArgumentException("reserved release reason");return new ReleaseCommand(code,detail);} }
+
+public record ReleaseCommand(ReleaseReasonCode reasonCode, String reasonDetail) {
+  public ReleaseCommand {
+    if (reasonCode == null) throw new IllegalArgumentException("invalid release reason");
+    if (reasonDetail != null) {
+      reasonDetail = reasonDetail.trim();
+      if (reasonDetail.isEmpty() || reasonDetail.length() > 500)
+        throw new IllegalArgumentException("invalid reason_detail");
+    }
+  }
+
+  public static ReleaseCommand external(ReleaseReasonCode code, String detail) {
+    if (code == ReleaseReasonCode.MIGRATED_LEGACY_DATA)
+      throw new IllegalArgumentException("reserved release reason");
+    return new ReleaseCommand(code, detail);
+  }
+}
