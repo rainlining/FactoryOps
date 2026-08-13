@@ -1,0 +1,146 @@
+package com.factoryops.business.batch.domain;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+public final class Batch {
+  private static final Pattern ID = Pattern.compile("^[A-Z0-9][A-Z0-9-]{0,63}$"),
+      PRODUCT = Pattern.compile("^[A-Z0-9][A-Z0-9._-]{0,63}$");
+  private final String id, productCode, productionLine;
+  private final BatchKind kind;
+  private final Instant createdAt;
+  private BatchStatus status;
+  private Instant heldAt, releasedAt;
+  private HoldCommand hold;
+  private ReleaseCommand release;
+
+  private Batch(
+      String id,
+      String product,
+      String line,
+      BatchKind kind,
+      BatchStatus status,
+      Instant created,
+      Instant held,
+      HoldCommand hold,
+      Instant released,
+      ReleaseCommand release) {
+    this.id = id;
+    this.productCode = product;
+    this.productionLine = line;
+    this.kind = kind;
+    this.status = status;
+    this.createdAt = created;
+    this.heldAt = held;
+    this.hold = hold;
+    this.releasedAt = released;
+    this.release = release;
+    validateState();
+  }
+
+  public static Batch production(String id, String product, String line, Instant at) {
+    if (!ID.matcher(Objects.requireNonNull(id)).matches())
+      throw new IllegalArgumentException("invalid batch_id");
+    if (id.startsWith("SYS-")) throw new IllegalArgumentException("reserved batch_id");
+    if (!PRODUCT.matcher(Objects.requireNonNull(product)).matches())
+      throw new IllegalArgumentException("invalid product_code");
+    if (!ID.matcher(Objects.requireNonNull(line)).matches())
+      throw new IllegalArgumentException("invalid production_line");
+    return new Batch(
+        id, product, line, BatchKind.PRODUCTION, BatchStatus.OPEN, at, null, null, null, null);
+  }
+
+  public static Batch restore(
+      String id,
+      String product,
+      String line,
+      BatchKind kind,
+      BatchStatus status,
+      Instant created,
+      Instant held,
+      HoldCommand hold,
+      Instant released,
+      ReleaseCommand release) {
+    return new Batch(id, product, line, kind, status, created, held, hold, released, release);
+  }
+
+  public CommandDisposition hold(HoldCommand command, Instant at) {
+    if (kind != BatchKind.PRODUCTION || status == BatchStatus.RELEASED)
+      throw new InvalidBatchTransitionException();
+    if (status == BatchStatus.HELD) {
+      if (hold.equals(command)) return CommandDisposition.REPLAYED;
+      throw new BatchCommandConflictException();
+    }
+    status = BatchStatus.HELD;
+    heldAt = at;
+    hold = command;
+    return CommandDisposition.APPLIED;
+  }
+
+  public CommandDisposition release(ReleaseCommand command, Instant at) {
+    if (kind != BatchKind.PRODUCTION || status == BatchStatus.OPEN)
+      throw new InvalidBatchTransitionException();
+    if (status == BatchStatus.RELEASED) {
+      if (release.equals(command)) return CommandDisposition.REPLAYED;
+      throw new BatchCommandConflictException();
+    }
+    status = BatchStatus.RELEASED;
+    releasedAt = at;
+    release = command;
+    return CommandDisposition.APPLIED;
+  }
+
+  private void validateState() {
+    if (createdAt == null) throw new IllegalArgumentException("created_at required");
+    if (status == BatchStatus.OPEN
+        && (heldAt != null || hold != null || releasedAt != null || release != null))
+      throw new IllegalArgumentException("invalid OPEN fields");
+    if (status == BatchStatus.HELD
+        && (heldAt == null || hold == null || releasedAt != null || release != null))
+      throw new IllegalArgumentException("invalid HELD fields");
+    if (status == BatchStatus.RELEASED
+        && (heldAt == null || hold == null || releasedAt == null || release == null))
+      throw new IllegalArgumentException("invalid RELEASED fields");
+  }
+
+  public String id() {
+    return id;
+  }
+
+  public String productCode() {
+    return productCode;
+  }
+
+  public String productionLine() {
+    return productionLine;
+  }
+
+  public BatchKind kind() {
+    return kind;
+  }
+
+  public BatchStatus status() {
+    return status;
+  }
+
+  public Instant createdAt() {
+    return createdAt;
+  }
+
+  public Instant heldAt() {
+    return heldAt;
+  }
+
+  public HoldCommand holdCommand() {
+    return hold;
+  }
+
+  public Instant releasedAt() {
+    return releasedAt;
+  }
+
+  public ReleaseCommand releaseCommand() {
+    return release;
+  }
+}
