@@ -41,7 +41,10 @@ class InspectionLifecycleHttpIT {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("PENDING")).andExpect(jsonPath("$.replayed").value(false));
         mvc.perform(post("/api/v1/inspections").contentType("application/json").content(body))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
-        mvc.perform(get("/api/v1/inspections/inspection-1")).andExpect(status().isOk()).andExpect(jsonPath("$.completed_at").doesNotExist());
+        mvc.perform(get("/api/v1/inspections/inspection-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.completed_at").doesNotExist())
+                .andExpect(jsonPath("$.result_count").value(0));
     }
 
     @Test void rejects_identity_conflict_and_reports_missing() throws Exception {

@@ -158,10 +158,15 @@ class InspectionResultHttpIT {
         var body=fixture("valid/fake-result.json"); createInspection(body);
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(body)).andExpect(status().isCreated());
         var completed=jdbc.queryForObject("select completed_at from inspections",java.sql.Timestamp.class);
+        mvc.perform(get("/api/v1/inspections/inspection-fake-0001"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.result_count").value(1));
         var second=body.replace("result-fake-0001","result-fake-0002");
         mvc.perform(post("/api/v1/inspection-results").contentType("application/json").content(second)).andExpect(status().isCreated());
         assertThat(jdbc.queryForObject("select completed_at from inspections",java.sql.Timestamp.class)).isEqualTo(completed);
-        mvc.perform(get("/api/v1/inspections/inspection-fake-0001")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
+        mvc.perform(get("/api/v1/inspections/inspection-fake-0001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.result_count").value(2));
     }
 
     @Test
