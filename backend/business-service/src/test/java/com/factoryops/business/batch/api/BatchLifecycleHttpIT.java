@@ -39,6 +39,7 @@ class BatchLifecycleHttpIT {
   void clean() {
     jdbc.execute("SET FOREIGN_KEY_CHECKS=0");
     try {
+      jdbc.update("DELETE FROM quality_incidents");
       jdbc.update("DELETE FROM vision_inspection_results");
       jdbc.update("DELETE FROM inspections");
       jdbc.update("DELETE FROM batches WHERE kind='PRODUCTION'");
@@ -266,8 +267,14 @@ class BatchLifecycleHttpIT {
   }
 
   private String inspectionRequest(String id, String batchId, String uri, String shaPrefix) {
-    return "{\"inspection_id\":\"" + id + "\",\"batch_id\":\"" + batchId
-        + "\",\"input\":{\"image_uri\":\"" + uri + "\",\"sha256\":\""
-        + shaPrefix.repeat(64) + "\"}}";
+    return "{\"inspection_id\":\""
+        + id
+        + "\",\"batch_id\":\""
+        + batchId
+        + "\",\"input\":{\"image_uri\":\""
+        + uri
+        + "\",\"sha256\":\""
+        + shaPrefix.repeat(64)
+        + "\"}}";
   }
 }

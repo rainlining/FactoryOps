@@ -43,6 +43,7 @@ class InspectionLifecycleHttpIT {
 
   @BeforeEach
   void clean() {
+    jdbc.update("DELETE FROM quality_incidents");
     jdbc.update("DELETE FROM vision_inspection_results");
     jdbc.update("DELETE FROM inspections");
     jdbc.update("DELETE FROM batches WHERE kind='PRODUCTION'");

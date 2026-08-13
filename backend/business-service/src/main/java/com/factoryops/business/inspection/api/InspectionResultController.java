@@ -13,17 +13,22 @@ import tools.jackson.databind.JsonNode;
 @RestController
 @RequestMapping("/api/v1/inspection-results")
 public class InspectionResultController {
-    private final InspectionResultIntake intake;
+  private final InspectionResultIntake intake;
 
-    public InspectionResultController(InspectionResultIntake intake) {
-        this.intake = intake;
-    }
+  public InspectionResultController(InspectionResultIntake intake) {
+    this.intake = intake;
+  }
 
-    @PostMapping
-    ResponseEntity<InspectionResultResponse> accept(@RequestBody JsonNode payload) {
-        var disposition = intake.accept(payload);
-        var status = disposition == IntakeDisposition.CREATED ? HttpStatus.CREATED : HttpStatus.OK;
-        return ResponseEntity.status(status)
-                .body(new InspectionResultResponse(disposition == IntakeDisposition.REPLAYED, disposition.name()));
-    }
+  @PostMapping
+  ResponseEntity<InspectionResultResponse> accept(@RequestBody JsonNode payload) {
+    var outcome = intake.accept(payload);
+    var disposition = outcome.disposition();
+    var status = disposition == IntakeDisposition.CREATED ? HttpStatus.CREATED : HttpStatus.OK;
+    return ResponseEntity.status(status)
+        .body(
+            new InspectionResultResponse(
+                disposition == IntakeDisposition.REPLAYED,
+                disposition.name(),
+                outcome.incidentId()));
+  }
 }
