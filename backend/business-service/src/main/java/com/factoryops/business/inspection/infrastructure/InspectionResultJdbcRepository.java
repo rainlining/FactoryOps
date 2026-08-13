@@ -47,4 +47,18 @@ public class InspectionResultJdbcRepository {
             throw new IllegalStateException(impossible);
         }
     }
+
+    public long countByInspectionId(String inspectionId) {
+        return jdbc.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM vision_inspection_results
+                WHERE inspection_id_hash = ?
+                AND inspection_id = ?
+                """,
+                Long.class,
+                InspectionJdbcRepository.hash(inspectionId),
+                inspectionId
+        );
+    }
 }

@@ -6,6 +6,8 @@
 
 系统必须通过 `POST /api/v1/inspection-results` 接收 Vision Inspection Contract 1.0。首次创建返回 201、`replayed=false` 和 `disposition=CREATED`；完全相同重放返回 200、`replayed=true` 和 `disposition=REPLAYED`。
 
+系统必须先完成 JSON、Vision Schema 和 Domain 校验，再在一个 READ COMMITTED 事务中验证父 Inspection、保存 Result 并推进 `PENDING → COMPLETED`。父 Inspection 不存在或图片身份不匹配时返回 422 且 Result 不入库；既有 malformed、Contract issue、result replay/conflict 语义保持不变。
+
 #### Scenario: 首次创建
 - **Given** 合法且尚不存在的 `result_id`
 - **When** 提交结果

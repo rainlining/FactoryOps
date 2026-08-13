@@ -1,6 +1,9 @@
 package com.factoryops.business.inspection.application;
 
 import com.factoryops.business.inspection.infrastructure.InspectionResultJdbcRepository;
+import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;
+import com.factoryops.business.inspection.domain.InspectionInput;
+import java.time.Clock;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DuplicateKeyException;
@@ -12,15 +15,19 @@ import tools.jackson.databind.JsonNode;
 public class InspectionResultIntakeService implements InspectionResultIntake {
     private final VisionInspectionContractValidator validator;
     private final InspectionResultJdbcRepository repository;
+    private final InspectionJdbcRepository inspections;
+    private final Clock clock;
     private final TransactionTemplate writeTransaction;
     private final TransactionTemplate readTransaction;
 
     public InspectionResultIntakeService(VisionInspectionContractValidator validator,
             InspectionResultJdbcRepository repository,
+            InspectionJdbcRepository inspections, Clock clock,
             @Qualifier("inspectionWriteTransaction") TransactionTemplate writeTransaction,
             @Qualifier("inspectionReadTransaction") TransactionTemplate readTransaction) {
         this.validator = validator;
         this.repository = repository;
+        this.inspections = inspections; this.clock = clock;
         this.writeTransaction = writeTransaction;
         this.readTransaction = readTransaction;
     }
@@ -28,12 +35,13 @@ public class InspectionResultIntakeService implements InspectionResultIntake {
     @Override
     public IntakeDisposition accept(JsonNode payload) {
         var result = validator.validate(payload);
-        var existing = readTransaction.execute(status -> repository.findByResultId(result.resultId()));
-        if (existing != null && existing.isPresent()) return compare(result, existing.get());
-        try {
-            writeTransaction.executeWithoutResult(status -> repository.insert(result));
-            return IntakeDisposition.CREATED;
-        } catch (DuplicateKeyException duplicate) {
+        try { return writeTransaction.execute(status -> {
+            var inspection=inspections.find(result.inspectionId()).orElseThrow(ResultInspectionNotFoundException::new);
+            var mismatch=inspection.input().firstMismatch(new InspectionInput(result.imageUri(),result.imageSha256()));
+            if(mismatch.isPresent()) throw new InspectionInputMismatchException(mismatch.get());
+            var existing=repository.findByResultId(result.resultId()); if(existing.isPresent()) return compare(result,existing.get());
+            inspections.completePending(result.inspectionId(),clock.instant()); repository.insert(result); return IntakeDisposition.CREATED;
+        }); } catch (DuplicateKeyException duplicate) {
             var winner = readTransaction.execute(status -> repository.findByResultId(result.resultId()))
                     .orElseThrow(() -> duplicate);
             return compare(result, winner);
