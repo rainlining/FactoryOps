@@ -32,4 +32,4 @@
 - Failure exercise：`accepted with variance（完成注入与 SQL 复位；Docker 阻断，未观察数据库时间覆盖）`
 - 最终 Diff Review：`passed（项目所有者明确接受）`
 - Learning Gate：`passed by explicit owner acceptance with documented variance`
-- Change 最终状态：`completed，待本提交归档`
+- Change 最终状态：`archived（2026-08-13）`

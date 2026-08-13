@@ -46,6 +46,10 @@
 - Failure/debug exercise：暂时移除 `completePending` SQL 的 `AND status='PENDING'`，以两份不同 Result 复现首次完成时间被覆盖，再恢复条件并验证。
 - Learning Gate：能够解释设计、沿成功与失败调用链定位、完成修改与实验、指出事务/幂等实际位置，并接受最终 diff 后才可 completed/archived/merge main。
 
+## Review 完成记录
+
+2026-08-13，项目所有者完成调用链、失败路径和最终 diff review，并明确接受 Change。`result_count` 由 Review 会话代写；故障 SQL 已注入并恢复，但因 Docker 不可用未实际观察时间覆盖。详细状态见 `learning.md` 与 `verification.md`。
+
 ## 剩余风险
 
 - 当前 API 输入校验错误粒度较粗，非法创建统一为 `invalid_inspection_input`；可在后续独立 Contract Change 中细化，不影响本 Change 的生命周期不变量。
