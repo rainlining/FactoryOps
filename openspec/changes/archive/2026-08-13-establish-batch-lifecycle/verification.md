@@ -26,4 +26,4 @@
 - 所有者修改：`passed（inspection_count，覆盖 0、1、2）`
 - Failure exercise：`passed（项目所有者确认）`
 - Learning Gate：`passed（项目所有者明确确认）`
-- Change：`completed`
+- Change：`archived（2026-08-13）`
