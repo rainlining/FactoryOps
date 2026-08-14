@@ -1,16 +1,23 @@
 package com.factoryops.business.outbox.infrastructure;
 
 import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;
-import com.factoryops.business.outbox.application.OutboxIntegrityException;
 import com.factoryops.business.outbox.application.OutboxEventView;
+import com.factoryops.business.outbox.application.OutboxIntegrityException;
 import com.factoryops.business.outbox.domain.OutboxEvent;
+import com.factoryops.business.outbox.publisher.OutboxPublicationRepository;
+import com.factoryops.business.outbox.publisher.OutboxPublicationStateException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-public class OutboxEventJdbcRepository {
+public class OutboxEventJdbcRepository implements OutboxPublicationRepository {
   private final JdbcTemplate jdbc;
 
   public OutboxEventJdbcRepository(JdbcTemplate jdbc) {
@@ -56,28 +63,51 @@ public class OutboxEventJdbcRepository {
             FROM outbox_events
             WHERE event_id = ?
             """,
-            (row, number) ->
-                new OutboxEvent(
-                    row.getString("event_id"),
-                    row.getString("aggregate_type"),
-                    row.getString("aggregate_id"),
-                    row.getString("event_type"),
-                    row.getString("contract_version"),
-                    row.getString("topic"),
-                    row.getString("message_key"),
-                    row.getTimestamp("occurred_at").toInstant(),
-                    row.getString("payload"),
-                    row.getString("status"),
-                    row.getInt("attempt_count"),
-                    row.getTimestamp("available_at").toInstant(),
-                    row.getTimestamp("published_at") == null
-                        ? null
-                        : row.getTimestamp("published_at").toInstant(),
-                    row.getString("last_error"),
-                    row.getTimestamp("created_at").toInstant()),
+            this::map,
             eventId)
         .stream()
         .findFirst();
+  }
+
+  @Override
+  public List<OutboxEvent> findPublishable(int limit) {
+    if (limit <= 0) {
+      throw new IllegalArgumentException("limit must be positive");
+    }
+    return jdbc.query(
+        """
+        SELECT event_id, aggregate_type, aggregate_id, event_type,
+               contract_version, topic, message_key, occurred_at, payload,
+               status, attempt_count, available_at, published_at,
+               last_error, created_at
+        FROM outbox_events
+        WHERE status = 'PENDING'
+          AND available_at <= CURRENT_TIMESTAMP(6)
+        ORDER BY available_at, created_at, event_id
+        LIMIT ?
+        """,
+        this::map,
+        limit);
+  }
+
+  @Override
+  @Transactional
+  public Instant markPublished(String eventId) {
+    var affected =
+        jdbc.update(
+            """
+            UPDATE outbox_events
+            SET status = 'PUBLISHED', published_at = CURRENT_TIMESTAMP(6)
+            WHERE event_id = ? AND status = 'PENDING'
+            """,
+            eventId);
+    if (affected != 1) {
+      throw new OutboxPublicationStateException(eventId, affected);
+    }
+    return jdbc.queryForObject(
+        "SELECT published_at FROM outbox_events WHERE event_id = ?",
+        (row, number) -> row.getTimestamp(1).toInstant(),
+        eventId);
   }
 
   public Optional<OutboxEventView> findViewByEventId(String eventId) {
@@ -96,7 +126,7 @@ public class OutboxEventJdbcRepository {
     }
   }
 
-  private java.util.List<String> immutableMismatches(OutboxEvent actual, OutboxEvent expected) {
+  private List<String> immutableMismatches(OutboxEvent actual, OutboxEvent expected) {
     var mismatches = new ArrayList<String>();
     addMismatch(mismatches, "event_id", actual.eventId(), expected.eventId());
     addMismatch(mismatches, "aggregate_type", actual.aggregateType(), expected.aggregateType());
@@ -112,9 +142,30 @@ public class OutboxEventJdbcRepository {
   }
 
   private void addMismatch(
-      java.util.List<String> mismatches, String field, Object actual, Object expected) {
+      List<String> mismatches, String field, Object actual, Object expected) {
     if (!actual.equals(expected)) {
       mismatches.add(field);
     }
+  }
+
+  private OutboxEvent map(ResultSet row, int number) throws SQLException {
+    return new OutboxEvent(
+        row.getString("event_id"),
+        row.getString("aggregate_type"),
+        row.getString("aggregate_id"),
+        row.getString("event_type"),
+        row.getString("contract_version"),
+        row.getString("topic"),
+        row.getString("message_key"),
+        row.getTimestamp("occurred_at").toInstant(),
+        row.getString("payload"),
+        row.getString("status"),
+        row.getInt("attempt_count"),
+        row.getTimestamp("available_at").toInstant(),
+        row.getTimestamp("published_at") == null
+            ? null
+            : row.getTimestamp("published_at").toInstant(),
+        row.getString("last_error"),
+        row.getTimestamp("created_at").toInstant());
   }
 }
