@@ -2,6 +2,7 @@ package com.factoryops.business.outbox.infrastructure;
 
 import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;
 import com.factoryops.business.outbox.application.OutboxIntegrityException;
+import com.factoryops.business.outbox.application.OutboxEventView;
 import com.factoryops.business.outbox.domain.OutboxEvent;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -77,6 +78,10 @@ public class OutboxEventJdbcRepository {
             eventId)
         .stream()
         .findFirst();
+  }
+
+  public Optional<OutboxEventView> findViewByEventId(String eventId) {
+    return findByEventId(eventId).map(OutboxEventView::from);
   }
 
   public void requireMatching(OutboxEvent expected) {

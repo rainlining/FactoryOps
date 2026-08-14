@@ -107,6 +107,9 @@ class OutboxMigrationIT {
         new QualityIncidentOpenedEventFactory(JsonMapper.builder().build())
             .create(incident, Instant.EPOCH);
     assertThat(repository.findByEventId(expected.eventId())).isPresent();
+    var view = repository.findViewByEventId(expected.eventId()).orElseThrow();
+    assertThat(view.payloadSizeBytes())
+        .isEqualTo(expected.payload().getBytes(StandardCharsets.UTF_8).length);
     repository.requireMatching(expected);
 
     var conflicting =
