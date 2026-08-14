@@ -1,3 +1,52 @@
 # Review Handoff：2026-08-14-persist-quality-incident-outbox
 
-当前只完成已讨论的 OpenSpec 设计，尚未进入实现。实现会话完成 migration、Event Factory、Repository、事务接入和测试后，必须填写真实 branch/worktree/base/head、调用链、验证证据、owner 修改与故障实验。
+## 恢复信息
+
+- 学习等级：`deep`
+- 状态：`review-handoff-ready`
+- 分支：`codex/persist-quality-incident-outbox`
+- worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-quality-incident-outbox`
+- base commit：`3e6ed021a0895a691ba70519ebc532503ba99851`
+- implementation head：`35ef7ea`
+- 禁止实现会话与 Review/Learning 会话并发修改此 worktree。
+
+## 已实现范围
+
+- 用 V5 创建 `outbox_events` 并为历史 OPEN Incident 回填事件。
+- 用 Java Event Factory 生成稳定 event ID、固定六位 UTC 微秒时间和 canonical JSON。
+- 在既有 Result Intake 写事务内原子保存 Incident 与 PENDING Outbox。
+- replay 必须找到同一事件，并逐项核对不可变身份和内容。
+- 数据库、并发、回滚、迁移及 Java→Schema Contract 均有自动化测试。
+
+非目标：Kafka Producer/Consumer、发布抢占、重试、锁、PUBLISHED 迁移、Incident 状态迁移。
+
+## 建议阅读顺序与真实调用链
+
+1. HTTP 入口：`InspectionResultController.accept`。
+2. 事务编排：`InspectionResultIntakeService.accept`；`TransactionTemplate` 包住 Result、Inspection、Incident、Outbox 写入。
+3. Incident 分支：`QualityIncidentService.openOrFind` 创建新 Incident；`findForReplay` 处理重复结果。
+4. 事件生成：`QualityIncidentOpenedEventFactory.create`。
+5. 持久化和回放校验：`OutboxEventJdbcRepository.insert`、`requireMatching`。
+6. 数据库边界：`V5__create_and_backfill_outbox_events.sql`。
+7. 成功、回放、并发和回滚：`InspectionResultHttpIT`。
+8. 历史迁移与精确 payload：`OutboxMigrationIT`。
+
+成功链：POST Result → Contract 校验 → Result Intake 事务 → Result INSERT → Inspection COMPLETE → Incident INSERT → Outbox INSERT → commit。
+
+重复链：相同 Result → replay 比较 → 读取 Incident → 重建期望事件 → `requireMatching` → 返回相同 Incident ID，不新增 Outbox。
+
+失败链：Outbox INSERT 违反 CHECK → JDBC 异常越过服务边界 → 外层事务回滚此前所有写入。Outbox 缺失或内容冲突则在 replay 时抛出 `OutboxIntegrityException`。
+
+## 验证与限制
+
+验证命令和真实结果见 `verification.md`。本地 Docker 已运行，全量 Java 集成测试已实际执行。Kafka 发布可靠性不属于此 Change。
+
+## Owner 修改任务
+
+为只读 Outbox 查询视图增加 `payload_size_bytes` 派生值并补测试。必须按 UTF-8 字节数计算，不修改表结构或 canonical payload。
+
+## Failure/Debug Exercise
+
+临时让新 Outbox INSERT 使用数据库不允许的 status；执行异常结果写入，观察 HTTP 失败且 Inspection 仍为 PENDING、Result/Incident/Outbox 均为 0。恢复 PENDING 后重跑原子回滚测试和完整构建。
+
+Review 会话完成 Walkthrough、owner 修改、故障实验、最终 diff review 与 Learning Gate 后，才可把 Change 标记为 `completed`。

@@ -71,6 +71,7 @@ Event Factory 使用 Incident `created_at` 作为 `occurred_at`。若事件生�
 - event ID 主键；
 - aggregate type + aggregate ID hash + event type 唯一；
 - aggregate ID hash + ID 外键指向 Quality Incident；
+- 表的事件信封字段可复用，但当前外键有意把本 Change 限定为 Quality Incident；未来支持其他 aggregate 时必须另行设计并迁移外键策略；
 - status 只允许 PENDING/PUBLISHED；
 - PENDING 必须没有 published_at，PUBLISHED 必须有 published_at；
 - attempt count 非负；

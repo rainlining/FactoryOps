@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `gate_status`: `not-started`
+- `gate_status`: `awaiting-learning-gate`
 
 ## 编码前必须理解
 
