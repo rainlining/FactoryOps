@@ -1,0 +1,6 @@
+{
+  "topic": "factoryops.quality.incident.v1",
+  "message_key_path": "$.payload.incident_id",
+  "value_content_type": "application/json",
+  "value_encoding": "utf-8"
+}

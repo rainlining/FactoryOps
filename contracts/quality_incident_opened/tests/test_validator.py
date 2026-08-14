@@ -79,6 +79,18 @@ class QualityIncidentOpenedValidationTest(unittest.TestCase):
             "$.occurred_at",
         )
 
+    def test_rejects_incident_that_is_not_open(self) -> None:
+        payload = valid_event()
+        event_payload = payload["payload"]
+        assert isinstance(event_payload, dict)
+        event_payload["status"] = "CLOSED"
+
+        self.assert_issue(
+            payload,
+            "schema_validation_failed",
+            "$.payload.status",
+        )
+
     def test_rejects_event_id_not_derived_from_incident(self) -> None:
         payload = valid_event()
         payload["event_id"] = "EVT-" + "A" * 64
