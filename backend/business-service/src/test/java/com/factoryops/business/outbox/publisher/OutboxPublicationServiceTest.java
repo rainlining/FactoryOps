@@ -29,7 +29,8 @@ class OutboxPublicationServiceTest {
     var summary = service.publish(List.of(event("EVT-1"), event("EVT-2")));
 
     assertThat(calls).containsExactly("send:EVT-1", "send:EVT-2", "mark:EVT-2");
-    assertThat(summary).isEqualTo(new PublicationRoundSummary(2, 1, 1));
+    assertThat(summary).isEqualTo(new PublicationRoundSummary(2, 1, 1, 17L));
+    assertThat(summary.lastSuccessfulOffset()).isEqualTo(17L);
   }
 
   @Test
@@ -48,7 +49,27 @@ class OutboxPublicationServiceTest {
             .publish(List.of(event("EVT-1"), event("EVT-2")));
 
     assertThat(calls).containsExactly("EVT-1", "EVT-2");
-    assertThat(summary).isEqualTo(new PublicationRoundSummary(2, 1, 1));
+    assertThat(summary).isEqualTo(new PublicationRoundSummary(2, 1, 1, 1L));
+    assertThat(summary.lastSuccessfulOffset()).isEqualTo(1L);
+  }
+
+  @Test
+  void leaves_last_successful_offset_empty_when_no_event_completes() {
+    OutboxEventSender sender =
+        event -> {
+          throw new IllegalStateException("broker unavailable");
+        };
+    OutboxPublicationRepository repository =
+        eventId -> {
+          throw new AssertionError("database must not be updated");
+        };
+
+    var summary =
+        new OutboxPublicationService(sender, repository)
+            .publish(List.of(event("EVT-1"), event("EVT-2")));
+
+    assertThat(summary).isEqualTo(new PublicationRoundSummary(2, 0, 2, null));
+    assertThat(summary.lastSuccessfulOffset()).isNull();
   }
 
   private OutboxEvent event(String id) {

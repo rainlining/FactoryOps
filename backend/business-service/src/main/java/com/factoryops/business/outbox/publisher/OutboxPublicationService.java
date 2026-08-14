@@ -20,11 +20,13 @@ public final class OutboxPublicationService {
   public PublicationRoundSummary publish(List<OutboxEvent> events) {
     var published = 0;
     var failed = 0;
+    Long lastSuccessfulOffset = null;
     for (var event : events) {
       try {
         var publication = sender.send(event);
         repository.markPublished(event.eventId());
         published++;
+        lastSuccessfulOffset = publication.offset();
         log.info(
             "outbox_publish_succeeded event_id={} topic={} message_key={} partition={} offset={}"
                 + " ack_ms={}",
@@ -45,6 +47,6 @@ public final class OutboxPublicationService {
             failure);
       }
     }
-    return new PublicationRoundSummary(events.size(), published, failed);
+    return new PublicationRoundSummary(events.size(), published, failed, lastSuccessfulOffset);
   }
 }
