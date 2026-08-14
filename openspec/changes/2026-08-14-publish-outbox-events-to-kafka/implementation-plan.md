@@ -14,7 +14,7 @@
 - 不实现 Consumer、Lease、锁、backoff、FAILED、dead-letter、Prometheus 或 exactly-once。
 - Kafka 网络调用期间不得持有 MySQL 事务。
 - value 必须是 Outbox payload 原文的 UTF-8 bytes，不得重新序列化。
-- `acks=all`、`enable.idempotence=true`、`allow.auto.create.topics=false`。
+- `acks=all`、`enable.idempotence=true`，且 Broker `auto.create.topics.enable=false`。
 - 只有 broker acknowledgement 成功后才允许条件更新 PUBLISHED。
 - `dataset/` 不得修改或提交。
 
@@ -114,7 +114,7 @@ Expected: FAIL，因为依赖、配置和 sender 尚不存在。
 
 - [ ] **Step 3: 添加依赖与最小实现**
 
-加入 Spring Kafka 和 Testcontainers Kafka；Producer 配置固定 acks/all、idempotence true、auto-create false、delivery timeout；不添加 headers，不解析 payload。
+加入 Spring Kafka 和 Testcontainers Kafka；Producer 配置固定 acks/all、idempotence true 和 delivery timeout，测试 Broker 禁用 auto-create；不添加 headers，不解析 payload。
 
 - [ ] **Step 4: 验证 GREEN**
 
@@ -241,4 +241,3 @@ Expected: 全部 exit 0，并记录精确测试数量。
 - [ ] **Step 4: Commit**
 
 `git commit -m "docs: hand off kafka publisher review"`
-

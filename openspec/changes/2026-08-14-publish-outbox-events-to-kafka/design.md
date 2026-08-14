@@ -53,7 +53,7 @@ Kafka 网络调用不处于 MySQL 事务内。查询可成批，但 publish/ack/
 
 - `acks=all`
 - `enable.idempotence=true`
-- `allow.auto.create.topics=false`
+- Broker `auto.create.topics.enable=false`
 - 明确 `delivery.timeout.ms`
 - topic：Outbox 保存的 `factoryops.quality.incident.v1`
 - key：Outbox 保存的 Incident ID
@@ -117,4 +117,3 @@ Prometheus、告警和 Consumer Lag 不在本 Change。手工证据由 Kafbat UI
 - 自动创建 Topic：掩盖配置错误。
 - 全 Mock Kafka：无法证明真实 partition、offset 和网络行为。
 - 同时实现 Consumer：会混入 offset、幂等登记和 Agent Runtime 边界。
-

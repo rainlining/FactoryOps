@@ -19,7 +19,7 @@ Business Service 已能在创建 OPEN Quality Incident 的同一 MySQL 事务中
 
 - 在现有 Java Business Service 内新增独立 `outbox.publisher` 模块。
 - 使用固定延迟、稳定顺序和可配置 batch size 查询到期 PENDING Outbox。
-- 使用 `acks=all`、Producer idempotence、明确 delivery timeout 和禁用 Topic 自动创建。
+- 使用 `acks=all`、Producer idempotence、明确 delivery timeout，并在 Broker 禁用 Topic 自动创建。
 - 逐事件发送、等待 acknowledgement，并以短 MySQL 事务条件更新 PUBLISHED。
 - 失败事件保持 PENDING；当前轮继续处理后续事件。
 - 使用真实 Kafka Testcontainers 验证 topic、key、payload bytes、partition、offset 和状态更新。

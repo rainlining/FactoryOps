@@ -16,7 +16,7 @@ Producer 必须使用 Outbox 保存的 topic 和 message key，并把已保存 p
 
 ### Requirement: Topic 必须显式存在
 
-Producer 必须禁止自动创建 Topic。`factoryops.quality.incident.v1` 必须由基础设施显式创建；本地学习环境使用 3 partitions 和 1 replica。Topic 不存在时发送必须失败且 Outbox 保持 PENDING。
+Kafka Broker 必须禁用自动创建 Topic。`factoryops.quality.incident.v1` 必须由基础设施显式创建；本地学习环境使用 3 partitions 和 1 replica。Topic 不存在时发送必须失败且 Outbox 保持 PENDING。
 
 ### Requirement: Broker acknowledgement 成功后才能标记 PUBLISHED
 
@@ -41,4 +41,3 @@ Kafka 已确认而 MySQL 状态更新尚未成功时，进程崩溃或数据库�
 ### Requirement: 本地环境必须支持可视化学习
 
 Docker 学习环境必须提供单节点 KRaft Kafka、显式 Topic 初始化和 Kafbat UI。Learning Lab 必须指导观察 topic、partition、offset、key、payload、PENDING/PUBLISHED 状态以及 at-least-once 重复。
-
