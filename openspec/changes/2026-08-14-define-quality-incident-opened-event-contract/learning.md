@@ -5,7 +5,7 @@
 - `learning_level`: `standard`
 - `pattern_stage`: `standard-after-vision-contract-deep`
 - `first_deep_reference`: `2026-08-10-define-vision-inspection-contract`
-- `gate_status`: `not-started`
+- `gate_status`: `awaiting-learning-gate`
 
 ## 需要理解
 
