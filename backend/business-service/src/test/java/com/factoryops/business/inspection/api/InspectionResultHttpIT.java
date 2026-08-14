@@ -24,8 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
-import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,6 +47,7 @@ class InspectionResultHttpIT {
 
   @BeforeEach
   void cleanDatabase() {
+    jdbc.update("DELETE FROM outbox_events");
     jdbc.update("DELETE FROM quality_incidents");
     jdbc.update("DELETE FROM vision_inspection_results");
     jdbc.update("DELETE FROM inspections");
@@ -80,6 +81,14 @@ class InspectionResultHttpIT {
         .andExpect(jsonPath("$.result_origin_kind").value("vision-service"));
     assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
         .isEqualTo(1);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM outbox_events WHERE aggregate_id = ?",
+                String.class,
+                incidentId))
+        .isEqualTo("PENDING");
     assertThat(
             jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='B-TEST'", String.class))
         .isEqualTo("OPEN");
@@ -94,6 +103,47 @@ class InspectionResultHttpIT {
         .andExpect(jsonPath("$.incident_id").doesNotExist());
     assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
         .isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events", Integer.class)).isZero();
+  }
+
+  @Test
+  void outbox_insert_failure_rolls_back_result_incident_and_completion() throws Exception {
+    var payload = mapper.readTree(fixture("valid/vision-service-result.json"));
+    createInspection(payload.toString());
+    jdbc.execute(
+        "ALTER TABLE outbox_events ADD CONSTRAINT chk_injected_outbox_failure CHECK"
+            + " (status='NEVER')");
+    try {
+      assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> intake.accept(payload)))
+          .isNotNull();
+    } finally {
+      jdbc.execute("ALTER TABLE outbox_events DROP CHECK chk_injected_outbox_failure");
+    }
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events", Integer.class)).isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
+        .isZero();
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM vision_inspection_results", Integer.class))
+        .isZero();
+    assertThat(jdbc.queryForObject("SELECT status FROM inspections", String.class))
+        .isEqualTo("PENDING");
+    assertThat(
+            jdbc.queryForObject("SELECT completed_at FROM inspections", java.sql.Timestamp.class))
+        .isNull();
+  }
+
+  @Test
+  void anomaly_replay_rejects_missing_or_conflicting_outbox() throws Exception {
+    var payload = mapper.readTree(fixture("valid/vision-service-result.json"));
+    createInspection(payload.toString());
+    intake.accept(payload);
+
+    jdbc.update("UPDATE outbox_events SET topic='factoryops.wrong.topic'");
+    assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> intake.accept(payload)))
+        .isInstanceOf(com.factoryops.business.outbox.application.OutboxIntegrityException.class);
+
+    jdbc.update("DELETE FROM outbox_events");
+    assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> intake.accept(payload)))
+        .isInstanceOf(com.factoryops.business.outbox.application.OutboxIntegrityException.class);
   }
 
   @Test
@@ -101,7 +151,8 @@ class InspectionResultHttpIT {
     var payload = (ObjectNode) mapper.readTree(fixture("valid/fake-result.json"));
     payload.put("inspection_id", "inspection-fake-anomaly-0001");
     payload.put("result_id", "result-fake-anomaly-0001");
-    payload.withObject("input")
+    payload
+        .withObject("input")
         .put("image_uri", "artifact://images/fake-anomaly-0001")
         .put("sha256", "c".repeat(64));
     payload.withObject("observation").put("is_anomaly", true).put("anomaly_score", 0.9);
@@ -200,7 +251,7 @@ class InspectionResultHttpIT {
 
   @Test
   void concurrent_identical_requests_create_one_row_and_replay_one() throws Exception {
-    var payload = mapper.readTree(fixture("valid/fake-result.json"));
+    var payload = mapper.readTree(fixture("valid/vision-service-result.json"));
     createInspection(payload.toString());
     var start = new CountDownLatch(1);
     var executor = Executors.newFixedThreadPool(2);
@@ -225,6 +276,10 @@ class InspectionResultHttpIT {
       executor.shutdownNow();
     }
     assertThat(jdbc.queryForObject("select count(*) from vision_inspection_results", Integer.class))
+        .isEqualTo(1);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM quality_incidents", Integer.class))
+        .isEqualTo(1);
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM outbox_events", Integer.class))
         .isEqualTo(1);
   }
 
