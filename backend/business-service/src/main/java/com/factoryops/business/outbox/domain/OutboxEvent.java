@@ -1,0 +1,45 @@
+package com.factoryops.business.outbox.domain;
+
+import java.time.Instant;
+import java.util.Objects;
+
+public record OutboxEvent(
+    String eventId,
+    String aggregateType,
+    String aggregateId,
+    String eventType,
+    String contractVersion,
+    String topic,
+    String messageKey,
+    Instant occurredAt,
+    String payload,
+    String status,
+    int attemptCount,
+    Instant availableAt,
+    Instant publishedAt,
+    String lastError,
+    Instant createdAt) {
+
+  public OutboxEvent {
+    requireText(eventId, "event_id");
+    requireText(aggregateType, "aggregate_type");
+    requireText(aggregateId, "aggregate_id");
+    requireText(eventType, "event_type");
+    requireText(contractVersion, "contract_version");
+    requireText(topic, "topic");
+    requireText(messageKey, "message_key");
+    requireText(payload, "payload");
+    Objects.requireNonNull(occurredAt, "occurred_at");
+    Objects.requireNonNull(availableAt, "available_at");
+    Objects.requireNonNull(createdAt, "created_at");
+    if (!"PENDING".equals(status) || attemptCount != 0 || publishedAt != null || lastError != null) {
+      throw new IllegalArgumentException("new outbox event must be pending and unattempted");
+    }
+  }
+
+  private static void requireText(String value, String field) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalArgumentException(field + " is required");
+    }
+  }
+}
