@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.factoryops.business.incident.domain.QualityIncident;
-import com.factoryops.business.outbox.application.QualityIncidentOpenedEventFactory;
 import com.factoryops.business.outbox.application.OutboxIntegrityException;
+import com.factoryops.business.outbox.application.QualityIncidentOpenedEventFactory;
 import com.factoryops.business.outbox.domain.OutboxEvent;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
@@ -14,11 +14,11 @@ import java.util.Calendar;
 import java.util.TimeZone;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
@@ -65,8 +65,7 @@ class OutboxMigrationIT {
                 FROM outbox_events
                 """)) {
       assertThat(row.next()).isTrue();
-      var incidentId =
-          "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49";
+      var incidentId = "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49";
       assertThat(row.getString("event_id"))
           .isEqualTo("EVT-9792A34B246A62F3EC748095244C8CF2790AB951B48D1EBCF144CEE73ACCAAEA");
       assertThat(row.getString("aggregate_id")).isEqualTo(incidentId);
@@ -140,18 +139,17 @@ class OutboxMigrationIT {
   }
 
   private java.sql.Connection connection() throws Exception {
-    return DriverManager.getConnection(
-        jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+    return DriverManager.getConnection(jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
   }
 
   private OutboxEventJdbcRepository repository() {
-    var dataSource = new DriverManagerDataSource(jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+    var dataSource =
+        new DriverManagerDataSource(jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
     return new OutboxEventJdbcRepository(new JdbcTemplate(dataSource));
   }
 
   private String jdbcUrl() {
-    return MYSQL.getJdbcUrl()
-        + "?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true";
+    return MYSQL.getJdbcUrl() + "?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true";
   }
 
   private String fixture(String name) throws Exception {

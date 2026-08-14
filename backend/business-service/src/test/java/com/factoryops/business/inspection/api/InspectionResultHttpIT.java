@@ -24,8 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
-import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -151,7 +151,8 @@ class InspectionResultHttpIT {
     var payload = (ObjectNode) mapper.readTree(fixture("valid/fake-result.json"));
     payload.put("inspection_id", "inspection-fake-anomaly-0001");
     payload.put("result_id", "result-fake-anomaly-0001");
-    payload.withObject("input")
+    payload
+        .withObject("input")
         .put("image_uri", "artifact://images/fake-anomaly-0001")
         .put("sha256", "c".repeat(64));
     payload.withObject("observation").put("is_anomaly", true).put("anomaly_score", 0.9);

@@ -34,8 +34,8 @@ public class QualityIncidentService {
       outbox.requireMatching(eventFactory.create(incident, incident.createdAt()));
       return incident.id();
     }
-    var incident = QualityIncident.open(
-        inspection.batchId(), inspection.id(), result.resultId(), createdAt);
+    var incident =
+        QualityIncident.open(inspection.batchId(), inspection.id(), result.resultId(), createdAt);
     incidents.insert(incident);
     outbox.insert(eventFactory.create(incident, createdAt));
     return incident.id();

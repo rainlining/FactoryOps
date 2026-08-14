@@ -16,13 +16,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public final class QualityIncidentOpenedEventFactory {
-  private static final String EVENT_NAMESPACE =
-      "factoryops:event:quality.incident.opened:v1:";
+  private static final String EVENT_NAMESPACE = "factoryops:event:quality.incident.opened:v1:";
   private static final String EVENT_TYPE = "quality.incident.opened";
   private static final String TOPIC = "factoryops.quality.incident.v1";
   private static final DateTimeFormatter UTC_MICROS =
-      DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSS'Z'")
-          .withZone(ZoneOffset.UTC);
+      DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSS'Z'").withZone(ZoneOffset.UTC);
 
   private final JsonMapper mapper;
 
@@ -60,8 +58,7 @@ public final class QualityIncidentOpenedEventFactory {
             .put("inspection_id", incident.inspectionId())
             .put("result_id", incident.resultId()));
 
-    var canonical =
-        new String(CanonicalJson.canonicalize(envelope), StandardCharsets.UTF_8);
+    var canonical = new String(CanonicalJson.canonicalize(envelope), StandardCharsets.UTF_8);
     var createdAt = outboxCreatedAt.truncatedTo(ChronoUnit.MICROS);
     return new OutboxEvent(
         eventId,

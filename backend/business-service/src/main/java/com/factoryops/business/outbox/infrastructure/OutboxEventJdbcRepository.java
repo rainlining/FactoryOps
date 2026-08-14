@@ -44,35 +44,38 @@ public class OutboxEventJdbcRepository {
   }
 
   public Optional<OutboxEvent> findByEventId(String eventId) {
-    return jdbc.query(
-        """
-        SELECT event_id, aggregate_type, aggregate_id, event_type,
-               contract_version, topic, message_key, occurred_at, payload,
-               status, attempt_count, available_at, published_at,
-               last_error, created_at
-        FROM outbox_events
-        WHERE event_id = ?
-        """,
-        (row, number) ->
-            new OutboxEvent(
-                row.getString("event_id"),
-                row.getString("aggregate_type"),
-                row.getString("aggregate_id"),
-                row.getString("event_type"),
-                row.getString("contract_version"),
-                row.getString("topic"),
-                row.getString("message_key"),
-                row.getTimestamp("occurred_at").toInstant(),
-                row.getString("payload"),
-                row.getString("status"),
-                row.getInt("attempt_count"),
-                row.getTimestamp("available_at").toInstant(),
-                row.getTimestamp("published_at") == null
-                    ? null
-                    : row.getTimestamp("published_at").toInstant(),
-                row.getString("last_error"),
-                row.getTimestamp("created_at").toInstant()),
-        eventId).stream().findFirst();
+    return jdbc
+        .query(
+            """
+            SELECT event_id, aggregate_type, aggregate_id, event_type,
+                   contract_version, topic, message_key, occurred_at, payload,
+                   status, attempt_count, available_at, published_at,
+                   last_error, created_at
+            FROM outbox_events
+            WHERE event_id = ?
+            """,
+            (row, number) ->
+                new OutboxEvent(
+                    row.getString("event_id"),
+                    row.getString("aggregate_type"),
+                    row.getString("aggregate_id"),
+                    row.getString("event_type"),
+                    row.getString("contract_version"),
+                    row.getString("topic"),
+                    row.getString("message_key"),
+                    row.getTimestamp("occurred_at").toInstant(),
+                    row.getString("payload"),
+                    row.getString("status"),
+                    row.getInt("attempt_count"),
+                    row.getTimestamp("available_at").toInstant(),
+                    row.getTimestamp("published_at") == null
+                        ? null
+                        : row.getTimestamp("published_at").toInstant(),
+                    row.getString("last_error"),
+                    row.getTimestamp("created_at").toInstant()),
+            eventId)
+        .stream()
+        .findFirst();
   }
 
   public void requireMatching(OutboxEvent expected) {

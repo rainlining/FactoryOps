@@ -19,10 +19,7 @@ class QualityIncidentOpenedEventFactoryTest {
   void creates_stable_pending_event_that_matches_shared_contract() throws Exception {
     var incident =
         QualityIncident.open(
-            "B-17",
-            "inspection-00731",
-            "result-1",
-            Instant.parse("2026-08-14T01:02:03.123456Z"));
+            "B-17", "inspection-00731", "result-1", Instant.parse("2026-08-14T01:02:03.123456Z"));
     var event = factory.create(incident, Instant.parse("2026-08-14T02:00:00Z"));
 
     assertThat(event.eventId())
@@ -41,8 +38,8 @@ class QualityIncidentOpenedEventFactoryTest {
     var payload = mapper.readTree(event.payload());
     assertThat(payload.get("occurred_at").asText()).isEqualTo("2026-08-14T01:02:03.123456Z");
     assertThat(payload.get("payload").has("anomaly_score")).isFalse();
-    try (var input = getClass().getResourceAsStream(
-        "/contracts/quality_incident_opened/v1.0/schema.json")) {
+    try (var input =
+        getClass().getResourceAsStream("/contracts/quality_incident_opened/v1.0/schema.json")) {
       assertThat(input).isNotNull();
       var schema =
           SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
