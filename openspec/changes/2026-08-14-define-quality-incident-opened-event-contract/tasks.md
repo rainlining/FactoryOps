@@ -14,7 +14,7 @@
 
 ## Handoff
 
-- [x] 填写 verification 和 review-handoff，推送并停在 review-handoff-ready。
+- [ ] 填写 verification 和 review-handoff，推送并停在 review-handoff-ready。（本地工件已完成，GitHub 连接连续三次失败，等待重试推送。）
 - [ ] 独立 Review 会话完成 Standard Learning Gate。
 
 ## 实施计划

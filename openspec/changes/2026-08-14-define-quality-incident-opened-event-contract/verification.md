@@ -28,6 +28,6 @@
 ## 状态
 
 - 技术验收：`passed`
-- Review Handoff：`ready`
-- Standard Learning Gate：`awaiting-learning-gate`
-- Change：`review-handoff-ready`
+- Review Handoff：`push-pending`（GitHub HTTPS 连接连续三次 reset/timeout）
+- Standard Learning Gate：`not-started`
+- Change：`technically-verified`
