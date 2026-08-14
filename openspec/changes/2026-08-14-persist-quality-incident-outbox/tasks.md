@@ -17,5 +17,5 @@
 
 ## Handoff
 
-- [x] 填写 verification 与 review-handoff，推送并停在 review-handoff-ready。
+- [ ] verification 与 review-handoff 已填写；待网络恢复后推送并进入 review-handoff-ready。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验与 Deep Learning Gate。
