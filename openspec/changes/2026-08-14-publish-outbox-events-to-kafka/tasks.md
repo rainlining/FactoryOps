@@ -19,5 +19,5 @@
 ## Handoff
 
 - [x] 填写 verification 与 review-handoff，停在 review-handoff-ready。
-- [ ] 推送 feature branch 到 GitHub。
+- [x] 推送 feature branch 到 GitHub。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验和 Deep Learning Gate。
