@@ -79,5 +79,5 @@ Review 会话完成前，不得归档该 Change 或合并 `main`。
 - 全部 Python Contract 回归：35 项通过。
 - Java `mvn test`：16 项通过。
 - 项目所有者已明确接受最终 Contract diff。
-- Change 状态：`completed`
+- Change 状态：`archived`
 - Change 未合并 `main`，等待后续集成 Change 按顺序推进。

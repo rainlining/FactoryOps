@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-14-define-quality-incident-opened-event-contract`
-- `status`: `completed`
+- `status`: `archived`
 - `learning_level`: `standard`
 - `first_deep_reference`: `2026-08-10-define-vision-inspection-contract`
 - `depends_on`: `[2026-08-13-establish-quality-incident]`
