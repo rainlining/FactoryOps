@@ -1,0 +1,24 @@
+{
+  "contract_version": "1.0",
+  "event_id": "EVT-9792A34B246A62F3EC748095244C8CF2790AB951B48D1EBCF144CEE73ACCAAEA",
+  "event_type": "quality.incident.opened",
+  "occurred_at": "2026-08-14T01:02:03.123456Z",
+  "producer": {
+    "name": "factoryops-business-service",
+    "version": "0.1.0"
+  },
+  "aggregate": {
+    "type": "quality-incident",
+    "id": "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49"
+  },
+  "correlation_id": "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49",
+  "causation_id": "result-other",
+  "payload": {
+    "incident_schema_version": "1.0",
+    "incident_id": "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49",
+    "status": "OPEN",
+    "batch_id": "B-17",
+    "inspection_id": "inspection-00731",
+    "result_id": "result-1001"
+  }
+}
