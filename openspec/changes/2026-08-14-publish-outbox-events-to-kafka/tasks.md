@@ -8,15 +8,16 @@
 
 ## 实现
 
-- [ ] 以失败测试定义 Publisher 编排与 Kafka sender 边界。
-- [ ] 实现稳定 PENDING 查询和条件 PUBLISHED 更新。
-- [ ] 接入真实 Kafka Producer 配置与 acknowledgement。
-- [ ] 实现 fixed-delay Poller、配置开关和结构化日志。
-- [ ] 增加真实 MySQL + Kafka Testcontainers 集成与故障测试。
-- [ ] 增加 KRaft Kafka、Topic 初始化、Kafbat UI 和中文 Learning Lab。
-- [ ] 执行格式化、完整验证、diff 与 dataset scope 检查。
+- [x] 以失败测试定义 Publisher 编排与 Kafka sender 边界。
+- [x] 实现稳定 PENDING 查询和条件 PUBLISHED 更新。
+- [x] 接入真实 Kafka Producer 配置与 acknowledgement。
+- [x] 实现 fixed-delay Poller、配置开关和结构化日志。
+- [x] 增加真实 MySQL + Kafka Testcontainers 集成与故障测试。
+- [x] 增加 KRaft Kafka、Topic 初始化、Kafbat UI 和中文 Learning Lab。
+- [x] 执行格式化、完整验证、diff 与 dataset scope 检查。
 
 ## Handoff
 
-- [ ] 填写 verification 与 review-handoff，推送并停在 review-handoff-ready。
+- [x] 填写 verification 与 review-handoff，停在 review-handoff-ready。
+- [ ] 推送 feature branch 到 GitHub。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验和 Deep Learning Gate。
