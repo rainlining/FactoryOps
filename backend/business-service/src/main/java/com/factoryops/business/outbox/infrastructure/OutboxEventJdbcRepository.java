@@ -3,6 +3,7 @@ package com.factoryops.business.outbox.infrastructure;
 import com.factoryops.business.inspection.infrastructure.InspectionJdbcRepository;
 import com.factoryops.business.outbox.application.OutboxIntegrityException;
 import com.factoryops.business.outbox.domain.OutboxEvent;
+import java.util.ArrayList;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -83,20 +84,32 @@ public class OutboxEventJdbcRepository {
         findByEventId(expected.eventId())
             .orElseThrow(
                 () -> new OutboxIntegrityException(expected.eventId(), "event is missing"));
-    if (!sameImmutableEvent(actual, expected)) {
-      throw new OutboxIntegrityException(expected.eventId(), "stored event content conflicts");
+    var mismatches = immutableMismatches(actual, expected);
+    if (!mismatches.isEmpty()) {
+      throw new OutboxIntegrityException(
+          expected.eventId(), "stored event content conflicts in " + String.join(", ", mismatches));
     }
   }
 
-  private boolean sameImmutableEvent(OutboxEvent actual, OutboxEvent expected) {
-    return actual.eventId().equals(expected.eventId())
-        && actual.aggregateType().equals(expected.aggregateType())
-        && actual.aggregateId().equals(expected.aggregateId())
-        && actual.eventType().equals(expected.eventType())
-        && actual.contractVersion().equals(expected.contractVersion())
-        && actual.topic().equals(expected.topic())
-        && actual.messageKey().equals(expected.messageKey())
-        && actual.occurredAt().equals(expected.occurredAt())
-        && actual.payload().equals(expected.payload());
+  private java.util.List<String> immutableMismatches(OutboxEvent actual, OutboxEvent expected) {
+    var mismatches = new ArrayList<String>();
+    addMismatch(mismatches, "event_id", actual.eventId(), expected.eventId());
+    addMismatch(mismatches, "aggregate_type", actual.aggregateType(), expected.aggregateType());
+    addMismatch(mismatches, "aggregate_id", actual.aggregateId(), expected.aggregateId());
+    addMismatch(mismatches, "event_type", actual.eventType(), expected.eventType());
+    addMismatch(
+        mismatches, "contract_version", actual.contractVersion(), expected.contractVersion());
+    addMismatch(mismatches, "topic", actual.topic(), expected.topic());
+    addMismatch(mismatches, "message_key", actual.messageKey(), expected.messageKey());
+    addMismatch(mismatches, "occurred_at", actual.occurredAt(), expected.occurredAt());
+    addMismatch(mismatches, "payload", actual.payload(), expected.payload());
+    return mismatches;
+  }
+
+  private void addMismatch(
+      java.util.List<String> mismatches, String field, Object actual, Object expected) {
+    if (!actual.equals(expected)) {
+      mismatches.add(field);
+    }
   }
 }

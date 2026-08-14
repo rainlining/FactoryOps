@@ -127,7 +127,8 @@ class OutboxMigrationIT {
             expected.lastError(),
             expected.createdAt());
     assertThatThrownBy(() -> repository.requireMatching(conflicting))
-        .isInstanceOf(OutboxIntegrityException.class);
+        .isInstanceOf(OutboxIntegrityException.class)
+        .hasMessageContaining("topic");
   }
 
   private Flyway flyway(String target) {

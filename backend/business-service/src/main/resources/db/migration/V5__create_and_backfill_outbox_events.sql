@@ -47,7 +47,6 @@ CREATE TABLE outbox_events (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-SET time_zone = '+00:00';
 SET @outbox_migration_time = CURRENT_TIMESTAMP(6);
 
 INSERT INTO outbox_events (
@@ -93,7 +92,10 @@ SELECT
         ), 256)))),
         ',"event_type":"quality.incident.opened"',
         ',"occurred_at":', JSON_QUOTE(CONCAT(
-            DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.%f'),
+            DATE_FORMAT(
+                CONVERT_TZ(created_at, @@session.time_zone, '+00:00'),
+                '%Y-%m-%dT%H:%i:%s.%f'
+            ),
             'Z'
         )),
         ',"payload":{"batch_id":', JSON_QUOTE(batch_id),
