@@ -15,7 +15,7 @@
 ## Handoff
 
 - [x] 填写 verification 和 review-handoff，推送并停在 review-handoff-ready。
-- [ ] 独立 Review 会话完成 Standard Learning Gate。
+- [x] 独立 Review 会话完成 Standard Learning Gate。
 
 ## 实施计划
 

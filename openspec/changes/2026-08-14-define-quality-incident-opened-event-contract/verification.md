@@ -29,5 +29,10 @@
 
 - 技术验收：`passed`
 - Review Handoff：`ready`
-- Standard Learning Gate：`awaiting-learning-gate`
-- Change：`review-handoff-ready`
+- Standard Learning Gate：`completed`
+- Change：`completed`
+
+## Review/Learning 完成
+
+- 项目所有者已完成真实调用链、事件身份、路由 key、关联字段、时间语义和重复关系分类的 Review。
+- 项目所有者已明确接受最终 Contract diff。

@@ -5,7 +5,7 @@
 - `learning_level`: `standard`
 - `pattern_stage`: `standard-after-vision-contract-deep`
 - `first_deep_reference`: `2026-08-10-define-vision-inspection-contract`
-- `gate_status`: `awaiting-learning-gate`
+- `gate_status`: `completed`
 
 ## 需要理解
 
@@ -22,8 +22,8 @@
 
 ## Learning Gate
 
-- [ ] 能解释事件代表的已成立业务事实。
-- [ ] 能解释稳定身份、路由 key 与时间语义。
-- [ ] 能指出哪些数据被有意排除以及原因。
-- [ ] 能区分 identical duplicate、conflicting duplicate 和 invalid event。
-- [ ] 已 review 最终 Contract diff 并接受。
+- [x] 能解释事件代表的已成立业务事实。
+- [x] 能解释稳定身份、路由 key 与时间语义。
+- [x] 能指出哪些数据被有意排除以及原因。
+- [x] 能区分 identical duplicate、conflicting duplicate 和 invalid event。
+- [x] 已 review 最终 Contract diff 并接受。
