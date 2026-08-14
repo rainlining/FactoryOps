@@ -9,3 +9,18 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: true
+  kafka:
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
+
+factoryops:
+  outbox:
+    publisher:
+      enabled: false
+      poll-delay: 1s
+      batch-size: 50
+      delivery-timeout: 10s
