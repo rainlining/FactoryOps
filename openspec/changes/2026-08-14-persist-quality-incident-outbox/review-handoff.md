@@ -3,11 +3,11 @@
 ## 恢复信息
 
 - 学习等级：`deep`
-- 状态：`technically-verified`（handoff 已生成，等待推送）
+- 状态：`completed`（本地 Review/Learning 已完成；远端推送仍待网络恢复）
 - 分支：`codex/persist-quality-incident-outbox`
 - worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-quality-incident-outbox`
 - base commit：`3e6ed021a0895a691ba70519ebc532503ba99851`
-- implementation head：`35ef7ea`
+- implementation head：`11ce637`
 - 禁止实现会话与 Review/Learning 会话并发修改此 worktree。
 
 ## 已实现范围
@@ -49,4 +49,13 @@
 
 临时让新 Outbox INSERT 使用数据库不允许的 status；执行异常结果写入，观察 HTTP 失败且 Inspection 仍为 PENDING、Result/Incident/Outbox 均为 0。恢复 PENDING 后重跑原子回滚测试和完整构建。
 
-Review 会话完成 Walkthrough、owner 修改、故障实验、最终 diff review 与 Learning Gate 后，才可把 Change 标记为 `completed`。
+本地 Review 会话已完成 Walkthrough、owner 修改、故障实验、最终 diff review 与 Learning Gate，因此 Change 已在本地记录为 `completed`。
+
+## Review/Learning 完成记录
+
+- 项目所有者已接受最终 diff。
+- Owner 修改已提交于 `11ce637`：新增 `OutboxEventView`，通过 `OutboxEventJdbcRepository.findViewByEventId` 提供只读查询，并按 UTF-8 字节数计算 `payload_size_bytes`。
+- 故障实验已完成：临时拒绝 Outbox INSERT 的 `status` 后，Result、Inspection、Incident、Outbox 均未留下数据，Inspection 保持 PENDING。
+- 验证结果：Java 单元测试 20/20、MySQL 集成测试 33/33、Python Contract 35/35，`git diff --check` 通过，`dataset/` 未修改。
+- Learning Gate：`completed`。
+- 集成限制：当前本地分支尚未推送远端，也未合并 `main`；推送成功后仍需按项目流程执行集成操作。

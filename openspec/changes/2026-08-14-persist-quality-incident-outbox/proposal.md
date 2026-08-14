@@ -3,11 +3,11 @@
 ## 元数据
 
 - `change_id`: `2026-08-14-persist-quality-incident-outbox`
-- `status`: `technically-verified`
+- `status`: `completed`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-13-establish-quality-incident, 2026-08-14-define-quality-incident-opened-event-contract]`
 - `spec_refs`: `[quality-incident, quality-incident-opened-event-contract]`
-- `review_session`: `pending`
+- `review_session`: `completed`
 
 ## 为什么要做
 

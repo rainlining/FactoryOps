@@ -17,5 +17,5 @@
 
 ## Handoff
 
-- [ ] verification 与 review-handoff 已填写；待网络恢复后推送并进入 review-handoff-ready。
-- [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验与 Deep Learning Gate。
+- [x] verification 与 review-handoff 已填写；远端推送仍待网络恢复，本地 Review/Learning 已完成。
+- [x] 独立 Review/Learning 会话完成 owner 修改、故障实验与 Deep Learning Gate。

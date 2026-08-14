@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `gate_status`: `awaiting-learning-gate`
+- `gate_status`: `completed`
 
 ## 编码前必须理解
 
@@ -34,10 +34,17 @@ Review 会话必须沿真实文件覆盖：Result HTTP 入口 → Result Intake 
 
 ## Learning Gate
 
-- [ ] 能用自己的话解释双写问题和 Transactional Outbox。
-- [ ] 能沿成功调用链定位事务、事件生成和数据库 INSERT。
-- [ ] 能定位 replay、冲突与完整性缺失路径。
-- [ ] 能指出数据库唯一键、外键、状态 CHECK 和待发布索引。
-- [ ] 完成 owner 修改任务。
-- [ ] 完成 failure/debug exercise 并根据数据库证据判断。
-- [ ] review 最终 diff 并明确接受。
+- [x] 能用自己的话解释双写问题和 Transactional Outbox。
+- [x] 能沿成功调用链定位事务、事件生成和数据库 INSERT。
+- [x] 能定位 replay、冲突与完整性缺失路径。
+- [x] 能指出数据库唯一键、外键、状态 CHECK 和待发布索引。
+- [x] 完成 owner 修改任务。
+- [x] 完成 failure/debug exercise 并根据数据库证据判断。
+- [x] review 最终 diff 并明确接受。
+
+## Review/Learning 完成记录
+
+- 项目所有者已完成并接受 `OutboxEventView` owner 修改：通过 `findViewByEventId` 暴露只读视图，并按 UTF-8 字节数计算 `payload_size_bytes`。
+- 已完成 Outbox INSERT CHECK 故障实验：Result、Inspection、Incident 和 Outbox 均回滚，Inspection 保持 PENDING。
+- 已完成最终 diff review；未修改表结构、canonical payload、事务边界或 Kafka 范围。
+- Learning Gate：`completed`。
