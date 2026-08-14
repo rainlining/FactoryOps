@@ -57,4 +57,3 @@ docker compose -f infra/kafka/compose.yml down
 ```
 
 本 Compose 未挂载 Kafka 数据卷，删除容器后本地实验消息不可恢复。
-

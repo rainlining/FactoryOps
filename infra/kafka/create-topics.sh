@@ -8,4 +8,3 @@ set -euo pipefail
   --topic factoryops.quality.incident.v1 \
   --partitions 3 \
   --replication-factor 1
-
