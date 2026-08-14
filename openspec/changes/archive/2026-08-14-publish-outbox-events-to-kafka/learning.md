@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `gate_status`: `preflight-passed`
+- `gate_status`: `completed`
 
 ## 编码前必须理解
 
@@ -34,11 +34,13 @@ Review 会话必须沿真实文件覆盖：Poller → PENDING Repository → Pub
 
 ## Learning Gate
 
-- [ ] 能解释 Kafka 核心对象和本 Change 的 ack 语义。
-- [ ] 能沿成功调用链定位查询、发送、ack 和状态更新。
-- [ ] 能在 Kafbat UI 中找到 topic、key、partition、offset 和 payload。
-- [ ] 能定位并解释至少一条发送失败路径和重复窗口。
-- [ ] 能指出单实例约束实际在哪里配置、哪里没有被代码保证。
-- [ ] 完成 owner 修改任务。
-- [ ] 完成 failure/debug exercise 并依据 Kafka/MySQL/日志证据判断。
-- [ ] review 最终 diff 并明确接受。
+- [x] 能解释 Kafka 核心对象和本 Change 的 ack 语义。
+- [x] 能沿成功调用链定位查询、发送、ack 和状态更新。
+- [x] 能在 Kafbat UI 中找到 topic、key、partition、offset 和 payload。
+- [x] 能定位并解释至少一条发送失败路径和重复窗口。
+- [x] 能指出单实例约束实际在哪里配置、哪里没有被代码保证。
+- [x] 完成 owner 修改任务。
+- [x] 完成 failure/debug exercise 并依据 Kafka/MySQL/日志证据判断。
+- [x] review 最终 diff 并明确接受。
+
+项目所有者于 2026-08-14 明确确认本 Change 学习完毕并批准归档。

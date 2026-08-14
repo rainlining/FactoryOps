@@ -1,6 +1,6 @@
 # 验证记录：2026-08-14-publish-outbox-events-to-kafka
 
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `baseline_python_contract_tests`: `35 passed`
 - `baseline_java_tests`: `21 unit + 33 MySQL integration passed`
 - `implementation_verification`: `passed`
@@ -24,6 +24,10 @@
    - 结果：Kafbat UI 返回 `{"status":"UP"}`。
 7. `git diff --check`
    - 结果：通过。
+8. Learning Gate 后重新执行 `cd backend/business-service && mvn verify`
+   - 结果：27 个单元测试和 38 个集成测试通过，0 failure，0 error。
+9. Learning Gate 后重新执行 `python -m unittest discover -s contracts -t . -v`
+   - 结果：35 个 Contract 测试通过，0 failure，0 error。
 
 ## 关键证据
 
@@ -40,3 +44,11 @@
 - 当前只允许部署一个启用的 Publisher 实例，但这一点是部署约束，不是 Lease/Claim 代码保证。
 - 当前没有 retry/backoff、`attempt_count` 更新、死信处理或多实例所有权协议。
 - Kafbat UI 只用于本地学习，没有配置生产安全认证。
+
+## Learning Gate
+
+- 真实调用链 Walkthrough：完成。
+- Owner 修改：完成 `last_successful_offset` 的状态传播、条件日志和日志断言。
+- Failure/debug exercise：完成。
+- 最终 diff review：完成并接受。
+- 最终状态：`completed`，允许归档和合并 `main`。

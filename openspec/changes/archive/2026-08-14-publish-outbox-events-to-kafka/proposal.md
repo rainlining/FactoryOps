@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-14-publish-outbox-events-to-kafka`
-- `status`: `learning-preflight-passed`
+- `status`: `archived`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-14-define-quality-incident-opened-event-contract, 2026-08-14-persist-quality-incident-outbox]`
 - `spec_refs`: `[quality-incident-opened-event-contract, quality-incident-outbox]`

@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `branch`: `codex/publish-outbox-events-to-kafka`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\publish-outbox-events-to-kafka`
 - `base_commit`: `953d7791fb3c843b7aea68399725fbf4078f5eac`
@@ -58,7 +58,7 @@ Owner 修改：在每轮摘要日志中增加 `last_successful_offset`，仅当�
 
 Failure/debug exercise：注入 Kafka ack 成功后数据库标记失败，确认 MySQL 保持 PENDING；复位后再次运行，观察 Kafka 中相同 Key/Payload、不同 Offset 的两条消息和最终 PUBLISHED。自动化基线见 `OutboxKafkaPublicationIT`，Review 会话应完成可观察实验。
 
-Learning Gate 仍未完成，本 Change 不得标记 `completed`、归档或合并 `main`。
+Learning Gate 已由独立 Review/Learning 会话完成，项目所有者已接受最终 diff 并批准归档。
 
 ## Review 会话恢复
 
