@@ -7,15 +7,22 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
+@Component
 public final class QualityIncidentOpenedEventFactory {
   private static final String EVENT_NAMESPACE =
       "factoryops:event:quality.incident.opened:v1:";
   private static final String EVENT_TYPE = "quality.incident.opened";
   private static final String TOPIC = "factoryops.quality.incident.v1";
+  private static final DateTimeFormatter UTC_MICROS =
+      DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSS'Z'")
+          .withZone(ZoneOffset.UTC);
 
   private final JsonMapper mapper;
 
@@ -86,6 +93,6 @@ public final class QualityIncidentOpenedEventFactory {
   }
 
   private static String format(Instant value) {
-    return value.truncatedTo(ChronoUnit.MICROS).toString();
+    return UTC_MICROS.format(value.truncatedTo(ChronoUnit.MICROS));
   }
 }

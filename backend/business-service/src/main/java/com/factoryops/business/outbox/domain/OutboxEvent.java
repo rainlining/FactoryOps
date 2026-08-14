@@ -32,8 +32,12 @@ public record OutboxEvent(
     Objects.requireNonNull(occurredAt, "occurred_at");
     Objects.requireNonNull(availableAt, "available_at");
     Objects.requireNonNull(createdAt, "created_at");
-    if (!"PENDING".equals(status) || attemptCount != 0 || publishedAt != null || lastError != null) {
-      throw new IllegalArgumentException("new outbox event must be pending and unattempted");
+    if (attemptCount < 0) {
+      throw new IllegalArgumentException("attempt_count must be non-negative");
+    }
+    if (!("PENDING".equals(status) && publishedAt == null)
+        && !("PUBLISHED".equals(status) && publishedAt != null)) {
+      throw new IllegalArgumentException("status and published_at are inconsistent");
     }
   }
 

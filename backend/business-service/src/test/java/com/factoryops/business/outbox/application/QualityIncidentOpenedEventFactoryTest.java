@@ -3,6 +3,7 @@ package com.factoryops.business.outbox.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.factoryops.business.incident.domain.QualityIncident;
+import com.factoryops.business.outbox.domain.OutboxEvent;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
 import java.time.Instant;
@@ -60,5 +61,29 @@ class QualityIncidentOpenedEventFactoryTest {
     assertThat(replay.eventId()).isEqualTo(first.eventId());
     assertThat(replay.payload()).isEqualTo(first.payload());
     assertThat(first.payload()).contains("\"occurred_at\":\"1970-01-01T00:00:00.000000Z\"");
+  }
+
+  @Test
+  void outbox_domain_can_represent_a_future_published_row() {
+    var publishedAt = Instant.parse("2026-08-14T03:00:00Z");
+    var event =
+        new OutboxEvent(
+            "EVT-" + "A".repeat(64),
+            "quality-incident",
+            "QI-" + "B".repeat(64),
+            "quality.incident.opened",
+            "1.0",
+            "factoryops.quality.incident.v1",
+            "QI-" + "B".repeat(64),
+            Instant.EPOCH,
+            "{}",
+            "PUBLISHED",
+            1,
+            Instant.EPOCH,
+            publishedAt,
+            null,
+            Instant.EPOCH);
+
+    assertThat(event.publishedAt()).isEqualTo(publishedAt);
   }
 }

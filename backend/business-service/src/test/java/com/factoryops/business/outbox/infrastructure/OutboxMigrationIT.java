@@ -1,9 +1,12 @@
 package com.factoryops.business.outbox.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.factoryops.business.incident.domain.QualityIncident;
 import com.factoryops.business.outbox.application.QualityIncidentOpenedEventFactory;
+import com.factoryops.business.outbox.application.OutboxIntegrityException;
+import com.factoryops.business.outbox.domain.OutboxEvent;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.time.Instant;
@@ -14,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
@@ -88,6 +93,42 @@ class OutboxMigrationIT {
       assertThat(row.getString("payload")).isEqualTo(expected);
       assertThat(row.next()).isFalse();
     }
+
+    var repository = repository();
+    var incident =
+        new QualityIncident(
+            "QI-B189C85A634933C66A6B084D07C3D5BFAC1D031176968F2C2067C4E3657C9E49",
+            "1.0",
+            "OPEN",
+            "SYS-LEGACY-UNASSIGNED",
+            "inspection-00731",
+            "result-1001",
+            Instant.parse("2026-08-14T01:02:03.123456Z"));
+    var expected =
+        new QualityIncidentOpenedEventFactory(JsonMapper.builder().build())
+            .create(incident, Instant.EPOCH);
+    assertThat(repository.findByEventId(expected.eventId())).isPresent();
+    repository.requireMatching(expected);
+
+    var conflicting =
+        new OutboxEvent(
+            expected.eventId(),
+            expected.aggregateType(),
+            expected.aggregateId(),
+            expected.eventType(),
+            expected.contractVersion(),
+            "factoryops.wrong.topic",
+            expected.messageKey(),
+            expected.occurredAt(),
+            expected.payload(),
+            expected.status(),
+            expected.attemptCount(),
+            expected.availableAt(),
+            expected.publishedAt(),
+            expected.lastError(),
+            expected.createdAt());
+    assertThatThrownBy(() -> repository.requireMatching(conflicting))
+        .isInstanceOf(OutboxIntegrityException.class);
   }
 
   private Flyway flyway(String target) {
@@ -101,6 +142,11 @@ class OutboxMigrationIT {
   private java.sql.Connection connection() throws Exception {
     return DriverManager.getConnection(
         jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+  }
+
+  private OutboxEventJdbcRepository repository() {
+    var dataSource = new DriverManagerDataSource(jdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+    return new OutboxEventJdbcRepository(new JdbcTemplate(dataSource));
   }
 
   private String jdbcUrl() {
