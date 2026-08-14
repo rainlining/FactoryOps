@@ -25,4 +25,13 @@ class QualityIncidentTest {
     assertThatThrownBy(() -> QualityIncident.open("", "inspection-1", "result-1", Instant.EPOCH))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void normalizes_creation_time_to_mysql_microsecond_precision() {
+    var incident =
+        QualityIncident.open(
+            "B-1", "inspection-1", "result-1", Instant.parse("2026-08-14T01:02:03.123456789Z"));
+
+    assertThat(incident.createdAt()).isEqualTo(Instant.parse("2026-08-14T01:02:03.123456Z"));
+  }
 }

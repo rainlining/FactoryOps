@@ -58,4 +58,5 @@
 - 故障实验已完成：临时拒绝 Outbox INSERT 的 `status` 后，Result、Inspection、Incident、Outbox 均未留下数据，Inspection 保持 PENDING。
 - 验证结果：Java 单元测试 20/20、MySQL 集成测试 33/33、Python Contract 35/35，`git diff --check` 通过，`dataset/` 未修改。
 - Learning Gate：`completed`。
+- 合并前复验额外发现并修复了 Incident 时间精度不变量：创建时间在领域入口统一到 MySQL/Contract 共用的微秒精度，避免首次 payload 与数据库回读后 replay payload 偶发不一致。
 - 集成限制：当前本地分支尚未推送远端，也未合并 `main`；推送成功后仍需按项目流程执行集成操作。

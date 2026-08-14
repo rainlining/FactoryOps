@@ -1,6 +1,7 @@
 package com.factoryops.business.incident.domain;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 public record QualityIncident(
@@ -32,6 +33,6 @@ public record QualityIncident(
         batchId,
         inspectionId,
         resultId,
-        createdAt);
+        createdAt.truncatedTo(ChronoUnit.MICROS));
   }
 }
