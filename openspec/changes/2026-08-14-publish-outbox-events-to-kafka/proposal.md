@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-14-publish-outbox-events-to-kafka`
-- `status`: `proposed`
+- `status`: `learning-preflight-passed`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-14-define-quality-incident-opened-event-contract, 2026-08-14-persist-quality-incident-outbox]`
 - `spec_refs`: `[quality-incident-opened-event-contract, quality-incident-outbox]`
@@ -41,4 +41,3 @@ Business Service 已能在创建 OPEN Quality Incident 的同一 MySQL 事务中
 这是项目第一次真实实现 Kafka Producer、broker acknowledgement、partition/offset、Producer 会话内幂等和跨 MySQL/Kafka 的 at-least-once 重复窗口。它引入新的传输、超时、恢复与失败语义，因此为 `deep`，不能因已经学习过 Outbox 而降级。
 
 后续 `consume-quality-incident-events-idempotently` 仍会因 Consumer offset、at-least-once redelivery、幂等登记和 Agent World 入口的新语义保持 `deep`。
-

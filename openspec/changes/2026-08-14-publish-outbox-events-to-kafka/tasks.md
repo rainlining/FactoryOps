@@ -3,8 +3,8 @@
 ## 设计与学习预检
 
 - [x] 完成运行形态、单实例、ack、事务、失败、测试和 Learning Lab 讨论。
-- [ ] 项目所有者 review 并接受书面 OpenSpec 设计。
-- [ ] 完成 Deep Change 编码前讲解并通过 learning preflight。
+- [x] 项目所有者 review 并接受书面 OpenSpec 设计。
+- [x] 完成 Deep Change 编码前讲解并通过 learning preflight。
 
 ## 实现
 
@@ -20,4 +20,3 @@
 
 - [ ] 填写 verification 与 review-handoff，推送并停在 review-handoff-ready。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验和 Deep Learning Gate。
-

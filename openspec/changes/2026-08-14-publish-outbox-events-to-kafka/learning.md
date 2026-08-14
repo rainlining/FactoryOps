@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `gate_status`: `not-started`
+- `gate_status`: `preflight-passed`
 
 ## 编码前必须理解
 
@@ -42,4 +42,3 @@ Review 会话必须沿真实文件覆盖：Poller → PENDING Repository → Pub
 - [ ] 完成 owner 修改任务。
 - [ ] 完成 failure/debug exercise 并依据 Kafka/MySQL/日志证据判断。
 - [ ] review 最终 diff 并明确接受。
-
