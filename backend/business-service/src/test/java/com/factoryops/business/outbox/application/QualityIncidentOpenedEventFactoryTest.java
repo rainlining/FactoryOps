@@ -59,5 +59,6 @@ class QualityIncidentOpenedEventFactoryTest {
 
     assertThat(replay.eventId()).isEqualTo(first.eventId());
     assertThat(replay.payload()).isEqualTo(first.payload());
+    assertThat(first.payload()).contains("\"occurred_at\":\"1970-01-01T00:00:00.000000Z\"");
   }
 }
