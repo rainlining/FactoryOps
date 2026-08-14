@@ -25,12 +25,24 @@ public final class ScheduledOutboxPublisher {
   public PublicationRoundSummary runOnce() {
     var started = Instant.now();
     var summary = service.publish(repository.findPublishable(batchSize));
-    log.info(
-        "outbox_publish_round selected={} published={} failed={} duration_ms={}",
-        summary.selected(),
-        summary.published(),
-        summary.failed(),
-        Duration.between(started, Instant.now()).toMillis());
+    var durationMillis = Duration.between(started, Instant.now()).toMillis();
+    if (summary.lastSuccessfulOffset() == null) {
+      log.info(
+          "outbox_publish_round selected={} published={} failed={} duration_ms={}",
+          summary.selected(),
+          summary.published(),
+          summary.failed(),
+          durationMillis);
+    } else {
+      log.info(
+          "outbox_publish_round selected={} published={} failed={} last_successful_offset={}"
+              + " duration_ms={}",
+          summary.selected(),
+          summary.published(),
+          summary.failed(),
+          summary.lastSuccessfulOffset(),
+          durationMillis);
+    }
     return summary;
   }
 }
