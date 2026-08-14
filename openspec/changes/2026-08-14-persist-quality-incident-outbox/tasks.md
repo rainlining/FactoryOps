@@ -3,7 +3,7 @@
 ## 设计与学习预检
 
 - [x] 完成事务一致性、数据模型、重放、迁移和失败路径讨论。
-- [ ] 项目所有者 review 书面 OpenSpec 设计。
+- [x] 项目所有者 review 书面 OpenSpec 设计。
 - [ ] 完成 Deep Change 编码前讲解与 learning preflight。
 
 ## 实现
