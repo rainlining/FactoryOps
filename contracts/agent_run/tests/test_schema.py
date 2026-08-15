@@ -32,16 +32,21 @@ class AgentRunSchemaTest(unittest.TestCase):
         self.validator.validate(payload)
 
     def test_all_declared_object_shapes_are_strict(self) -> None:
-        object_schemas = [
-            self.schema,
-            *(
-                value
-                for value in self.schema["properties"].values()
-                if isinstance(value, dict) and value.get("type") == "object"
-            ),
-        ]
+        def find_object_schemas(node: object) -> list[dict[str, object]]:
+            if isinstance(node, dict):
+                found = [node] if node.get("type") == "object" else []
+                return found + [
+                    item
+                    for value in node.values()
+                    for item in find_object_schemas(value)
+                ]
+            if isinstance(node, list):
+                return [item for value in node for item in find_object_schemas(value)]
+            return []
 
-        self.assertGreaterEqual(len(object_schemas), 6)
+        object_schemas = find_object_schemas(self.schema)
+
+        self.assertGreaterEqual(len(object_schemas), 7)
         for object_schema in object_schemas:
             with self.subTest(title=object_schema.get("title")):
                 self.assertIs(object_schema.get("additionalProperties"), False)

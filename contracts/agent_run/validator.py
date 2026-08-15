@@ -70,6 +70,26 @@ def _schema_error_path(error: ValidationError) -> str:
     return _json_path(parts)
 
 
+def _leaf_schema_errors(error: ValidationError) -> list[ValidationError]:
+    if not error.context:
+        return [error]
+    return [leaf for child in error.context for leaf in _leaf_schema_errors(child)]
+
+
+def _most_specific_schema_error(
+    errors: Sequence[ValidationError],
+) -> ValidationError:
+    leaves = [leaf for error in errors for leaf in _leaf_schema_errors(error)]
+    deepest_path_length = max(len(error.absolute_path) for error in leaves)
+    deepest = [
+        error for error in leaves if len(error.absolute_path) == deepest_path_length
+    ]
+    return min(
+        deepest,
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+
+
 def _raise_issue(code: str, path: str, message: str) -> None:
     raise AgentRunValidationError(
         (ValidationIssue(code=code, path=path, message=message),)
@@ -102,7 +122,7 @@ def validate_run(
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if schema_errors:
-        error = schema_errors[0]
+        error = _most_specific_schema_error(schema_errors)
         _raise_issue(
             "schema_validation_failed",
             _schema_error_path(error),
@@ -154,10 +174,20 @@ def validate_run(
         )
 
 
+def _normalize_integral_numbers(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {key: _normalize_integral_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_integral_numbers(item) for item in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def canonicalize_run(run: Mapping[str, object]) -> bytes:
     validate_run(run)
     return json.dumps(
-        run,
+        _normalize_integral_numbers(run),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,

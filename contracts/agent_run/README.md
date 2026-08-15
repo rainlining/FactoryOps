@@ -53,7 +53,7 @@ validate_run(run_document)
 2. 使用严格 JSON Schema 校验结构和条件字段。
 3. 校验 original 身份、replay 自引用、时间顺序和进度计数。
 
-错误通过 `AgentRunValidationError.issues` 返回稳定 `code`、JSON `path` 和说明。
+错误通过 `AgentRunValidationError.issues` 返回稳定 `code`、尽可能具体的叶级 JSON `path` 和说明；例如过短的状态原因码定位到 `$.lifecycle.status_reason.code`。
 
 ## 重复关系
 
@@ -67,6 +67,8 @@ relation = classify_run_relation(first, second)
 - 同 `run_id`、不同合法内容：`duplicate-conflicting`
 - 不同 `run_id`：`distinct`
 - 任一输入非法：先拒绝，不给出关系分类
+
+Canonical form 会把 `0` 与 JSON Schema 视为同一 integer 的 `0.0` 规范为相同表示，避免不同语言的 JSON serializer 把语义相同快照误判为冲突。
 
 该分类用于同一 Run 快照在传输或写入边界的重复判断。Lifecycle 正常更新必须由后续 Repository 使用 `revision` 和合法迁移处理，不能拿两个不同 revision 的快照直接做“重复写入”处理。
 

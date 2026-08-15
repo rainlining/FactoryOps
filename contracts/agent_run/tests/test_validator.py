@@ -66,7 +66,7 @@ class AgentRunValidationTest(unittest.TestCase):
             (
                 "short-status-reason-code.json",
                 "schema_validation_failed",
-                "$.lifecycle.status_reason",
+                "$.lifecycle.status_reason.code",
             ),
         )
 
@@ -214,6 +214,19 @@ class AgentRunRelationTest(unittest.TestCase):
         self.assertEqual(
             classify_run_relation(first, second),
             "duplicate-conflicting",
+        )
+
+    def test_integral_float_and_integer_have_same_canonical_form(self) -> None:
+        first = valid_original()
+        second = copy.deepcopy(first)
+        lifecycle = second["lifecycle"]
+        assert isinstance(lifecycle, dict)
+        lifecycle["revision"] = 0.0
+
+        self.assertEqual(canonicalize_run(first), canonicalize_run(second))
+        self.assertEqual(
+            classify_run_relation(first, second),
+            "duplicate-identical",
         )
 
     def test_different_run_id_is_distinct(self) -> None:
