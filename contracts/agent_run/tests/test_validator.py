@@ -63,6 +63,11 @@ class AgentRunValidationTest(unittest.TestCase):
                 "replay_self_reference",
                 "$.identity.replayed_from_run_id",
             ),
+            (
+                "short-status-reason-code.json",
+                "schema_validation_failed",
+                "$.lifecycle.status_reason",
+            ),
         )
 
         for fixture_name, expected_code, expected_path in cases:

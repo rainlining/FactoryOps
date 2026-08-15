@@ -277,7 +277,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "minLength": 1,
+          "minLength": 3,
           "maxLength": 128,
           "pattern": "^[A-Z][A-Z0-9_]*$"
         },
