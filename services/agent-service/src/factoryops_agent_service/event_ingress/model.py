@@ -17,6 +17,7 @@ class KafkaRecord:
 class DecodedEvent:
     record: KafkaRecord
     event_id: str
+    incident_id: str
     event_type: str
     contract_version: str
     message_key: str

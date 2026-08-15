@@ -85,6 +85,7 @@ class KafkaRecordDecoder:
         return DecodedEvent(
             record=record,
             event_id=event["event_id"],
+            incident_id=incident_id,
             event_type=event["event_type"],
             contract_version=event["contract_version"],
             message_key=key,

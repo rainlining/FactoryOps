@@ -23,6 +23,7 @@ def test_decodes_valid_contract_and_routing_key(
     decoded = KafkaRecordDecoder().decode(record)
 
     assert decoded.event_id == valid_event["event_id"]
+    assert decoded.incident_id == incident_id
     assert decoded.message_key == incident_id
     assert len(decoded.canonical_sha256) == hashlib.sha256().digest_size
 
