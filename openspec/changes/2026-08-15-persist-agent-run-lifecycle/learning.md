@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `planned`
+- `status`: `passed`
 
 ## 学习目标
 
@@ -35,10 +35,14 @@
 
 ## Learning Gate
 
-- [ ] 解释真实设计与关键取舍。
-- [ ] 完成两条真实调用链 Walkthrough。
-- [ ] 定位并解释创建和迁移失败路径。
-- [ ] 完成 Owner 修改任务。
-- [ ] 完成两项 Failure/Debug Exercise。
-- [ ] 指出事务、幂等、乐观锁和不可变字段实际执行位置。
-- [ ] Review 最终 diff 并明确接受。
+- [x] 解释真实设计与关键取舍。
+- [x] 完成两条真实调用链 Walkthrough。
+- [x] 定位并解释创建和迁移失败路径。
+- [x] 完成 Owner 修改任务。
+- [x] 完成两项 Failure/Debug Exercise。
+- [x] 指出事务、幂等、乐观锁和不可变字段实际执行位置。
+- [x] Review 最终 diff 并明确接受。
+
+## 完成记录
+
+2026-08-15，项目所有者确认两条真实事务链 Walkthrough 与故障实验证据已经完成，并要求在修复最终 Diff Review 阻塞项、确认无问题后归档。最终实现经过多轮独立只读审查；Head `a415350` 的结论为 0 Critical、0 Important，Learning Gate 通过。

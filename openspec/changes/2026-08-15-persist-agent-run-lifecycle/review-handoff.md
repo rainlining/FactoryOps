@@ -9,7 +9,7 @@
 - `base_commit`: `a5e0da6`
 - `reviewed_implementation_head`: `4cdbc4303fc28afac2e50504d77ec338294472a1`
 - `branch_head`: 本 handoff 元数据提交；进入 Review 时以 `git rev-parse HEAD` 核对
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 
 Feature branch 已推送。Review 会话可切换到上述 worktree，或从远端获取同名分支；开始时先执行 `git status --short --branch` 和 `git log -1 --oneline`。在 Learning Gate 完成前，不得归档、合并 `main`，也不得与实现会话并发修改本 Change。
 
@@ -48,7 +48,7 @@ transition 失败链：条件 UPDATE 未命中或唯一键冲突 → 原写事�
 
 ## 验证证据
 
-完整命令、数量和限制见 `verification.md`。交接时的结果是 Python 48 passed、Contract 57 passed、Java 65 passed，并且 Ruff 与 `git diff --check` 通过。
+完整命令、数量和限制见 `verification.md`。最终结果是 Python 51 passed、Contract 57 passed、Java 65 passed，并且 Ruff 与 `git diff --check` 通过。
 
 独立审查无 Critical。审查发现的 replay 分类顺序和 Clock 回拨写入两项 Important 已在 `4cdbc43` 修复；对应测试分别证明 conflicting 分类不会被 lineage 校验遮蔽，以及非法终态不会改变 snapshot revision/history。
 
@@ -60,4 +60,4 @@ Failure/Debug A：运行或断点观察两个相同 revision 的并发迁移，�
 
 Failure/Debug B：使用现有 SQLAlchemy 故障注入让 history INSERT 失败，确认 snapshot 状态、revision 和 history count 全部保持原值；完成后移除或关闭注入并重跑测试。
 
-Learning Gate 仍为 pending。Review 会话必须完成真实 Walkthrough、Owner 修改、两项故障实验、最终 diff review 与明确接受，才能把 Change 标记 completed。
+Learning Gate 已通过。项目所有者确认真实事务链 Walkthrough 与故障实验证据完成，并授权在最终阻塞修复、独立审查无 Critical/Important 后归档。

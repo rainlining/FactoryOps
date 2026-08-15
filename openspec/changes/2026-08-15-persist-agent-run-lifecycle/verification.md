@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- `change_status`: `review-handoff-ready`
+- `change_status`: `completed`
 - `technical_verification`: `passed`
-- `learning_gate`: `pending`
+- `learning_gate`: `passed`
 
 ## 实际验证
 
@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | Python lint | `python -m ruff check src tests` | 通过 |
 | Python format | `python -m ruff format --check src tests` | 通过 |
-| Agent Service | `python -m pytest -q` | 48 passed |
+| Agent Service | `python -m pytest -q` | 51 passed |
 | Contract | `python -m unittest discover -s contracts -p "test_*.py" -v` | 57 passed |
 | Business Service 回归 | `mvn -q verify` | exit 0；65 tests，0 failure/error/skip |
 | Diff whitespace | `git diff --check a5e0da6..HEAD` | 通过 |
@@ -45,12 +45,14 @@ Java 全量回归中的 broker unavailable、missing topic 和连接断开日志
 
 ## 独立代码审查
 
-只读审查最初发现两项 Important，均已在 `4cdbc43` 修复并加入真实 MySQL 回归：
+多轮只读审查发现的 Important 均已修复并加入真实 MySQL 回归：
 
 1. replay 幂等键的已存在分类提前到 lineage 校验之前；
 2. 状态迁移在 SQL 写入前构造候选 snapshot 并执行 Agent Run Contract 校验。
+3. original、replay 与 transition 均在业务校验前优先分类已提交的幂等键。
+4. 三条路径均覆盖“首次查询未命中、并发赢家随后提交、当前请求在 INSERT 前失败”的竞态，并在失败出口重新查询赢家。
 
-审查无 Critical。另有 MySQL DDL 半迁移恢复限制，已保留为后续专门工程问题，不在本 Change 静默扩大范围。
+最终 Head `a415350` 的独立审查结论为 Ready：0 Critical、0 Important。另有 MySQL DDL 半迁移恢复和 transition history 更多防御性 CHECK 建议，均保留为后续独立工程问题，不阻塞当前规格。
 
 ## GitHub 推送状态
 
