@@ -8,14 +8,14 @@
 
 ## 实现
 
-- [ ] Task 1：修正 CANCELLED Contract 时间语义并以 Contract 测试保护。
-- [ ] Task 2：实现领域命令、结果类型与确定性迁移规则。
-- [ ] Task 3：升级 migration runner 并创建 Run/Transition Schema。
-- [ ] Task 4：实现 original/replay 创建事务与读取重建。
-- [ ] Task 5：实现状态迁移、乐观锁和 request 幂等分类。
-- [ ] Task 6：完成 MySQL 并发、故障回滚、回归和 handoff。
+- [x] Task 1：修正 CANCELLED Contract 时间语义并以 Contract 测试保护。
+- [x] Task 2：实现领域命令、结果类型与确定性迁移规则。
+- [x] Task 3：升级 migration runner 并创建 Run/Transition Schema。
+- [x] Task 4：实现 original/replay 创建事务与读取重建。
+- [x] Task 5：实现状态迁移、乐观锁和 request 幂等分类。
+- [x] Task 6：完成 MySQL 并发、故障回滚、回归和 handoff。
 
 ## Handoff
 
-- [ ] 提交并推送 feature branch，状态推进到 `review-handoff-ready`。
+- [x] 提交 feature branch 并准备 handoff；推送结果记录在 `verification.md`。
 - [ ] 独立 Review/Learning 会话完成 Deep Learning Gate。

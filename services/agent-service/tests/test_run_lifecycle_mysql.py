@@ -154,58 +154,60 @@ def test_migration_runner_is_idempotent(mysql_engine: Engine) -> None:
 def test_migration_runner_upgrades_database_that_only_has_001() -> None:
     mysql = MySqlContainer("mysql:8.4")
     mysql.start()
-    database_url = mysql.get_connection_url().replace(
-        "mysql://",
-        "mysql+pymysql://",
-        1,
-    )
-    upgrade_engine = create_engine(database_url)
-    migration_001 = (
-        files("factoryops_agent_service.event_ingress.migrations")
-        .joinpath("001_create_agent_event_inbox.sql")
-        .read_text(encoding="utf-8")
-    )
-    with upgrade_engine.begin() as connection:
-        connection.exec_driver_sql(
-            """
-            CREATE TABLE agent_schema_history (
-              version VARCHAR(100) PRIMARY KEY,
-              applied_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-            ) ENGINE=InnoDB
-            """
+    upgrade_engine = None
+    try:
+        database_url = mysql.get_connection_url().replace(
+            "mysql://",
+            "mysql+pymysql://",
+            1,
         )
-        for statement in migration_001.split(";"):
-            if statement.strip():
-                connection.exec_driver_sql(statement)
-        connection.execute(
-            text("INSERT INTO agent_schema_history(version) VALUES (:version)"),
-            {"version": "001_create_agent_event_inbox"},
+        upgrade_engine = create_engine(database_url)
+        migration_001 = (
+            files("factoryops_agent_service.event_ingress.migrations")
+            .joinpath("001_create_agent_event_inbox.sql")
+            .read_text(encoding="utf-8")
         )
-
-    migrate(upgrade_engine)
-
-    with upgrade_engine.connect() as connection:
-        versions = connection.scalars(
-            text("SELECT version FROM agent_schema_history ORDER BY version")
-        ).all()
-        run_table = connection.scalar(
-            text(
+        with upgrade_engine.begin() as connection:
+            connection.exec_driver_sql(
                 """
-                SELECT COUNT(*)
-                FROM information_schema.tables
-                WHERE table_schema = DATABASE()
-                  AND table_name = 'agent_runs'
+                CREATE TABLE agent_schema_history (
+                  version VARCHAR(100) PRIMARY KEY,
+                  applied_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                ) ENGINE=InnoDB
                 """
             )
-        )
-    try:
+            for statement in migration_001.split(";"):
+                if statement.strip():
+                    connection.exec_driver_sql(statement)
+            connection.execute(
+                text("INSERT INTO agent_schema_history(version) VALUES (:version)"),
+                {"version": "001_create_agent_event_inbox"},
+            )
+
+        migrate(upgrade_engine)
+
+        with upgrade_engine.connect() as connection:
+            versions = connection.scalars(
+                text("SELECT version FROM agent_schema_history ORDER BY version")
+            ).all()
+            run_table = connection.scalar(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.tables
+                    WHERE table_schema = DATABASE()
+                      AND table_name = 'agent_runs'
+                    """
+                )
+            )
         assert versions == [
             "001_create_agent_event_inbox",
             "002_create_agent_run_lifecycle",
         ]
         assert run_table == 1
     finally:
-        upgrade_engine.dispose()
+        if upgrade_engine is not None:
+            upgrade_engine.dispose()
         mysql.stop()
 
 
