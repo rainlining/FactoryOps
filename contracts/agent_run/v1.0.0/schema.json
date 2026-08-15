@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://factoryops.dev/contracts/agent-run/1.0.0/schema.json",
+  "title": "FactoryOps Workflow Run Contract 1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "identity",
+    "provenance",
+    "lifecycle",
+    "execution_refs",
+    "progress"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0"
+    },
+    "identity": {
+      "title": "Workflow Run Identity",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "run_kind", "original_run_id"],
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "run_kind": {
+          "enum": ["original", "replay"]
+        },
+        "original_run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "trigger_event_id": {
+          "$ref": "#/$defs/eventId"
+        },
+        "replayed_from_run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "replay_request_id": {
+          "$ref": "#/$defs/replayRequestId"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "run_kind": {
+                "const": "original"
+              }
+            },
+            "required": ["run_kind"]
+          },
+          "then": {
+            "required": ["trigger_event_id"],
+            "not": {
+              "anyOf": [
+                {
+                  "required": ["replayed_from_run_id"]
+                },
+                {
+                  "required": ["replay_request_id"]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "run_kind": {
+                "const": "replay"
+              }
+            },
+            "required": ["run_kind"]
+          },
+          "then": {
+            "required": ["replayed_from_run_id", "replay_request_id"],
+            "not": {
+              "required": ["trigger_event_id"]
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "title": "Workflow Run Provenance",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident_id",
+        "runtime_version",
+        "workflow_version",
+        "prompt_set_version",
+        "model_policy_version",
+        "tool_policy_version",
+        "context_policy_version",
+        "code_revision",
+        "created_at"
+      ],
+      "properties": {
+        "incident_id": {
+          "$ref": "#/$defs/incidentId"
+        },
+        "runtime_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "workflow_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "prompt_set_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "model_policy_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "tool_policy_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "context_policy_version": {
+          "$ref": "#/$defs/versionReference"
+        },
+        "code_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,64}$"
+        },
+        "created_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        }
+      }
+    },
+    "lifecycle": {
+      "title": "Workflow Run Lifecycle",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "revision", "updated_at"],
+      "properties": {
+        "status": {
+          "enum": [
+            "PENDING",
+            "RUNNING",
+            "WAITING_FOR_APPROVAL",
+            "SUSPENDED",
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updated_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "started_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "ended_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "status_reason": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/statusReason"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": ["SUCCEEDED", "FAILED", "CANCELLED"]
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["started_at", "ended_at"]
+          },
+          "else": {
+            "not": {
+              "required": ["ended_at"]
+            }
+          }
+        }
+      ]
+    },
+    "execution_refs": {
+      "title": "Workflow Run Execution References",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coordinator_execution_id", "latest_checkpoint_id"],
+      "properties": {
+        "coordinator_execution_id": {
+          "$ref": "#/$defs/nullableReference"
+        },
+        "latest_checkpoint_id": {
+          "$ref": "#/$defs/nullableReference"
+        }
+      }
+    },
+    "progress": {
+      "title": "Workflow Run Progress Summary",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_execution_count",
+        "task_count",
+        "completed_task_count"
+      ],
+      "properties": {
+        "agent_execution_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "task_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed_task_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "runId": {
+      "type": "string",
+      "pattern": "^RUN-[0-9A-F]{32}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^EVT-[0-9A-F]{64}$"
+    },
+    "replayRequestId": {
+      "type": "string",
+      "pattern": "^RPR-[0-9A-F]{32}$"
+    },
+    "incidentId": {
+      "type": "string",
+      "pattern": "^QI-[0-9A-F]{64}$"
+    },
+    "versionReference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,6})?Z$"
+    },
+    "nullableReference": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      ]
+    },
+    "statusReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    }
+  }
+}
