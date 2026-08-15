@@ -164,3 +164,33 @@ def validate_run(
             "$.progress.completed_task_count",
             "completed_task_count cannot exceed task_count",
         )
+
+
+def canonicalize_run(run: Mapping[str, object]) -> bytes:
+    validate_run(run)
+    return json.dumps(
+        run,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def classify_run_relation(
+    first: Mapping[str, object],
+    second: Mapping[str, object],
+) -> str:
+    first_canonical = canonicalize_run(first)
+    second_canonical = canonicalize_run(second)
+
+    first_identity = first["identity"]
+    second_identity = second["identity"]
+    assert isinstance(first_identity, Mapping)
+    assert isinstance(second_identity, Mapping)
+
+    if first_identity["run_id"] != second_identity["run_id"]:
+        return "distinct"
+    if first_canonical == second_canonical:
+        return "duplicate-identical"
+    return "duplicate-conflicting"

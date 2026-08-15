@@ -5,6 +5,8 @@ from pathlib import Path
 
 from contracts.agent_run.validator import (
     AgentRunValidationError,
+    canonicalize_run,
+    classify_run_relation,
     validate_run,
 )
 
@@ -179,6 +181,61 @@ class AgentRunValidationTest(unittest.TestCase):
             "lifecycle_timestamp_order_invalid",
             "$.lifecycle.ended_at",
         )
+
+
+class AgentRunRelationTest(unittest.TestCase):
+    def test_canonical_form_ignores_object_key_order(self) -> None:
+        first = valid_original()
+        second = dict(reversed(list(first.items())))
+
+        self.assertEqual(canonicalize_run(first), canonicalize_run(second))
+
+    def test_same_id_and_content_is_identical_duplicate(self) -> None:
+        first = valid_original()
+        second = copy.deepcopy(first)
+
+        self.assertEqual(
+            classify_run_relation(first, second),
+            "duplicate-identical",
+        )
+
+    def test_same_id_with_different_valid_lifecycle_is_conflicting(self) -> None:
+        first = valid_original()
+        second = copy.deepcopy(first)
+        lifecycle = second["lifecycle"]
+        assert isinstance(lifecycle, dict)
+        lifecycle["revision"] = 1
+        lifecycle["updated_at"] = "2026-08-15T01:00:01.000000Z"
+
+        self.assertEqual(
+            classify_run_relation(first, second),
+            "duplicate-conflicting",
+        )
+
+    def test_different_run_id_is_distinct(self) -> None:
+        first = valid_replay()
+        second = copy.deepcopy(first)
+        identity = second["identity"]
+        assert isinstance(identity, dict)
+        identity["run_id"] = "RUN-44444444444444444444444444444444"
+        identity["replay_request_id"] = (
+            "RPR-44444444444444444444444444444444"
+        )
+
+        self.assertEqual(
+            classify_run_relation(first, second),
+            "distinct",
+        )
+
+    def test_invalid_run_is_rejected_before_relation_classification(self) -> None:
+        first = valid_replay()
+        second = copy.deepcopy(first)
+        identity = second["identity"]
+        assert isinstance(identity, dict)
+        identity["replayed_from_run_id"] = identity["run_id"]
+
+        with self.assertRaises(AgentRunValidationError):
+            classify_run_relation(first, second)
 
 
 if __name__ == "__main__":
