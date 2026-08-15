@@ -1,0 +1,38 @@
+{
+  "contract_version": "1.0.0",
+  "identity": {
+    "run_id": "RUN-11111111111111111111111111111111",
+    "run_kind": "original",
+    "original_run_id": "RUN-11111111111111111111111111111111",
+    "trigger_event_id": "EVT-1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "provenance": {
+    "incident_id": "QI-1111111111111111111111111111111111111111111111111111111111111111",
+    "runtime_version": "agent-runtime:0.1.0",
+    "workflow_version": "quality-incident-workflow:1.0.0",
+    "prompt_set_version": "quality-incident-prompts:1.0.0",
+    "model_policy_version": "default-model-policy:1.0.0",
+    "tool_policy_version": "quality-tool-policy:1.0.0",
+    "context_policy_version": "incident-context-policy:1.0.0",
+    "code_revision": "651228b9d71ee81e80e6a5030e4c49a50ec60f88",
+    "created_at": "2026-08-15T01:00:00.000000Z"
+  },
+  "lifecycle": {
+    "status": "PENDING",
+    "revision": 0,
+    "updated_at": "2026-08-15T01:00:00.000000Z",
+    "status_reason": null
+  },
+  "execution_refs": {
+    "coordinator_execution_id": null,
+    "latest_checkpoint_id": null
+  },
+  "progress": {
+    "agent_execution_count": 0,
+    "task_count": 0,
+    "completed_task_count": 0
+  },
+  "ground_truth": {
+    "expected_root_cause": "bearing failure"
+  }
+}

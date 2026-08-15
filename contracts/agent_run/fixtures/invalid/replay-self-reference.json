@@ -1,0 +1,41 @@
+{
+  "contract_version": "1.0.0",
+  "identity": {
+    "run_id": "RUN-33333333333333333333333333333333",
+    "run_kind": "replay",
+    "original_run_id": "RUN-11111111111111111111111111111111",
+    "replayed_from_run_id": "RUN-33333333333333333333333333333333",
+    "replay_request_id": "RPR-33333333333333333333333333333333"
+  },
+  "provenance": {
+    "incident_id": "QI-1111111111111111111111111111111111111111111111111111111111111111",
+    "runtime_version": "agent-runtime:0.2.0",
+    "workflow_version": "quality-incident-workflow:1.0.0",
+    "prompt_set_version": "quality-incident-prompts:1.1.0",
+    "model_policy_version": "comparison-model-policy:1.0.0",
+    "tool_policy_version": "quality-tool-policy:1.0.0",
+    "context_policy_version": "incident-context-policy:1.0.0",
+    "code_revision": "33e9c00123456789abcdef0123456789abcdef01",
+    "created_at": "2026-08-15T02:00:00.000000Z"
+  },
+  "lifecycle": {
+    "status": "SUCCEEDED",
+    "revision": 8,
+    "updated_at": "2026-08-15T02:05:00.000000Z",
+    "started_at": "2026-08-15T02:00:01.000000Z",
+    "ended_at": "2026-08-15T02:05:00.000000Z",
+    "status_reason": {
+      "code": "WORKFLOW_COMPLETED",
+      "message": "All planned workflow tasks completed."
+    }
+  },
+  "execution_refs": {
+    "coordinator_execution_id": "AGX-33333333333333333333333333333333",
+    "latest_checkpoint_id": "CHK-33333333333333333333333333333333"
+  },
+  "progress": {
+    "agent_execution_count": 4,
+    "task_count": 7,
+    "completed_task_count": 7
+  }
+}
