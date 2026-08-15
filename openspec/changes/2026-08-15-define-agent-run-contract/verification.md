@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- `change_status`: `technically-verified`
+- `change_status`: `review-handoff-ready`
 - `technical_verification`: `passed`
 - `learning_gate`: `pending`
 
@@ -66,7 +66,7 @@ git diff --check
 - 无法在不加载历史记录的情况下证明 replay 引用存在、类型正确或不存在跨记录循环。
 - 本 Change 不验证状态迁移边，只验证当前快照的状态与时间组合。
 - `revision` 的并发更新语义要由后续 MySQL Lifecycle Change 证明。
-- 2026-08-15 连续三次执行 `git -c http.version=HTTP/1.1 push -u origin codex/define-agent-run-contract` 均因无法连接 `github.com:443` 超时；`gh auth status` 正常，`Test-NetConnection` 证明 TCP 443 当前不可达。分支尚未推送，因此没有宣称 `review-handoff-ready`。
+- 2026-08-15 首轮三次推送因无法连接 `github.com:443` 超时；网络恢复后重新执行 `git -c http.version=HTTP/1.1 push -u origin codex/define-agent-run-contract` 成功，feature branch 已发布。
 
 ## 范围检查
 

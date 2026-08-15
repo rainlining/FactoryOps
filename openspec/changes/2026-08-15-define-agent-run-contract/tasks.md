@@ -16,5 +16,5 @@
 ## Handoff
 
 - [x] 提交 feature branch，状态推进到 `review-handoff-ready`。
-- [ ] 推送 feature branch。
+- [x] 推送 feature branch。
 - [ ] 独立 Review/Learning 会话完成 Deep Learning Gate。

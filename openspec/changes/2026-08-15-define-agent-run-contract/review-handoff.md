@@ -4,7 +4,7 @@
 
 - `change_id`: `2026-08-15-define-agent-run-contract`
 - `learning_level`: `deep`
-- `status`: `pending-push`
+- `status`: `review-handoff-ready`
 - `feature_branch`: `codex/define-agent-run-contract`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\define-agent-run-contract`
 - `base_commit`: `651228b9d71ee81e80e6a5030e4c49a50ec60f88`
@@ -13,7 +13,7 @@
 
 Review/Learning 会话接手期间，不得由其他会话修改本分支或 worktree。
 
-> Handoff 内容已经完整，但 feature branch 因本机到 `github.com:443` 的连接超时尚未推送。推送成功并同步生命周期状态后，才正式进入 `review-handoff-ready`。
+Feature branch 已推送到 `origin/codex/define-agent-run-contract`，可以由独立 Review/Learning 会话接手。
 
 ## 2. 已实现范围
 
