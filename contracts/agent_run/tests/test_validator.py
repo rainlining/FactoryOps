@@ -10,7 +10,6 @@ from contracts.agent_run.validator import (
     validate_run,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -218,9 +217,7 @@ class AgentRunRelationTest(unittest.TestCase):
         identity = second["identity"]
         assert isinstance(identity, dict)
         identity["run_id"] = "RUN-44444444444444444444444444444444"
-        identity["replay_request_id"] = (
-            "RPR-44444444444444444444444444444444"
-        )
+        identity["replay_request_id"] = "RPR-44444444444444444444444444444444"
 
         self.assertEqual(
             classify_run_relation(first, second),

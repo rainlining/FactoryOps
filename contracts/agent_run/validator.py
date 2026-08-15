@@ -11,7 +11,6 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
 
-
 CONTRACT_ROOT = Path(__file__).resolve().parent
 
 
@@ -26,16 +25,13 @@ class AgentRunValidationError(ValueError):
     def __init__(self, issues: Sequence[ValidationIssue]) -> None:
         self.issues = tuple(issues)
         super().__init__(
-            "; ".join(
-                f"{issue.path}: {issue.message}" for issue in self.issues
-            )
+            "; ".join(f"{issue.path}: {issue.message}" for issue in self.issues)
         )
 
 
 def _json_path(parts: Sequence[object]) -> str:
     return "$" + "".join(
-        f"[{part}]" if isinstance(part, int) else f".{part}"
-        for part in parts
+        f"[{part}]" if isinstance(part, int) else f".{part}" for part in parts
     )
 
 
@@ -48,9 +44,7 @@ def _schema_error_path(error: ValidationError) -> str:
     parts = list(error.absolute_path)
     if error.validator == "required" and isinstance(error.instance, Mapping):
         missing = next(
-            name
-            for name in error.validator_value
-            if name not in error.instance
+            name for name in error.validator_value if name not in error.instance
         )
         parts.append(missing)
     elif error.validator == "additionalProperties" and isinstance(
@@ -58,7 +52,7 @@ def _schema_error_path(error: ValidationError) -> str:
         Mapping,
     ):
         declared = error.schema.get("properties", {})
-        extra = sorted(set(error.instance) - set(declared))[0]
+        extra = min(set(error.instance) - set(declared))
         parts.append(extra)
     elif error.validator == "not" and isinstance(error.instance, Mapping):
         forbidden_fields = (
@@ -68,11 +62,7 @@ def _schema_error_path(error: ValidationError) -> str:
             "ended_at",
         )
         forbidden = next(
-            (
-                field
-                for field in forbidden_fields
-                if field in error.instance
-            ),
+            (field for field in forbidden_fields if field in error.instance),
             None,
         )
         if forbidden is not None:
@@ -109,9 +99,7 @@ def validate_run(
     )
     schema_errors = sorted(
         validator.iter_errors(run),
-        key=lambda error: tuple(
-            str(part) for part in error.absolute_path
-        ),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if schema_errors:
         error = schema_errors[0]

@@ -4,7 +4,6 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -23,16 +22,12 @@ class AgentRunSchemaTest(unittest.TestCase):
         )
 
     def test_schema_accepts_original_run_fixture(self) -> None:
-        payload = load_json(
-            ROOT / "fixtures" / "valid" / "original-run.json"
-        )
+        payload = load_json(ROOT / "fixtures" / "valid" / "original-run.json")
 
         self.validator.validate(payload)
 
     def test_schema_accepts_replay_run_fixture(self) -> None:
-        payload = load_json(
-            ROOT / "fixtures" / "valid" / "replay-run.json"
-        )
+        payload = load_json(ROOT / "fixtures" / "valid" / "replay-run.json")
 
         self.validator.validate(payload)
 

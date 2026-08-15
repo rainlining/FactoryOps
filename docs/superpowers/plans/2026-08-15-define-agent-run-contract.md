@@ -64,15 +64,7 @@
 - Create: `contracts/agent_run/tests/test_validator.py`
 - Create: `contracts/agent_run/fixtures/invalid/unsupported-version.json`
 - Create: `contracts/agent_run/fixtures/invalid/ground-truth-leak.json`
-- Create: `contracts/agent_run/fixtures/invalid/original-run-id-mismatch.json`
-- Create: `contracts/agent_run/fixtures/invalid/original-with-replay-request.json`
-- Create: `contracts/agent_run/fixtures/invalid/replay-missing-source.json`
 - Create: `contracts/agent_run/fixtures/invalid/replay-self-reference.json`
-- Create: `contracts/agent_run/fixtures/invalid/unknown-status.json`
-- Create: `contracts/agent_run/fixtures/invalid/terminal-without-ended-at.json`
-- Create: `contracts/agent_run/fixtures/invalid/non-terminal-with-ended-at.json`
-- Create: `contracts/agent_run/fixtures/invalid/ended-before-started.json`
-- Create: `contracts/agent_run/fixtures/invalid/completed-count-exceeds-total.json`
 
 **Interfaces:**
 - Consumes: `v1.0.0/schema.json` and fixture documents.
@@ -80,7 +72,7 @@
 
 - [ ] **Step 1: Write failing Validator tests**
 
-  Assert stable error code and JSON path for version, Schema, original identity, replay self-reference, timestamp ordering and progress count failures.
+  Assert stable error code and JSON path for version, Schema, original identity, replay self-reference, timestamp ordering and progress count failures。版本、ground truth 和 replay 自引用使用独立 invalid fixture，其余边界通过对有效 fixture 的单字段变异保持测试聚焦。
 
 - [ ] **Step 2: Verify RED**
 

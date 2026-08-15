@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-15-define-agent-run-contract`
-- `status`: `design-reviewed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-15-consume-quality-incident-events-idempotently]`
 - `spec_refs`: `[quality-incident-event-ingress, development-governance]`
