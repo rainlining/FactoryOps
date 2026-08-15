@@ -1,18 +1,24 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from importlib.resources import files
 
 import pytest
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from testcontainers.community.mysql import MySqlContainer
 
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.run_lifecycle.model import (
+    ActorKind,
     OperationOutcome,
     OriginalRunCommand,
     ReplayRunCommand,
     RunProvenance,
+    RunStatus,
+    TransitionCommand,
 )
+from factoryops_agent_service.run_lifecycle.rules import LifecycleRuleViolation
 from factoryops_agent_service.run_lifecycle.service import (
     AgentRunLifecycleService,
     RunCreationRejected,
@@ -143,6 +149,64 @@ def test_migration_runner_is_idempotent(mysql_engine: Engine) -> None:
         count = connection.scalar(text("SELECT COUNT(*) FROM agent_schema_history"))
 
     assert count == 2
+
+
+def test_migration_runner_upgrades_database_that_only_has_001() -> None:
+    mysql = MySqlContainer("mysql:8.4")
+    mysql.start()
+    database_url = mysql.get_connection_url().replace(
+        "mysql://",
+        "mysql+pymysql://",
+        1,
+    )
+    upgrade_engine = create_engine(database_url)
+    migration_001 = (
+        files("factoryops_agent_service.event_ingress.migrations")
+        .joinpath("001_create_agent_event_inbox.sql")
+        .read_text(encoding="utf-8")
+    )
+    with upgrade_engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE agent_schema_history (
+              version VARCHAR(100) PRIMARY KEY,
+              applied_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+            ) ENGINE=InnoDB
+            """
+        )
+        for statement in migration_001.split(";"):
+            if statement.strip():
+                connection.exec_driver_sql(statement)
+        connection.execute(
+            text("INSERT INTO agent_schema_history(version) VALUES (:version)"),
+            {"version": "001_create_agent_event_inbox"},
+        )
+
+    migrate(upgrade_engine)
+
+    with upgrade_engine.connect() as connection:
+        versions = connection.scalars(
+            text("SELECT version FROM agent_schema_history ORDER BY version")
+        ).all()
+        run_table = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'agent_runs'
+                """
+            )
+        )
+    try:
+        assert versions == [
+            "001_create_agent_event_inbox",
+            "002_create_agent_run_lifecycle",
+        ]
+        assert run_table == 1
+    finally:
+        upgrade_engine.dispose()
+        mysql.stop()
 
 
 def _event_id(marker: str) -> str:
@@ -278,6 +342,71 @@ def test_original_requires_persisted_inbox_event(mysql_engine: Engine) -> None:
         )
 
 
+def test_invalid_creation_contract_is_rejected_before_insert(
+    mysql_engine: Engine,
+) -> None:
+    event_id = _seed_inbox(mysql_engine, "C")
+
+    with pytest.raises(RunCreationRejected, match="Contract"):
+        _service(mysql_engine).create_original_run(
+            OriginalRunCommand(
+                event_id,
+                _provenance("C", prompt="invalid version with spaces"),
+            )
+        )
+
+    with mysql_engine.connect() as connection:
+        count = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_runs
+                WHERE trigger_event_id=:event_id
+                """
+            ),
+            {"event_id": event_id},
+        )
+    assert count == 0
+
+
+def test_initial_history_failure_rolls_back_run(mysql_engine: Engine) -> None:
+    event_id = _seed_inbox(mysql_engine, "D")
+    service = _service(mysql_engine)
+
+    def fail_initial_transition(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        if "INSERT INTO agent_run_transitions" not in statement:
+            return
+        if isinstance(parameters, dict) and parameters.get("to_revision") == 0:
+            raise RuntimeError("injected initial history failure")
+
+    event.listen(mysql_engine, "before_cursor_execute", fail_initial_transition)
+    try:
+        with pytest.raises(RuntimeError, match="initial history failure"):
+            service.create_original_run(OriginalRunCommand(event_id, _provenance("D")))
+    finally:
+        event.remove(mysql_engine, "before_cursor_execute", fail_initial_transition)
+
+    with mysql_engine.connect() as connection:
+        count = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_runs
+                WHERE trigger_event_id=:event_id
+                """
+            ),
+            {"event_id": event_id},
+        )
+    assert count == 0
+
+
 def test_replay_creation_validates_lineage_and_is_idempotent(
     mysql_engine: Engine,
 ) -> None:
@@ -315,3 +444,302 @@ def test_replay_creation_validates_lineage_and_is_idempotent(
                 provenance=_provenance("5"),
             )
         )
+
+
+def _create_original(
+    engine: Engine,
+    marker: str,
+) -> tuple[AgentRunLifecycleService, str]:
+    event_id = _seed_inbox(engine, marker)
+    service = _service(engine)
+    result = service.create_original_run(
+        OriginalRunCommand(event_id, _provenance(marker))
+    )
+    assert result.run is not None
+    identity = result.run["identity"]
+    assert isinstance(identity, dict)
+    run_id = identity["run_id"]
+    assert isinstance(run_id, str)
+    return service, run_id
+
+
+def _transition_command(
+    run_id: str,
+    request_marker: str,
+    expected_status: RunStatus,
+    expected_revision: int,
+    to_status: RunStatus,
+    *,
+    reason_code: str = "TEST_TRANSITION",
+    checkpoint_id: str | None = None,
+) -> TransitionCommand:
+    return TransitionCommand(
+        transition_request_id="TRQ-" + request_marker * 32,
+        run_id=run_id,
+        expected_status=expected_status,
+        expected_revision=expected_revision,
+        to_status=to_status,
+        actor_kind=ActorKind.COORDINATOR,
+        actor_id="coordinator-execution-1",
+        reason_code=reason_code,
+        reason_message="A persisted lifecycle transition.",
+        checkpoint_id=checkpoint_id,
+    )
+
+
+def test_transition_updates_snapshot_and_appends_history(
+    mysql_engine: Engine,
+) -> None:
+    service, run_id = _create_original(mysql_engine, "6")
+    result = service.transition_run(
+        _transition_command(
+            run_id,
+            "6",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+            reason_code="WORKFLOW_STARTED",
+        )
+    )
+
+    assert result.outcome is OperationOutcome.APPLIED
+    assert result.run is not None
+    lifecycle = result.run["lifecycle"]
+    assert isinstance(lifecycle, dict)
+    assert lifecycle["status"] == "RUNNING"
+    assert lifecycle["revision"] == 1
+    assert lifecycle["started_at"] == "2026-08-15T05:00:00.000000Z"
+    assert "ended_at" not in lifecycle
+    assert lifecycle["status_reason"] == {
+        "code": "WORKFLOW_STARTED",
+        "message": "A persisted lifecycle transition.",
+    }
+
+    with mysql_engine.connect() as connection:
+        transitions = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_run_transitions
+                WHERE run_id=:run_id
+                """
+            ),
+            {"run_id": run_id},
+        )
+    assert transitions == 2
+
+
+def test_transition_retry_conflict_and_stale_revision_are_distinct(
+    mysql_engine: Engine,
+) -> None:
+    service, run_id = _create_original(mysql_engine, "7")
+    transition = _transition_command(
+        run_id,
+        "7",
+        RunStatus.PENDING,
+        0,
+        RunStatus.RUNNING,
+    )
+
+    applied = service.transition_run(transition)
+    identical = service.transition_run(transition)
+    conflicting = service.transition_run(
+        _transition_command(
+            run_id,
+            "7",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+            reason_code="DIFFERENT_REASON",
+        )
+    )
+    stale = service.transition_run(
+        _transition_command(
+            run_id,
+            "8",
+            RunStatus.PENDING,
+            0,
+            RunStatus.CANCELLED,
+        )
+    )
+
+    assert applied.outcome is OperationOutcome.APPLIED
+    assert identical.outcome is OperationOutcome.DUPLICATE_IDENTICAL
+    assert conflicting.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert stale.outcome is OperationOutcome.CONCURRENCY_CONFLICT
+    assert stale.run is not None
+    stale_lifecycle = stale.run["lifecycle"]
+    assert isinstance(stale_lifecycle, dict)
+    assert stale_lifecycle["status"] == "RUNNING"
+    assert stale_lifecycle["revision"] == 1
+
+
+def test_cancel_before_start_has_no_started_at(mysql_engine: Engine) -> None:
+    service, run_id = _create_original(mysql_engine, "8")
+
+    result = service.transition_run(
+        _transition_command(
+            run_id,
+            "9",
+            RunStatus.PENDING,
+            0,
+            RunStatus.CANCELLED,
+            reason_code="CANCELLED_BEFORE_START",
+        )
+    )
+
+    assert result.run is not None
+    lifecycle = result.run["lifecycle"]
+    assert isinstance(lifecycle, dict)
+    assert lifecycle["status"] == "CANCELLED"
+    assert "started_at" not in lifecycle
+    assert lifecycle["ended_at"] == "2026-08-15T05:00:00.000000Z"
+
+    with pytest.raises(LifecycleRuleViolation, match="illegal transition"):
+        service.transition_run(
+            _transition_command(
+                run_id,
+                "A",
+                RunStatus.CANCELLED,
+                1,
+                RunStatus.RUNNING,
+            )
+        )
+
+
+def test_suspended_persists_checkpoint_reference(mysql_engine: Engine) -> None:
+    service, run_id = _create_original(mysql_engine, "9")
+    service.transition_run(
+        _transition_command(
+            run_id,
+            "B",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+        )
+    )
+
+    with pytest.raises(LifecycleRuleViolation, match="checkpoint"):
+        service.transition_run(
+            _transition_command(
+                run_id,
+                "C",
+                RunStatus.RUNNING,
+                1,
+                RunStatus.SUSPENDED,
+            )
+        )
+
+    suspended = service.transition_run(
+        _transition_command(
+            run_id,
+            "D",
+            RunStatus.RUNNING,
+            1,
+            RunStatus.SUSPENDED,
+            reason_code="TOOL_TEMPORARILY_UNAVAILABLE",
+            checkpoint_id="checkpoint-9",
+        )
+    )
+
+    assert suspended.outcome is OperationOutcome.APPLIED
+    assert suspended.run is not None
+    refs = suspended.run["execution_refs"]
+    assert isinstance(refs, dict)
+    assert refs["latest_checkpoint_id"] == "checkpoint-9"
+
+
+def test_concurrent_transitions_allow_only_one_winner(mysql_engine: Engine) -> None:
+    service, run_id = _create_original(mysql_engine, "A")
+    commands = (
+        _transition_command(
+            run_id,
+            "E",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+        ),
+        _transition_command(
+            run_id,
+            "F",
+            RunStatus.PENDING,
+            0,
+            RunStatus.CANCELLED,
+        ),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(service.transition_run, commands))
+
+    assert {result.outcome for result in results} == {
+        OperationOutcome.APPLIED,
+        OperationOutcome.CONCURRENCY_CONFLICT,
+    }
+    stored = service.get_run(run_id)
+    assert stored is not None
+    lifecycle = stored["lifecycle"]
+    assert isinstance(lifecycle, dict)
+    assert lifecycle["revision"] == 1
+    with mysql_engine.connect() as connection:
+        count = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_run_transitions
+                WHERE run_id=:run_id
+                """
+            ),
+            {"run_id": run_id},
+        )
+    assert count == 2
+
+
+def test_transition_insert_failure_rolls_back_snapshot(mysql_engine: Engine) -> None:
+    service, run_id = _create_original(mysql_engine, "B")
+
+    def fail_transition_insert(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        if "INSERT INTO agent_run_transitions" not in statement:
+            return
+        if isinstance(parameters, dict) and parameters.get("to_revision") == 1:
+            raise RuntimeError("injected transition history failure")
+
+    event.listen(mysql_engine, "before_cursor_execute", fail_transition_insert)
+    try:
+        with pytest.raises(RuntimeError, match="history failure"):
+            service.transition_run(
+                _transition_command(
+                    run_id,
+                    "A",
+                    RunStatus.PENDING,
+                    0,
+                    RunStatus.RUNNING,
+                )
+            )
+    finally:
+        event.remove(mysql_engine, "before_cursor_execute", fail_transition_insert)
+
+    stored = service.get_run(run_id)
+    assert stored is not None
+    lifecycle = stored["lifecycle"]
+    assert isinstance(lifecycle, dict)
+    assert lifecycle["status"] == "PENDING"
+    assert lifecycle["revision"] == 0
+    with mysql_engine.connect() as connection:
+        count = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_run_transitions
+                WHERE run_id=:run_id
+                """
+            ),
+            {"run_id": run_id},
+        )
+    assert count == 1

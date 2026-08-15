@@ -76,6 +76,8 @@ def plan_transition(
         raise LifecycleRuleViolation("reason_message must not be blank")
     if command.to_status is RunStatus.SUSPENDED and not command.checkpoint_id:
         raise LifecycleRuleViolation("SUSPENDED requires a checkpoint")
+    if command.to_status is not RunStatus.SUSPENDED and command.checkpoint_id:
+        raise LifecycleRuleViolation("checkpoint is only accepted for SUSPENDED")
 
     started_at = current_started_at
     if (

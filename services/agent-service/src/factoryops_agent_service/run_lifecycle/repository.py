@@ -49,6 +49,58 @@ class MySqlAgentRunRepository:
     ) -> Mapping[str, object] | None:
         return self._find_run("replay_request_id", replay_request_id)
 
+    def find_transition_by_request(
+        self,
+        transition_request_id: str,
+    ) -> Mapping[str, object] | None:
+        with self._engine.connect() as connection:
+            return (
+                connection.execute(
+                    text(
+                        """
+                        SELECT *
+                        FROM agent_run_transitions
+                        WHERE transition_request_id=:transition_request_id
+                        """
+                    ),
+                    {"transition_request_id": transition_request_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+
+    def apply_transition(
+        self,
+        update: Mapping[str, object],
+        transition: Mapping[str, object],
+    ) -> None:
+        with self._engine.begin() as connection:
+            updated = connection.execute(
+                text(
+                    """
+                    UPDATE agent_runs
+                    SET status=:to_status,
+                        revision=:to_revision,
+                        updated_at=:occurred_at,
+                        started_at=:started_at,
+                        ended_at=:ended_at,
+                        status_reason_code=:reason_code,
+                        status_reason_message=:status_reason_message,
+                        latest_checkpoint_id=CASE
+                          WHEN :to_status='SUSPENDED' THEN :checkpoint_id
+                          ELSE latest_checkpoint_id
+                        END
+                    WHERE run_id=:run_id
+                      AND status=:expected_status
+                      AND revision=:expected_revision
+                    """
+                ),
+                update,
+            )
+            if updated.rowcount != 1:
+                raise ConditionalUpdateMiss
+            self._insert_transition(connection, transition)
+
     def _find_run(
         self,
         column: str,
@@ -124,3 +176,7 @@ class MySqlAgentRunRepository:
             ),
             transition,
         )
+
+
+class ConditionalUpdateMiss(RuntimeError):
+    pass

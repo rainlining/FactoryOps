@@ -16,8 +16,11 @@ from .model import (
     RunOperationResult,
     RunProvenance,
     RunStatus,
+    TransitionCommand,
+    TransitionOperationResult,
 )
-from .repository import MySqlAgentRunRepository
+from .repository import ConditionalUpdateMiss, MySqlAgentRunRepository
+from .rules import plan_transition
 
 
 class RunCreationRejected(ValueError):
@@ -25,6 +28,10 @@ class RunCreationRejected(ValueError):
 
 
 class PersistenceIntegrityError(RuntimeError):
+    pass
+
+
+class RunNotFound(LookupError):
     pass
 
 
@@ -108,6 +115,104 @@ class AgentRunLifecycleService:
         row = self._repository.find_run(run_id)
         return None if row is None else self._to_contract(row)
 
+    def transition_run(
+        self,
+        command: TransitionCommand,
+    ) -> TransitionOperationResult:
+        current = self._repository.find_run(command.run_id)
+        if current is None:
+            raise RunNotFound(f"Run does not exist: {command.run_id}")
+        if (
+            current["status"] != command.expected_status.value
+            or current["revision"] != command.expected_revision
+        ):
+            return self._classify_failed_transition(command)
+
+        occurred_at = self._now()
+        current_started_at = current["started_at"]
+        assert current_started_at is None or isinstance(
+            current_started_at,
+            datetime,
+        )
+        plan = plan_transition(
+            command,
+            current_started_at=current_started_at,
+            occurred_at=occurred_at,
+        )
+        transition = {
+            "transition_id": self._transition_id_factory(),
+            "transition_request_id": command.transition_request_id,
+            "run_id": command.run_id,
+            "from_status": command.expected_status.value,
+            "to_status": command.to_status.value,
+            "from_revision": command.expected_revision,
+            "to_revision": plan.to_revision,
+            "actor_kind": command.actor_kind.value,
+            "actor_id": command.actor_id,
+            "reason_code": command.reason_code,
+            "reason_message": command.reason_message,
+            "checkpoint_id": command.checkpoint_id,
+            "occurred_at": occurred_at,
+        }
+        update = {
+            **transition,
+            "expected_status": command.expected_status.value,
+            "expected_revision": command.expected_revision,
+            "started_at": plan.started_at,
+            "ended_at": plan.ended_at,
+            "status_reason_message": command.reason_message or command.reason_code,
+        }
+        try:
+            self._repository.apply_transition(update, transition)
+        except ConditionalUpdateMiss:
+            return self._classify_failed_transition(command)
+        except IntegrityError as error:
+            classified = self._classify_failed_transition(command)
+            if classified.outcome is OperationOutcome.CONCURRENCY_CONFLICT:
+                raise PersistenceIntegrityError(
+                    "transition history insert violated database constraints"
+                ) from error
+            return classified
+
+        stored = self.get_run(command.run_id)
+        if stored is None:
+            raise PersistenceIntegrityError("transitioned Run could not be reloaded")
+        return TransitionOperationResult(OperationOutcome.APPLIED, stored)
+
+    def _classify_failed_transition(
+        self,
+        command: TransitionCommand,
+    ) -> TransitionOperationResult:
+        existing = self._repository.find_transition_by_request(
+            command.transition_request_id
+        )
+        if existing is None:
+            outcome = OperationOutcome.CONCURRENCY_CONFLICT
+        elif self._transition_matches(existing, command):
+            outcome = OperationOutcome.DUPLICATE_IDENTICAL
+        else:
+            outcome = OperationOutcome.DUPLICATE_CONFLICTING
+        return TransitionOperationResult(outcome, self.get_run(command.run_id))
+
+    def _transition_matches(
+        self,
+        existing: Mapping[str, object],
+        command: TransitionCommand,
+    ) -> bool:
+        expected = {
+            "run_id": command.run_id,
+            "from_status": command.expected_status.value,
+            "to_status": command.to_status.value,
+            "from_revision": command.expected_revision,
+            "to_revision": command.expected_revision + 1,
+            "actor_kind": command.actor_kind.value,
+            "actor_id": command.actor_id,
+            "reason_code": command.reason_code,
+            "reason_message": command.reason_message,
+            "checkpoint_id": command.checkpoint_id,
+        }
+        return all(existing[column] == value for column, value in expected.items())
+
     def _create_or_classify(
         self,
         run: Mapping[str, object],
@@ -116,6 +221,10 @@ class AgentRunLifecycleService:
         matches: Callable[[Mapping[str, object], object], bool],
         command: object,
     ) -> RunOperationResult:
+        try:
+            self._to_contract(run)
+        except PersistenceIntegrityError as error:
+            raise RunCreationRejected(f"Run Contract is invalid: {error}") from error
         try:
             self._repository.insert_run_with_initial_transition(run, transition)
         except IntegrityError as error:
