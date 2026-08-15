@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 import pytest
@@ -34,13 +35,14 @@ class FakeConsumer:
 
 
 class FakeProcessor:
-    def __init__(self, failure: Exception | None = None) -> None:
+    def __init__(self, failure: Exception | None = None, result=None) -> None:
         self.failure = failure
+        self.result = result or ProcessingResult(IngressOutcome.ACCEPTED, "EVT-1")
 
     def process(self, record: KafkaRecord) -> ProcessingResult:
         if self.failure:
             raise self.failure
-        return ProcessingResult(IngressOutcome.ACCEPTED, "EVT-1")
+        return self.result
 
 
 def test_commits_next_offset_only_after_processing() -> None:
@@ -50,6 +52,37 @@ def test_commits_next_offset_only_after_processing() -> None:
 
     assert result == ProcessingResult(IngressOutcome.ACCEPTED, "EVT-1")
     assert consumer.actions == ["poll", "commit:10"]
+
+
+def test_logs_redelivery_false_for_first_accept(caplog) -> None:
+    caplog.set_level(
+        logging.INFO, logger="factoryops_agent_service.event_ingress.worker"
+    )
+    consumer = FakeConsumer()
+
+    KafkaIngressWorker(consumer, FakeProcessor()).run_once()
+
+    assert any(
+        "outcome=accepted" in message and "redelivery=false" in message
+        for message in caplog.messages
+    )
+
+
+def test_logs_redelivery_true_for_identical_duplicate(caplog) -> None:
+    caplog.set_level(
+        logging.INFO, logger="factoryops_agent_service.event_ingress.worker"
+    )
+    consumer = FakeConsumer()
+    processor = FakeProcessor(
+        result=ProcessingResult(IngressOutcome.DUPLICATE_IDENTICAL, "EVT-1")
+    )
+
+    KafkaIngressWorker(consumer, processor).run_once()
+
+    assert any(
+        "outcome=duplicate-identical" in message and "redelivery=true" in message
+        for message in caplog.messages
+    )
 
 
 @pytest.mark.parametrize(

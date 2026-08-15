@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Protocol
 
-from .model import KafkaRecord, ProcessingResult
+from .model import IngressOutcome, KafkaRecord, ProcessingResult
 from .processor import EventIngressProcessor
 
 LOGGER = logging.getLogger(__name__)
@@ -46,10 +46,11 @@ class KafkaIngressWorker:
             )
             raise
 
+        redelivery = result.outcome is IngressOutcome.DUPLICATE_IDENTICAL
         LOGGER.info(
             "event_ingress_processed topic=%s partition=%s offset=%s "
             "event_id=%s outcome=%s processing_ms=%s total_ms=%s "
-            "offset_committed=true",
+            "offset_committed=true redelivery=%s",
             record.topic,
             record.partition,
             record.offset,
@@ -57,6 +58,7 @@ class KafkaIngressWorker:
             result.outcome.value,
             processing_ms,
             round((time.monotonic() - started) * 1000),
+            str(redelivery).lower(),
         )
         return result
 
