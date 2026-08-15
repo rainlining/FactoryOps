@@ -130,6 +130,15 @@ class AgentRunLifecycleService:
         self,
         command: TransitionCommand,
     ) -> TransitionOperationResult:
+        existing_transition = self._repository.find_transition_by_request(
+            command.transition_request_id
+        )
+        if existing_transition is not None:
+            return self._classify_existing_transition(
+                existing_transition,
+                command,
+            )
+
         current = self._repository.find_run(command.run_id)
         if current is None:
             raise RunNotFound(f"Run does not exist: {command.run_id}")
@@ -217,12 +226,25 @@ class AgentRunLifecycleService:
             command.transition_request_id
         )
         if existing is None:
-            outcome = OperationOutcome.CONCURRENCY_CONFLICT
-        elif self._transition_matches(existing, command):
-            outcome = OperationOutcome.DUPLICATE_IDENTICAL
-        else:
-            outcome = OperationOutcome.DUPLICATE_CONFLICTING
-        return TransitionOperationResult(outcome, self.get_run(command.run_id))
+            return TransitionOperationResult(
+                OperationOutcome.CONCURRENCY_CONFLICT,
+                self.get_run(command.run_id),
+            )
+        return self._classify_existing_transition(existing, command)
+
+    def _classify_existing_transition(
+        self,
+        existing: Mapping[str, object],
+        command: TransitionCommand,
+    ) -> TransitionOperationResult:
+        outcome = (
+            OperationOutcome.DUPLICATE_IDENTICAL
+            if self._transition_matches(existing, command)
+            else OperationOutcome.DUPLICATE_CONFLICTING
+        )
+        existing_run_id = existing["run_id"]
+        assert isinstance(existing_run_id, str)
+        return TransitionOperationResult(outcome, self.get_run(existing_run_id))
 
     def _transition_matches(
         self,

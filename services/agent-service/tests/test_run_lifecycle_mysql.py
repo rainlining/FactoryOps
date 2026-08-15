@@ -566,6 +566,24 @@ def test_transition_retry_conflict_and_stale_revision_are_distinct(
             reason_code="DIFFERENT_REASON",
         )
     )
+    conflicting_missing_run = service.transition_run(
+        _transition_command(
+            "RUN-" + "F" * 32,
+            "7",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+        )
+    )
+    conflicting_illegal_transition = service.transition_run(
+        _transition_command(
+            run_id,
+            "7",
+            RunStatus.RUNNING,
+            1,
+            RunStatus.PENDING,
+        )
+    )
     stale = service.transition_run(
         _transition_command(
             run_id,
@@ -579,6 +597,12 @@ def test_transition_retry_conflict_and_stale_revision_are_distinct(
     assert applied.outcome is OperationOutcome.APPLIED
     assert identical.outcome is OperationOutcome.DUPLICATE_IDENTICAL
     assert conflicting.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert conflicting_missing_run.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert (
+        conflicting_illegal_transition.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    )
+    assert conflicting_missing_run.run == applied.run
+    assert conflicting_illegal_transition.run == applied.run
     assert stale.outcome is OperationOutcome.CONCURRENCY_CONFLICT
     assert stale.run is not None
     stale_lifecycle = stale.run["lifecycle"]
