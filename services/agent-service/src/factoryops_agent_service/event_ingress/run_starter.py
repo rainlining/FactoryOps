@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
 from typing import Protocol
 
 from factoryops_agent_service.run_lifecycle.model import (
@@ -12,14 +11,8 @@ from factoryops_agent_service.run_lifecycle.model import (
 )
 from factoryops_agent_service.run_lifecycle.service import PersistenceIntegrityError
 
-from .model import DecodedEvent
+from .model import DecodedEvent, RunStartOutcome
 from .runtime_config import AgentRuntimeConfig
-
-
-class RunStartOutcome(str, Enum):
-    CREATED = "created"
-    ALREADY_STARTED = "already-started"
-    NOT_APPLICABLE = "not-applicable"
 
 
 @dataclass(frozen=True)

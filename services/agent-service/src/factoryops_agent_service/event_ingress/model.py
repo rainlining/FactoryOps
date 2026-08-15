@@ -31,7 +31,15 @@ class IngressOutcome(str, Enum):
     REJECTED_CONFLICTING = "rejected-conflicting"
 
 
+class RunStartOutcome(str, Enum):
+    CREATED = "created"
+    ALREADY_STARTED = "already-started"
+    NOT_APPLICABLE = "not-applicable"
+
+
 @dataclass(frozen=True)
 class ProcessingResult:
     outcome: IngressOutcome
     event_id: str | None
+    run_id: str | None
+    run_start_outcome: RunStartOutcome

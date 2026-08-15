@@ -13,7 +13,21 @@ from factoryops_agent_service.event_ingress.decoder import (
 )
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.event_ingress.model import IngressOutcome, KafkaRecord
+from factoryops_agent_service.event_ingress.processor import EventIngressProcessor
 from factoryops_agent_service.event_ingress.repository import MySqlInboxRepository
+from factoryops_agent_service.event_ingress.run_starter import (
+    RunStartOutcome,
+    RunStartResult,
+)
+
+
+class RecordingStarter:
+    def __init__(self) -> None:
+        self.event_ids: list[str] = []
+
+    def ensure_original_run(self, event):
+        self.event_ids.append(event.event_id)
+        return RunStartResult(RunStartOutcome.CREATED, "RUN-" + "1" * 32)
 
 
 def test_mysql_inbox_classifies_new_identical_conflict_and_invalid(
@@ -50,6 +64,13 @@ def test_mysql_inbox_classifies_new_identical_conflict_and_invalid(
         )
         duplicate = KafkaRecordDecoder().decode(duplicate_record)
         assert repository.accept(duplicate) is IngressOutcome.DUPLICATE_IDENTICAL
+
+        starter = RecordingStarter()
+        processor = EventIngressProcessor(KafkaRecordDecoder(), repository, starter)
+        recovered = processor.process(duplicate_record)
+        assert recovered.outcome is IngressOutcome.DUPLICATE_IDENTICAL
+        assert recovered.run_start_outcome is RunStartOutcome.CREATED
+        assert starter.event_ids == [first.event_id]
 
         conflicting_event = copy.deepcopy(valid_event)
         conflicting_event["occurred_at"] = "2026-08-15T00:00:00Z"
