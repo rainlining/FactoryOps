@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -78,17 +79,33 @@ def test_mysql_inbox_classifies_new_identical_conflict_and_invalid(
         assert recovered.run_start_outcome is RunStartOutcome.CREATED
         assert starter.event_ids == [first.event_id]
 
-        real_processor = EventIngressProcessor(
-            KafkaRecordDecoder(),
-            repository,
-            IncidentRunStarter(AgentRunLifecycleService(engine), _runtime_config()),
-        )
+        create_barrier = Barrier(2)
+        synchronization_lock = Lock()
+        synchronized_lookups: list[str] = []
+        processors = [
+            EventIngressProcessor(
+                KafkaRecordDecoder(),
+                repository,
+                IncidentRunStarter(
+                    _synchronized_lifecycle(
+                        engine,
+                        create_barrier,
+                        synchronization_lock,
+                        synchronized_lookups,
+                    ),
+                    _runtime_config(),
+                ),
+            )
+            for _ in range(2)
+        ]
         with ThreadPoolExecutor(max_workers=2) as executor:
             concurrent_results = list(
                 executor.map(
-                    real_processor.process, [duplicate_record, duplicate_record]
+                    lambda processor: processor.process(duplicate_record),
+                    processors,
                 )
             )
+        assert len(synchronized_lookups) == 2
         assert sorted(
             result.run_start_outcome.value for result in concurrent_results
         ) == [
@@ -104,6 +121,7 @@ def test_mysql_inbox_classifies_new_identical_conflict_and_invalid(
         )
         changed_result = changed_processor.process(duplicate_record)
         assert changed_result.run_start_outcome is RunStartOutcome.ALREADY_STARTED
+        real_processor = processors[0]
 
         conflicting_event = copy.deepcopy(valid_event)
         conflicting_event["occurred_at"] = "2026-08-15T00:00:00Z"
@@ -198,3 +216,29 @@ def _runtime_config(
         context_policy_version="context-policy:0.1.0",
         code_revision="651228b9d71ee81e80e6a5030e4c49a50ec60f88",
     )
+
+
+def _synchronized_lifecycle(
+    engine,
+    barrier: Barrier,
+    synchronization_lock: Lock,
+    synchronized_lookups: list[str],
+) -> AgentRunLifecycleService:
+    lifecycle = AgentRunLifecycleService(engine)
+    original_find = lifecycle._repository.find_run_by_trigger_event
+    first_lookup = True
+
+    def find_after_both_requests_reach_create(trigger_event_id: str):
+        nonlocal first_lookup
+        existing = original_find(trigger_event_id)
+        if first_lookup and existing is None:
+            first_lookup = False
+            with synchronization_lock:
+                synchronized_lookups.append(trigger_event_id)
+            barrier.wait(timeout=10)
+        return existing
+
+    lifecycle._repository.find_run_by_trigger_event = (
+        find_after_both_requests_reach_create
+    )
+    return lifecycle

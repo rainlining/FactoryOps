@@ -14,7 +14,10 @@ from factoryops_agent_service.run_lifecycle.model import (
     OperationOutcome,
     RunOperationResult,
 )
-from factoryops_agent_service.run_lifecycle.service import PersistenceIntegrityError
+from factoryops_agent_service.run_lifecycle.service import (
+    PersistenceIntegrityError,
+    RunCreationRejected,
+)
 
 RUN_ID = "RUN-" + "1" * 32
 
@@ -130,4 +133,15 @@ def test_converts_persistence_integrity_failure_to_start_integrity_failure(
     lifecycle = FakeLifecycle(PersistenceIntegrityError("invalid stored Run"))
 
     with pytest.raises(RunStartIntegrityError, match="invalid stored Run"):
+        IncidentRunStarter(lifecycle, runtime_config()).ensure_original_run(event)
+
+
+def test_converts_deterministic_creation_rejection_to_start_integrity_failure(
+    valid_event: dict[str, object],
+    valid_payload: bytes,
+) -> None:
+    event = decoded_event(valid_event, valid_payload)
+    lifecycle = FakeLifecycle(RunCreationRejected("Run Contract is invalid"))
+
+    with pytest.raises(RunStartIntegrityError, match="Run Contract is invalid"):
         IncidentRunStarter(lifecycle, runtime_config()).ensure_original_run(event)

@@ -43,6 +43,7 @@ class AgentRuntimeConfig:
                 environment,
                 variable_name,
                 VERSION_PATTERN,
+                max_length=128,
             )
         values["code_revision"] = cls._required_value(
             environment,
@@ -56,13 +57,17 @@ class AgentRuntimeConfig:
         environment: Mapping[str, str],
         variable_name: str,
         pattern: re.Pattern[str],
+        *,
+        max_length: int | None = None,
     ) -> str:
         value = environment.get(variable_name)
         if value is None:
             raise AgentRuntimeConfigurationError(
                 f"missing required environment variable {variable_name}"
             )
-        if pattern.fullmatch(value) is None:
+        if pattern.fullmatch(value) is None or (
+            max_length is not None and len(value) > max_length
+        ):
             raise AgentRuntimeConfigurationError(
                 f"invalid value for environment variable {variable_name}"
             )

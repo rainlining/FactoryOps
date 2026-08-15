@@ -9,7 +9,10 @@ from factoryops_agent_service.run_lifecycle.model import (
     OriginalRunCommand,
     RunOperationResult,
 )
-from factoryops_agent_service.run_lifecycle.service import PersistenceIntegrityError
+from factoryops_agent_service.run_lifecycle.service import (
+    PersistenceIntegrityError,
+    RunCreationRejected,
+)
 
 from .model import DecodedEvent, RunStartOutcome
 from .runtime_config import AgentRuntimeConfig
@@ -49,7 +52,7 @@ class IncidentRunStarter:
         )
         try:
             result = self._lifecycle.create_original_run(command)
-        except PersistenceIntegrityError as error:
+        except (PersistenceIntegrityError, RunCreationRejected) as error:
             raise RunStartIntegrityError(str(error)) from error
 
         run_id, incident_id = self._identity(result.run)

@@ -35,6 +35,7 @@ def test_loads_frozen_runtime_configuration_and_builds_provenance() -> None:
     [
         ("FACTORYOPS_AGENT_RUNTIME_VERSION", ""),
         ("FACTORYOPS_AGENT_WORKFLOW_VERSION", "invalid version"),
+        ("FACTORYOPS_AGENT_PROMPT_SET_VERSION", "a" * 129),
         ("FACTORYOPS_AGENT_CODE_REVISION", "not-a-revision"),
     ],
 )
