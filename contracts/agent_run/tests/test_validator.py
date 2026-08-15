@@ -138,6 +138,21 @@ class AgentRunValidationTest(unittest.TestCase):
             "$.lifecycle.ended_at",
         )
 
+    def test_accepts_cancelled_run_that_never_started(self) -> None:
+        payload = valid_original()
+        lifecycle = payload["lifecycle"]
+        assert isinstance(lifecycle, dict)
+        lifecycle["status"] = "CANCELLED"
+        lifecycle["revision"] = 1
+        lifecycle["updated_at"] = "2026-08-15T01:01:00.000000Z"
+        lifecycle["ended_at"] = "2026-08-15T01:01:00.000000Z"
+        lifecycle["status_reason"] = {
+            "code": "CANCELLED_BEFORE_START",
+            "message": "The queued run was cancelled before execution.",
+        }
+
+        validate_run(payload)
+
     def test_rejects_non_terminal_run_with_ended_at(self) -> None:
         payload = valid_original()
         lifecycle = payload["lifecycle"]

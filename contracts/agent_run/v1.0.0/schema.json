@@ -181,12 +181,25 @@
             "required": ["status"]
           },
           "then": {
-            "required": ["started_at", "ended_at"]
+            "required": ["ended_at"]
           },
           "else": {
             "not": {
               "required": ["ended_at"]
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": ["SUCCEEDED", "FAILED"]
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["started_at"]
           }
         }
       ]
