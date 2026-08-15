@@ -4,11 +4,12 @@
 
 - `change_id`: `2026-08-15-start-agent-run-from-inbox`
 - `learning_level`: `deep`
-- `status`: `draft-not-executable`
+- `status`: `review-handoff-ready`
 - `feature_branch`: `codex/start-agent-run-from-inbox`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\start-agent-run-from-inbox`
 - `base_commit`: `db7ab6e`
-- `head_commit`: 全量验证与最终审查后填写
+- `reviewed_implementation_head`: `f217b7e`
+- `handoff_metadata_commit`: 本文件的最终文档提交；用 `git log -1 --oneline` 取得
 
 ## 已实现范围
 
@@ -45,10 +46,28 @@
 - Owner 修改：在 Review 会话确定一个需要理解 offset 完成不变量的小型可观察字段或失败分类修改。
 - Failure/Debug Exercise：注入 Inbox commit 后、Run 创建前一次失败；观察 Inbox=1、Run=0、offset 未提交，复位后重投得到 Inbox=1、Run=1、initial history=1、offset 已提交。
 
-## 尚未满足的 Handoff 条件
+## 验证与审查
 
-- Docker 当前未运行，真实 MySQL/Kafka 与完整回归尚未执行。
-- 尚未进行最终独立只读代码审查。
-- 最终 head commit 与完整验证数量尚未填写。
+- Agent Service：75 passed；Ruff check/format 通过。
+- Contract：57 passed。
+- Java `mvn verify`：65 passed，0 failures/errors/skipped。
+- `git diff --check`：通过。
+- 独立复审：READY，0 Critical、0 Important、0 Minor。
+- 完整命令、耗时和首次审查修复记录见 `verification.md`。
 
-在这些条件满足前，本文件不得作为 Review/Learning 会话的执行依据，也禁止另一会话并发修改当前 worktree。
+## Review 会话恢复
+
+```powershell
+cd C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\start-agent-run-from-inbox
+git status --short --branch
+git log --oneline db7ab6e..HEAD
+git diff --stat db7ab6e..HEAD
+```
+
+Review/Learning 会话只读恢复后，先完成 Walkthrough，再由项目所有者执行 Owner 修改和 Failure/Debug Exercise。不得与实现会话并发修改该 worktree。
+
+## 剩余风险
+
+- 固定 1 秒 retry delay 没有指数退避；当前只用于已有同步 Worker 的 adapter 重试。
+- 本 Change 不领取或执行 `PENDING` Run；后续 Coordinator Change 必须定义 ownership 与恢复。
+- Learning Gate 尚未完成，Change 不得标记 `completed`、归档或合并 `main`。

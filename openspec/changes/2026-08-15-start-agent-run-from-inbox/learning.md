@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `awaiting-technical-verification`
+- `status`: `awaiting-learning-gate`
 
 ## 学习目标
 

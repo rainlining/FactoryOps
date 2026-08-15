@@ -12,9 +12,9 @@
 - [x] Task 3：将 Starter 接入 Processor 并扩展 ProcessingResult。
 - [x] Task 4：在 Worker/main 区分 retryable 与 fatal 失败。
 - [x] Task 5：完成 MySQL 与 Kafka 崩溃恢复、并发和回归测试。
-- [ ] Task 6：完成 verification、独立审查和 review handoff。
+- [x] Task 6：完成 verification、独立审查和 review handoff。
 
 ## Handoff
 
-- [ ] 推送 feature branch并进入 `review-handoff-ready`。
+- [x] 推送 feature branch并进入 `review-handoff-ready`。
 - [ ] 独立 Review/Learning 会话完成 Deep Learning Gate。

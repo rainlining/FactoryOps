@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-- `change_status`: `applying`
-- `technical_verification`: `pending`
+- `change_status`: `review-handoff-ready`
+- `technical_verification`: `passed`
 - `learning_gate`: `pending`
 
 ## 基线
@@ -17,13 +17,24 @@
 - [x] 未修改 `dataset/`。
 - [x] `git diff --check` 通过。
 
-## 实施中的验证证据
+## 最终验证证据
 
-2026-08-15，在 Docker Desktop 未运行的环境中：
+2026-08-15 启动 Docker Desktop 后，在 commit `f217b7e` 上执行：
 
 - `python -m ruff check src tests`：通过。
 - `python -m ruff format --check src tests`：28 files already formatted。
-- 非 Docker 局部集合：51 passed。
-- `test_inbox_mysql.py` 与 `test_kafka_mysql_e2e.py` 已完成测试代码，但尚未取得真实容器运行证据。
+- `python -m pytest -q`：75 passed in 99.98s，包含真实 MySQL 8.4 与 Apache Kafka 4.1.0 Testcontainers。
+- `python -m pytest -q tests/test_inbox_mysql.py tests/test_kafka_mysql_e2e.py`：3 passed in 74.80s（修复前目标验证）；修复后的相关 MySQL 测试又随 75 项全量通过。
+- 三个 Contract unittest 套件：Agent Run 22、Quality Incident Opened 18、Vision Inspection 17，共 57 passed。
+- `mvn verify -q`：exit 0；Surefire/Failsafe XML 汇总 65 tests、0 failures、0 errors、0 skipped，Java 17。
+- `git diff --check db7ab6e..f217b7e`：通过。
 
-不得将上述局部结果解释为 `technically-verified`。启动 Docker 后必须重新执行完整 Agent Service、Contract、Java 与 diff 验证。
+## 独立审查
+
+首次审查发现两个 Important：版本配置缺少 128 字符上限/确定性创建拒绝会被重试，以及并发测试未强制真实竞态。commit `f217b7e` 增加失败测试和修复后，独立复审结论为 READY：0 Critical、0 Important、0 Minor。
+
+## 剩余限制
+
+- 本 Change 只创建 `PENDING` Run，不负责 Coordinator 启动。
+- retryable adapter 失败采用固定 1 秒进程级等待；退避与停机编排不属于本 Change。
+- Deep Learning Gate 尚未在独立 Review/Learning 会话完成，因此不得归档或合并 `main`。
