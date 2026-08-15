@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `planned`
+- `status`: `completed`
 
 ## 学习目标
 
@@ -49,10 +49,18 @@
 
 ## Learning Gate
 
-- [ ] 能用自己的话解释真实设计和关键取舍。
-- [ ] 完成真实成功调用链 Walkthrough。
-- [ ] 定位并解释至少一条失败路径。
-- [ ] 完成项目所有者亲自修改任务并通过测试。
-- [ ] 完成 Failure/Debug Exercise 并根据证据判断行为。
-- [ ] 指出幂等、不可变性和跨记录校验将在哪里执行。
-- [ ] Review 最终 diff 并明确接受 Change。
+- [x] 能用自己的话解释真实设计和关键取舍。
+- [x] 完成真实成功调用链 Walkthrough。
+- [x] 定位并解释至少一条失败路径。
+- [x] 完成项目所有者亲自修改任务并通过测试。
+- [x] 完成 Failure/Debug Exercise 并根据证据判断行为。
+- [x] 指出幂等、不可变性和跨记录校验将在哪里执行。
+- [x] Review 最终 diff 并明确接受 Change。
+
+## 完成证据
+
+- Owner 修改提交：`0dfe007c48710810c2ed94ecd09a0c6d93d89b20`。
+- 修改内容：把 `status_reason.code` 的最小长度从 1 收紧为 3，并增加 `short-status-reason-code.json` 失败 fixture。
+- Failure/Debug Exercise 使用 replay 自引用场景；非法输入由语义 Validator 拒绝，relation classifier 不参与分类。
+- 项目所有者在本轮确认进入最终 diff review，并授权无遗留问题后归档；最终独立审查发现的问题已修复并重新验证。
+- v1.0.0 尚未合并或发布，Owner 的约束收紧属于首版发布前修正，不要求为此升级 major version。

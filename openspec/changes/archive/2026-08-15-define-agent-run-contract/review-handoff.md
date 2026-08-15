@@ -4,12 +4,13 @@
 
 - `change_id`: `2026-08-15-define-agent-run-contract`
 - `learning_level`: `deep`
-- `status`: `review-handoff-ready`
+- `status`: `archived`
 - `feature_branch`: `codex/define-agent-run-contract`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\define-agent-run-contract`
 - `base_commit`: `651228b9d71ee81e80e6a5030e4c49a50ec60f88`
-- `head_commit`: `52cf1c575a407c15b579970f081c8e3ff340db1a`
-- `head_scope`: 上述 head 包含全部设计、Contract、测试、格式化与验证文档；其后的 handoff commit 只填写本文件和推送状态。
+- `owner_change_commit`: `0dfe007c48710810c2ed94ecd09a0c6d93d89b20`
+- `review_fix_commit`: `662f20983e00a6aa4d6faea2eaf8b21a160d2a37`
+- `review_scope`: 上述 review fix commit 包含全部 Contract 行为、测试和 Owner 修改；其后提交只同步完成与归档文档。
 
 Review/Learning 会话接手期间，不得由其他会话修改本分支或 worktree。
 
@@ -125,15 +126,15 @@ git diff --check
 - `revision` 尚未连接 Repository 的 compare-and-set 更新。
 - relation classifier 将同 `run_id` 的不同合法内容判为冲突；正常 Lifecycle 演进必须由后续 Repository 依据 revision 处理，不能误用该传输重复分类器。
 
-## 10. Owner 修改任务
+## 10. Owner 修改任务（已完成）
 
-在 `contracts/agent_run/v1.0.0/schema.json` 中收紧 `status_reason.code` 约束，并增加一个能证明新约束的失败测试或 invalid fixture。
+项目所有者已在 `0dfe007` 中把 `status_reason.code` 最小长度收紧为 3，并增加 `short-status-reason-code.json` 失败 fixture。
 
-Review 会话必须要求项目所有者解释：
+完成结论：
 
-- 修改保护了什么真实语义；
-- 现有哪个测试会因错误实现而失败；
-- 约束收紧是否影响 Contract 版本兼容性。
+- 修改拒绝无法表达稳定含义的单字符原因码。
+- fixture relation test 会在约束被撤销时失败。
+- v1.0.0 尚未发布，本次为首版冻结前收紧，不触发 major 升级。
 
 ## 11. Failure/Debug Exercise
 
