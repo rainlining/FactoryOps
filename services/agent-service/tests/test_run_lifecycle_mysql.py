@@ -347,6 +347,34 @@ def test_original_retry_is_identical_or_conflicting(mysql_engine: Engine) -> Non
     assert conflicting_invalid_contract.run == first.run
 
 
+def test_original_retry_rechecks_key_after_initial_miss(mysql_engine: Engine) -> None:
+    event_id = _seed_inbox(mysql_engine, "E")
+    winner_service = _service(mysql_engine)
+    retry_service = _service(mysql_engine)
+    original_lookup = retry_service._repository.find_run_by_trigger_event
+    winner: dict[str, object] = {}
+
+    def stale_first_lookup(candidate_event_id: str) -> object:
+        if not winner:
+            assert original_lookup(candidate_event_id) is None
+            winner["result"] = winner_service.create_original_run(
+                OriginalRunCommand(event_id, _provenance("E"))
+            )
+            return None
+        return original_lookup(candidate_event_id)
+
+    retry_service._repository.find_run_by_trigger_event = stale_first_lookup
+    result = retry_service.create_original_run(
+        OriginalRunCommand(
+            event_id,
+            _provenance("E", prompt="invalid version with spaces"),
+        )
+    )
+
+    assert result.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert result.run == winner["result"].run
+
+
 def test_original_requires_persisted_inbox_event(mysql_engine: Engine) -> None:
     with pytest.raises(RunCreationRejected, match="Inbox"):
         _service(mysql_engine).create_original_run(
@@ -467,6 +495,51 @@ def test_replay_creation_validates_lineage_and_is_idempotent(
                 provenance=_provenance("5"),
             )
         )
+
+
+def test_replay_retry_rechecks_key_after_initial_miss(mysql_engine: Engine) -> None:
+    event_id = _seed_inbox(mysql_engine, "F")
+    setup_service = _service(mysql_engine)
+    original = setup_service.create_original_run(
+        OriginalRunCommand(event_id, _provenance("F"))
+    ).run
+    assert original is not None
+    identity = original["identity"]
+    assert isinstance(identity, dict)
+    original_run_id = identity["run_id"]
+    assert isinstance(original_run_id, str)
+    request_id = "RPR-" + "F" * 32
+    winner_service = _service(mysql_engine)
+    retry_service = _service(mysql_engine)
+    original_lookup = retry_service._repository.find_run_by_replay_request
+    winner: dict[str, object] = {}
+
+    def stale_first_lookup(candidate_request_id: str) -> object:
+        if not winner:
+            assert original_lookup(candidate_request_id) is None
+            winner["result"] = winner_service.create_replay_run(
+                ReplayRunCommand(
+                    request_id,
+                    original_run_id,
+                    original_run_id,
+                    _provenance("F", prompt="prompts:2.0.0"),
+                )
+            )
+            return None
+        return original_lookup(candidate_request_id)
+
+    retry_service._repository.find_run_by_replay_request = stale_first_lookup
+    result = retry_service.create_replay_run(
+        ReplayRunCommand(
+            request_id,
+            original_run_id,
+            original_run_id,
+            _provenance("E"),
+        )
+    )
+
+    assert result.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert result.run == winner["result"].run
 
 
 def _create_original(
@@ -619,6 +692,42 @@ def test_transition_retry_conflict_and_stale_revision_are_distinct(
     assert isinstance(stale_lifecycle, dict)
     assert stale_lifecycle["status"] == "RUNNING"
     assert stale_lifecycle["revision"] == 1
+
+
+def test_transition_retry_rechecks_key_after_initial_miss(mysql_engine: Engine) -> None:
+    winner_service, run_id = _create_original(mysql_engine, "0")
+    retry_service = _service(mysql_engine)
+    request_marker = "Z"
+    winner_command = _transition_command(
+        run_id,
+        request_marker,
+        RunStatus.PENDING,
+        0,
+        RunStatus.RUNNING,
+    )
+    original_lookup = retry_service._repository.find_transition_by_request
+    winner: dict[str, object] = {}
+
+    def stale_first_lookup(candidate_request_id: str) -> object:
+        if not winner:
+            assert original_lookup(candidate_request_id) is None
+            winner["result"] = winner_service.transition_run(winner_command)
+            return None
+        return original_lookup(candidate_request_id)
+
+    retry_service._repository.find_transition_by_request = stale_first_lookup
+    result = retry_service.transition_run(
+        _transition_command(
+            "RUN-" + "E" * 32,
+            request_marker,
+            RunStatus.RUNNING,
+            1,
+            RunStatus.PENDING,
+        )
+    )
+
+    assert result.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert result.run == winner["result"].run
 
 
 def test_cancel_before_start_has_no_started_at(mysql_engine: Engine) -> None:

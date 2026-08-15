@@ -70,6 +70,15 @@ class AgentRunLifecycleService:
             )
 
         if not self._repository.inbox_event_exists(command.trigger_event_id):
+            existing = self._repository.find_run_by_trigger_event(
+                command.trigger_event_id
+            )
+            if existing is not None:
+                return self._classify_existing_creation(
+                    existing,
+                    self._original_matches,
+                    command,
+                )
             raise RunCreationRejected("Inbox event does not exist")
         created_at = self._now()
         run_id = self._run_id_factory()
@@ -107,7 +116,19 @@ class AgentRunLifecycleService:
 
         original = self._repository.find_run(command.original_run_id)
         source = self._repository.find_run(command.replayed_from_run_id)
-        self._validate_replay_lineage(command, original, source)
+        try:
+            self._validate_replay_lineage(command, original, source)
+        except RunCreationRejected:
+            existing = self._repository.find_run_by_replay_request(
+                command.replay_request_id
+            )
+            if existing is not None:
+                return self._classify_existing_creation(
+                    existing,
+                    self._replay_matches,
+                    command,
+                )
+            raise
         created_at = self._now()
         run_id = self._run_id_factory()
         run = self._initial_run(
@@ -137,17 +158,15 @@ class AgentRunLifecycleService:
         self,
         command: TransitionCommand,
     ) -> TransitionOperationResult:
-        existing_transition = self._repository.find_transition_by_request(
-            command.transition_request_id
-        )
-        if existing_transition is not None:
-            return self._classify_existing_transition(
-                existing_transition,
-                command,
-            )
+        existing_result = self._find_existing_transition_result(command)
+        if existing_result is not None:
+            return existing_result
 
         current = self._repository.find_run(command.run_id)
         if current is None:
+            existing_result = self._find_existing_transition_result(command)
+            if existing_result is not None:
+                return existing_result
             raise RunNotFound(f"Run does not exist: {command.run_id}")
         if (
             current["status"] != command.expected_status.value
@@ -161,11 +180,17 @@ class AgentRunLifecycleService:
             current_started_at,
             datetime,
         )
-        plan = plan_transition(
-            command,
-            current_started_at=current_started_at,
-            occurred_at=occurred_at,
-        )
+        try:
+            plan = plan_transition(
+                command,
+                current_started_at=current_started_at,
+                occurred_at=occurred_at,
+            )
+        except LifecycleRuleViolation:
+            existing_result = self._find_existing_transition_result(command)
+            if existing_result is not None:
+                return existing_result
+            raise
         candidate = {
             **current,
             "status": command.to_status.value,
@@ -181,6 +206,9 @@ class AgentRunLifecycleService:
         try:
             self._to_contract(candidate)
         except PersistenceIntegrityError as error:
+            existing_result = self._find_existing_transition_result(command)
+            if existing_result is not None:
+                return existing_result
             raise LifecycleRuleViolation(
                 f"transition would violate Run Contract: {error}"
             ) from error
@@ -253,6 +281,17 @@ class AgentRunLifecycleService:
         assert isinstance(existing_run_id, str)
         return TransitionOperationResult(outcome, self.get_run(existing_run_id))
 
+    def _find_existing_transition_result(
+        self,
+        command: TransitionCommand,
+    ) -> TransitionOperationResult | None:
+        existing = self._repository.find_transition_by_request(
+            command.transition_request_id
+        )
+        if existing is None:
+            return None
+        return self._classify_existing_transition(existing, command)
+
     def _transition_matches(
         self,
         existing: Mapping[str, object],
@@ -283,6 +322,13 @@ class AgentRunLifecycleService:
         try:
             self._to_contract(run)
         except PersistenceIntegrityError as error:
+            existing = find_existing()
+            if existing is not None:
+                return self._classify_existing_creation(
+                    existing,
+                    matches,
+                    command,
+                )
             raise RunCreationRejected(f"Run Contract is invalid: {error}") from error
         try:
             self._repository.insert_run_with_initial_transition(run, transition)
