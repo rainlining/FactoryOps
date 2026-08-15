@@ -20,7 +20,7 @@ from .model import (
     TransitionOperationResult,
 )
 from .repository import ConditionalUpdateMiss, MySqlAgentRunRepository
-from .rules import plan_transition
+from .rules import LifecycleRuleViolation, plan_transition
 
 
 class RunCreationRejected(ValueError):
@@ -87,6 +87,17 @@ class AgentRunLifecycleService:
         self,
         command: ReplayRunCommand,
     ) -> RunOperationResult:
+        existing = self._repository.find_run_by_replay_request(
+            command.replay_request_id
+        )
+        if existing is not None:
+            outcome = (
+                OperationOutcome.DUPLICATE_IDENTICAL
+                if self._replay_matches(existing, command)
+                else OperationOutcome.DUPLICATE_CONFLICTING
+            )
+            return RunOperationResult(outcome, self._to_contract(existing))
+
         original = self._repository.find_run(command.original_run_id)
         source = self._repository.find_run(command.replayed_from_run_id)
         self._validate_replay_lineage(command, original, source)
@@ -139,6 +150,25 @@ class AgentRunLifecycleService:
             current_started_at=current_started_at,
             occurred_at=occurred_at,
         )
+        candidate = {
+            **current,
+            "status": command.to_status.value,
+            "revision": plan.to_revision,
+            "updated_at": occurred_at,
+            "started_at": plan.started_at,
+            "ended_at": plan.ended_at,
+            "status_reason_code": command.reason_code,
+            "status_reason_message": command.reason_message or command.reason_code,
+        }
+        if command.to_status is RunStatus.SUSPENDED:
+            candidate["latest_checkpoint_id"] = command.checkpoint_id
+        try:
+            self._to_contract(candidate)
+        except PersistenceIntegrityError as error:
+            raise LifecycleRuleViolation(
+                f"transition would violate Run Contract: {error}"
+            ) from error
+
         transition = {
             "transition_id": self._transition_id_factory(),
             "transition_request_id": command.transition_request_id,

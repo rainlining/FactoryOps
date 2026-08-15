@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from importlib.resources import files
 
 import pytest
@@ -437,6 +437,17 @@ def test_replay_creation_validates_lineage_and_is_idempotent(
     assert duplicate.outcome is OperationOutcome.DUPLICATE_IDENTICAL
     assert applied.run == duplicate.run
 
+    conflicting_retry = service.create_replay_run(
+        ReplayRunCommand(
+            replay_request_id=replay_command.replay_request_id,
+            original_run_id=original_run_id,
+            replayed_from_run_id=original_run_id,
+            provenance=_provenance("5"),
+        )
+    )
+    assert conflicting_retry.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert conflicting_retry.run == applied.run
+
     with pytest.raises(RunCreationRejected, match="same Incident"):
         service.create_replay_run(
             ReplayRunCommand(
@@ -607,6 +618,75 @@ def test_cancel_before_start_has_no_started_at(mysql_engine: Engine) -> None:
                 RunStatus.RUNNING,
             )
         )
+
+
+def test_clock_rollback_cannot_commit_terminal_state(mysql_engine: Engine) -> None:
+    event_id = _seed_inbox(mysql_engine, "3")
+    times = iter(
+        (
+            FIXED_TIME,
+            FIXED_TIME + timedelta(minutes=10),
+            FIXED_TIME + timedelta(minutes=5),
+        )
+    )
+    service = AgentRunLifecycleService(mysql_engine, clock=lambda: next(times))
+    created = service.create_original_run(
+        OriginalRunCommand(event_id, _provenance("3"))
+    )
+    assert created.run is not None
+    identity = created.run["identity"]
+    assert isinstance(identity, dict)
+    run_id = identity["run_id"]
+    assert isinstance(run_id, str)
+    service.transition_run(
+        _transition_command(
+            run_id,
+            "Y",
+            RunStatus.PENDING,
+            0,
+            RunStatus.RUNNING,
+        )
+    )
+
+    with pytest.raises(LifecycleRuleViolation, match="Run Contract"):
+        service.transition_run(
+            _transition_command(
+                run_id,
+                "S",
+                RunStatus.RUNNING,
+                1,
+                RunStatus.SUCCEEDED,
+            )
+        )
+
+    with mysql_engine.connect() as connection:
+        snapshot = (
+            connection.execute(
+                text(
+                    """
+                SELECT status, revision, ended_at
+                FROM agent_runs
+                WHERE run_id=:run_id
+                """
+                ),
+                {"run_id": run_id},
+            )
+            .mappings()
+            .one()
+        )
+        transition_count = connection.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM agent_run_transitions
+                WHERE run_id=:run_id
+                """
+            ),
+            {"run_id": run_id},
+        )
+
+    assert snapshot == {"status": "RUNNING", "revision": 1, "ended_at": None}
+    assert transition_count == 2
 
 
 def test_suspended_persists_checkpoint_reference(mysql_engine: Engine) -> None:
