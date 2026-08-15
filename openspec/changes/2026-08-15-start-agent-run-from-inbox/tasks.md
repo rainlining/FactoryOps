@@ -16,5 +16,5 @@
 
 ## Handoff
 
-- [x] 推送 feature branch并进入 `review-handoff-ready`。
+- [ ] 推送 feature branch并进入 `review-handoff-ready`（GitHub 网络恢复后执行）。
 - [ ] 独立 Review/Learning 会话完成 Deep Learning Gate。

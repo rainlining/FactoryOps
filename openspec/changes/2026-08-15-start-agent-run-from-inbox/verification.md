@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- `change_status`: `review-handoff-ready`
+- `change_status`: `technically-verified`
 - `technical_verification`: `passed`
 - `learning_gate`: `pending`
 
@@ -35,6 +35,7 @@
 
 ## 剩余限制
 
+- 2026-08-15 最终推送期间 `github.com:443` 连续超时；本地分支包含完整提交，但尚未满足 pushed handoff 条件。
 - 本 Change 只创建 `PENDING` Run，不负责 Coordinator 启动。
 - retryable adapter 失败采用固定 1 秒进程级等待；退避与停机编排不属于本 Change。
 - Deep Learning Gate 尚未在独立 Review/Learning 会话完成，因此不得归档或合并 `main`。

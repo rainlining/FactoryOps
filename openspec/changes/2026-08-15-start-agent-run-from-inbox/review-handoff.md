@@ -4,7 +4,7 @@
 
 - `change_id`: `2026-08-15-start-agent-run-from-inbox`
 - `learning_level`: `deep`
-- `status`: `review-handoff-ready`
+- `status`: `pending-push-not-executable`
 - `feature_branch`: `codex/start-agent-run-from-inbox`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\start-agent-run-from-inbox`
 - `base_commit`: `db7ab6e`
@@ -65,6 +65,8 @@ git diff --stat db7ab6e..HEAD
 ```
 
 Review/Learning 会话只读恢复后，先完成 Walkthrough，再由项目所有者执行 Owner 修改和 Failure/Debug Exercise。不得与实现会话并发修改该 worktree。
+
+当前本地提交尚未成功推送到 GitHub。必须先确认远端分支包含最终本地 HEAD，再把状态改为 `review-handoff-ready`；在此之前不要启动另一会话的正式 Review/Learning 修改。
 
 ## 剩余风险
 
