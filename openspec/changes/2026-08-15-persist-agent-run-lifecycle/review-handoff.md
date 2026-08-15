@@ -7,7 +7,8 @@
 - `feature_branch`: `codex/persist-agent-run-lifecycle`
 - `worktree`: `C:\\Users\\小霖\\Desktop\\work\\project2\\FactoryOps\\.worktrees\\persist-agent-run-lifecycle`
 - `base_commit`: `a5e0da6`
-- `head_commit`: 以本文件最终提交后的 `git rev-parse HEAD` 为准
+- `reviewed_implementation_head`: `4cdbc4303fc28afac2e50504d77ec338294472a1`
+- `branch_head`: 本 handoff 元数据提交；进入 Review 时以 `git rev-parse HEAD` 核对
 - `status`: `review-handoff-ready`
 
 Review 会话应切换到上述 worktree，先执行 `git status --short --branch` 和 `git log -1 --oneline`。在 Learning Gate 完成前，不得归档、合并 `main`，也不得与实现会话并发修改本 Change。
@@ -41,13 +42,15 @@ Review 会话应切换到上述 worktree，先执行 `git status --short --branc
 
 original 成功链：`create_original_run` → 校验 Inbox 引用及 Contract → INSERT snapshot → INSERT `NULL → PENDING` history → commit → `get_run` 重建 Contract。
 
-transition 成功链：`transition_run` → 读取 snapshot → `plan_transition` → Contract 预校验 → 条件 UPDATE snapshot → INSERT history → commit → 返回 applied。
+transition 成功链：`transition_run` → 读取 snapshot → `plan_transition` → 构造候选 snapshot 并执行 Contract 预校验 → 条件 UPDATE snapshot → INSERT history → commit → 返回 applied。
 
 transition 失败链：条件 UPDATE 未命中或唯一键冲突 → 原写事务 rollback → `_classify_failed_transition` 在新连接读取已提交事实 → 返回 duplicate-identical、duplicate-conflicting 或 concurrency-conflict。
 
 ## 验证证据
 
-完整命令、数量和限制见 `verification.md`。交接时的结果是 Python 47 passed、Contract 57 passed、Java 65 passed，并且 Ruff 与 `git diff --check` 通过。
+完整命令、数量和限制见 `verification.md`。交接时的结果是 Python 48 passed、Contract 57 passed、Java 65 passed，并且 Ruff 与 `git diff --check` 通过。
+
+独立审查无 Critical。审查发现的 replay 分类顺序和 Clock 回拨写入两项 Important 已在 `4cdbc43` 修复；对应测试分别证明 conflicting 分类不会被 lineage 校验遮蔽，以及非法终态不会改变 snapshot revision/history。
 
 ## Deep Learning 任务
 
