@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- `change_status`: `completed`
+- `change_status`: `archived`
 - `technical_verification`: `passed`
 - `learning_gate`: `passed`
 
