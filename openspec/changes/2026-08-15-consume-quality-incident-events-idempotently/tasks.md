@@ -8,14 +8,15 @@
 
 ## 实现
 
-- [ ] 建立最小 Python Agent Service 包、配置和 migration runner。
-- [ ] 以测试定义 decoder、Inbox outcome 和 Worker commit/seek 协议。
-- [ ] 实现 MySQL Inbox 与 rejection 事务。
-- [ ] 实现 confluent-kafka adapter 和串行 Worker。
-- [ ] 增加真实 MySQL 与 Kafka 端到端故障测试。
-- [ ] 执行完整验证、格式检查和 dataset scope 检查。
+- [x] 建立最小 Python Agent Service 包、配置和 migration runner。
+- [x] 以测试定义 decoder、Inbox outcome 和 Worker commit/seek 协议。
+- [x] 实现 MySQL Inbox 与 rejection 事务。
+- [x] 实现 confluent-kafka adapter 和串行 Worker。
+- [x] 增加真实 MySQL 与 Kafka 端到端故障测试。
+- [x] 执行完整验证、格式检查和 dataset scope 检查。
 
 ## Handoff
 
-- [ ] 填写 verification 与 review-handoff 并推送 feature branch。
+- [x] 填写 verification 与 review-handoff。
+- [ ] 推送 feature branch。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验和 Deep Learning Gate。
