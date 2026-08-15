@@ -50,6 +50,7 @@ class KafkaIngressWorker:
         LOGGER.info(
             "event_ingress_processed topic=%s partition=%s offset=%s "
             "event_id=%s outcome=%s processing_ms=%s total_ms=%s "
+            "run_id=%s run_start_outcome=%s "
             "offset_committed=true redelivery=%s",
             record.topic,
             record.partition,
@@ -58,6 +59,8 @@ class KafkaIngressWorker:
             result.outcome.value,
             processing_ms,
             round((time.monotonic() - started) * 1000),
+            result.run_id or "none",
+            result.run_start_outcome.value,
             str(redelivery).lower(),
         )
         return result

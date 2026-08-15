@@ -79,7 +79,10 @@ def test_logs_redelivery_false_for_first_accept(caplog) -> None:
     KafkaIngressWorker(consumer, FakeProcessor()).run_once()
 
     assert any(
-        "outcome=accepted" in message and "redelivery=false" in message
+        "outcome=accepted" in message
+        and "redelivery=false" in message
+        and "run_id=RUN-1" in message
+        and "run_start_outcome=created" in message
         for message in caplog.messages
     )
 
