@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- `change_status`: `review-handoff-ready`
+- `change_status`: `technically-verified`
 - `technical_verification`: `passed`
 - `learning_gate`: `pending`
 
@@ -51,3 +51,10 @@ Java 全量回归中的 broker unavailable、missing topic 和连接断开日志
 2. 状态迁移在 SQL 写入前构造候选 snapshot 并执行 Agent Run Contract 校验。
 
 审查无 Critical。另有 MySQL DDL 半迁移恢复限制，已保留为后续专门工程问题，不在本 Change 静默扩大范围。
+
+## GitHub 推送状态
+
+- `gh auth status`：账号 `rainlining` 登录有效；`gh api repos/rainlining/FactoryOps` 可访问。
+- `git push origin main` 与 `git push -u origin codex/persist-agent-run-lifecycle` 多次失败：连接 `github.com:443` 约 21 秒后 timeout/reset。
+- 这属于 Git HTTPS 传输网络阻断，不是认证、non-fast-forward 或代码错误。
+- 本地 feature branch 完整且工作树干净；网络恢复后必须先推送，才能将状态推进为 `review-handoff-ready`。
