@@ -17,5 +17,5 @@
 
 ## Handoff
 
-- [ ] 推送 feature branch；本地 handoff 已准备，GitHub 网络阻断记录在 `verification.md`。
+- [x] 推送 feature branch并准备 handoff，状态推进到 `review-handoff-ready`。
 - [ ] 独立 Review/Learning 会话完成 Deep Learning Gate。

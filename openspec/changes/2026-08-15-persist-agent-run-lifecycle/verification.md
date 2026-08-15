@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- `change_status`: `technically-verified`
+- `change_status`: `review-handoff-ready`
 - `technical_verification`: `passed`
 - `learning_gate`: `pending`
 
@@ -54,7 +54,7 @@ Java 全量回归中的 broker unavailable、missing topic 和连接断开日志
 
 ## GitHub 推送状态
 
-- `gh auth status`：账号 `rainlining` 登录有效；`gh api repos/rainlining/FactoryOps` 可访问。
-- `git push origin main` 与 `git push -u origin codex/persist-agent-run-lifecycle` 多次失败：连接 `github.com:443` 约 21 秒后 timeout/reset。
-- 这属于 Git HTTPS 传输网络阻断，不是认证、non-fast-forward 或代码错误。
-- 本地 feature branch 完整且工作树干净；网络恢复后必须先推送，才能将状态推进为 `review-handoff-ready`。
+- 早期 Git HTTPS 连接曾超时；2026-08-15 重试成功。
+- `main` 已从远端 `651228b` 推进到本地基线 `a5e0da6`。
+- `codex/persist-agent-run-lifecycle` 已创建并跟踪同名远端分支。
+- 本 handoff 状态提交后再次推送，并用远端引用核对最终 commit。

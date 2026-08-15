@@ -9,9 +9,9 @@
 - `base_commit`: `a5e0da6`
 - `reviewed_implementation_head`: `4cdbc4303fc28afac2e50504d77ec338294472a1`
 - `branch_head`: 本 handoff 元数据提交；进入 Review 时以 `git rev-parse HEAD` 核对
-- `status`: `technically-verified-push-pending`
+- `status`: `review-handoff-ready`
 
-GitHub HTTPS 推送当前被网络超时阻断，因此本文件是已准备但尚未远端发布的 handoff。Review 会话若使用同一台机器，可切换到上述 worktree，先执行 `git status --short --branch` 和 `git log -1 --oneline`；若依赖远端分支，必须等推送成功。在 Learning Gate 完成前，不得归档、合并 `main`，也不得与实现会话并发修改本 Change。
+Feature branch 已推送。Review 会话可切换到上述 worktree，或从远端获取同名分支；开始时先执行 `git status --short --branch` 和 `git log -1 --oneline`。在 Learning Gate 完成前，不得归档、合并 `main`，也不得与实现会话并发修改本 Change。
 
 ## 已实现范围
 
