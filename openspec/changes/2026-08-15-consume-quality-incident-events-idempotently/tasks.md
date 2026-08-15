@@ -18,5 +18,5 @@
 ## Handoff
 
 - [x] 填写 verification 与 review-handoff。
-- [ ] 推送 feature branch。
+- [x] 推送 feature branch。
 - [ ] 独立 Review/Learning 会话完成 owner 修改、故障实验和 Deep Learning Gate。
