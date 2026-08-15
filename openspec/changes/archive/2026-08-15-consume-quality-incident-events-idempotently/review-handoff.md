@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `branch`: `codex/consume-quality-incident-events-idempotently`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\consume-quality-incident-events-idempotently`
 - `base_commit`: `753c23b34157f7007ef660b6b93a27ca6ae46ea2`
@@ -57,7 +57,7 @@ Owner 修改：为成功日志增加 `redelivery=true/false`，仅 `duplicate-id
 
 Failure/debug exercise：复现 Inbox 已提交但首次 offset commit 失败，观察 committed offset 未推进、seek 当前 offset、第二次 identical、Inbox count=1 和第二次 commit 成功。自动化基线为 `test_db_commit_before_offset_failure_redelivers_as_identical_duplicate`。
 
-Learning Gate 未完成，不得归档或合并 `main`。
+Learning Gate 已由独立 Review/Learning 会话完成，项目所有者已接受最终 diff 并批准归档。
 
 ## Review 会话恢复
 

@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-15-consume-quality-incident-events-idempotently`
-- `status`: `review-handoff-ready`
+- `status`: `archived`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-14-define-quality-incident-opened-event-contract, 2026-08-14-publish-outbox-events-to-kafka]`
 - `spec_refs`: `[quality-incident-opened-event-contract, outbox-kafka-publication]`

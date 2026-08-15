@@ -1,6 +1,6 @@
 # 验证记录：2026-08-15-consume-quality-incident-events-idempotently
 
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `dataset_scope`: `untouched`
 - `implementation_verification`: `passed`
 
@@ -37,3 +37,20 @@
 - migration runner 只支持当前线性 SQL migration；完整 Alembic 生命周期留给表模型扩大后的独立 Change。
 - 没有 DLQ Topic；确定性非法消息只写 MySQL rejection evidence。
 - 同一 Group 的多实例由 Kafka 分配 Partition，但本 Change 未实现跨 Partition 的全局调度或 Agent Run ownership。
+
+## Learning Gate 后复验
+
+1. `python -m ruff check . && python -m ruff format --check . && python -m pytest -q`
+   - 结果：Ruff 通过，17 个文件格式正确，11 个 Agent Service 测试通过。
+2. `python -m unittest discover -s contracts -t . -v`
+   - 结果：35 个 Contract 测试通过。
+3. `cd backend/business-service && mvn verify`
+   - 结果：27 个单元测试与 38 个集成测试通过，BUILD SUCCESS。
+
+## Learning Gate
+
+- 真实调用链 Walkthrough：完成。
+- Owner 修改：完成 `redelivery=true/false` 条件日志和日志断言。
+- Failure/debug exercise：完成。
+- 技术选型与最终 diff review：完成并接受。
+- 最终状态：`completed`，允许归档和合并 `main`。

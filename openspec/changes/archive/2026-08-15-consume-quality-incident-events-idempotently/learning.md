@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `gate_status`: `preflight-passed`
+- `gate_status`: `completed`
 
 ## Review 时应理解
 
@@ -28,8 +28,10 @@
 
 ## Learning Gate
 
-- [ ] 能沿 poll → validate → DB transaction → commit offset 定位真实代码。
-- [ ] 能解释一条 invalid 与一条 transient failure 路径。
-- [ ] 完成 Owner 修改。
-- [ ] 完成 failure/debug exercise。
-- [ ] review 技术选型文档和最终 diff 并明确接受。
+- [x] 能沿 poll → validate → DB transaction → commit offset 定位真实代码。
+- [x] 能解释一条 invalid 与一条 transient failure 路径。
+- [x] 完成 Owner 修改。
+- [x] 完成 failure/debug exercise。
+- [x] review 技术选型文档和最终 diff 并明确接受。
+
+项目所有者于 2026-08-15 明确确认本 Change 学习完毕并批准归档。
