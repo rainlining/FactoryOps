@@ -329,12 +329,22 @@ def test_original_retry_is_identical_or_conflicting(mysql_engine: Engine) -> Non
             _provenance("2", prompt="prompts:2.0.0"),
         )
     )
+    conflicting_invalid_contract = service.create_original_run(
+        OriginalRunCommand(
+            event_id,
+            _provenance("2", prompt="invalid version with spaces"),
+        )
+    )
 
     assert first.outcome is OperationOutcome.APPLIED
     assert identical.outcome is OperationOutcome.DUPLICATE_IDENTICAL
     assert conflicting.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    assert (
+        conflicting_invalid_contract.outcome is OperationOutcome.DUPLICATE_CONFLICTING
+    )
     assert identical.run == first.run
     assert conflicting.run == first.run
+    assert conflicting_invalid_contract.run == first.run
 
 
 def test_original_requires_persisted_inbox_event(mysql_engine: Engine) -> None:

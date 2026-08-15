@@ -61,6 +61,14 @@ class AgentRunLifecycleService:
         self,
         command: OriginalRunCommand,
     ) -> RunOperationResult:
+        existing = self._repository.find_run_by_trigger_event(command.trigger_event_id)
+        if existing is not None:
+            return self._classify_existing_creation(
+                existing,
+                self._original_matches,
+                command,
+            )
+
         if not self._repository.inbox_event_exists(command.trigger_event_id):
             raise RunCreationRejected("Inbox event does not exist")
         created_at = self._now()
@@ -91,12 +99,11 @@ class AgentRunLifecycleService:
             command.replay_request_id
         )
         if existing is not None:
-            outcome = (
-                OperationOutcome.DUPLICATE_IDENTICAL
-                if self._replay_matches(existing, command)
-                else OperationOutcome.DUPLICATE_CONFLICTING
+            return self._classify_existing_creation(
+                existing,
+                self._replay_matches,
+                command,
             )
-            return RunOperationResult(outcome, self._to_contract(existing))
 
         original = self._repository.find_run(command.original_run_id)
         source = self._repository.find_run(command.replayed_from_run_id)
@@ -298,6 +305,19 @@ class AgentRunLifecycleService:
             OperationOutcome.APPLIED,
             self._to_contract(created),
         )
+
+    def _classify_existing_creation(
+        self,
+        existing: Mapping[str, object],
+        matches: Callable[[Mapping[str, object], object], bool],
+        command: object,
+    ) -> RunOperationResult:
+        outcome = (
+            OperationOutcome.DUPLICATE_IDENTICAL
+            if matches(existing, command)
+            else OperationOutcome.DUPLICATE_CONFLICTING
+        )
+        return RunOperationResult(outcome, self._to_contract(existing))
 
     def _initial_run(
         self,
