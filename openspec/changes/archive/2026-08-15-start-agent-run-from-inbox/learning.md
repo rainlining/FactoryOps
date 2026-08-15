@@ -3,7 +3,7 @@
 ## 元数据
 
 - `learning_level`: `deep`
-- `status`: `awaiting-learning-gate`
+- `status`: `passed`
 
 ## 学习目标
 
@@ -26,10 +26,14 @@
 
 ## Learning Gate
 
-- [ ] 解释真实设计与取舍。
-- [ ] 完成端到端调用链 Walkthrough。
-- [ ] 定位 retryable 与 fatal 失败路径。
-- [ ] 完成 Owner 修改任务。
-- [ ] 完成 Failure/Debug Exercise。
-- [ ] 指出 offset、Inbox 幂等和 Run 幂等实际执行位置。
-- [ ] Review 最终 diff 并明确接受。
+- [x] 解释真实设计与取舍。
+- [x] 完成端到端调用链 Walkthrough。
+- [x] 定位 retryable 与 fatal 失败路径。
+- [x] 完成 Owner 修改任务。
+- [x] 完成 Failure/Debug Exercise。
+- [x] 指出 offset、Inbox 幂等和 Run 幂等实际执行位置。
+- [x] Review 最终 diff 并明确接受。
+
+## 完成记录
+
+2026-08-15，项目所有者确认本 Change 的 Learning Gate 已在独立 Review/Learning 会话完成，并明确要求执行最终 Diff Review 和归档。最终实现独立复审结论为 READY：0 Critical、0 Important、0 Minor。

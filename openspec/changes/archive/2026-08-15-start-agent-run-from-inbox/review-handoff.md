@@ -4,7 +4,7 @@
 
 - `change_id`: `2026-08-15-start-agent-run-from-inbox`
 - `learning_level`: `deep`
-- `status`: `pending-push-not-executable`
+- `status`: `learning-gate-passed`
 - `feature_branch`: `codex/start-agent-run-from-inbox`
 - `worktree`: `C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\start-agent-run-from-inbox`
 - `base_commit`: `db7ab6e`
@@ -72,4 +72,4 @@ Review/Learning 会话只读恢复后，先完成 Walkthrough，再由项目所�
 
 - 固定 1 秒 retry delay 没有指数退避；当前只用于已有同步 Worker 的 adapter 重试。
 - 本 Change 不领取或执行 `PENDING` Run；后续 Coordinator Change 必须定义 ownership 与恢复。
-- Learning Gate 尚未完成，Change 不得标记 `completed`、归档或合并 `main`。
+- 项目所有者已确认 Learning Gate 完成；本文件保留为归档后的历史 handoff 证据。
