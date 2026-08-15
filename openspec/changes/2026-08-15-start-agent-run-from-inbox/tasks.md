@@ -7,11 +7,11 @@
 
 ## 实现
 
-- [ ] Task 1：以测试冻结配置加载与 DecodedEvent Incident 语义。
-- [ ] Task 2：实现 IncidentRunStarter 的 created/already-started/integrity 行为。
-- [ ] Task 3：将 Starter 接入 Processor 并扩展 ProcessingResult。
-- [ ] Task 4：在 Worker/main 区分 retryable 与 fatal 失败。
-- [ ] Task 5：完成 MySQL 与 Kafka 崩溃恢复、并发和回归测试。
+- [x] Task 1：以测试冻结配置加载与 DecodedEvent Incident 语义。
+- [x] Task 2：实现 IncidentRunStarter 的 created/already-started/integrity 行为。
+- [x] Task 3：将 Starter 接入 Processor 并扩展 ProcessingResult。
+- [x] Task 4：在 Worker/main 区分 retryable 与 fatal 失败。
+- [x] Task 5：完成 MySQL 与 Kafka 崩溃恢复、并发和回归测试。
 - [ ] Task 6：完成 verification、独立审查和 review handoff。
 
 ## Handoff
