@@ -19,6 +19,11 @@ Task 必须属于一个 Workflow Run，由一个 Coordinator Execution 创建，
 - **WHEN** 使用相同 Run、request ID 和不可变内容重试
 - **THEN** 关系分类必须识别 identical duplicate
 
+#### Scenario: 相同 dispatch key 生成不同 Task ID
+
+- **WHEN** 两个合法 payload 具有相同 `task_key` 但不同 `task_id`
+- **THEN** 必须分类为 conflicting duplicate，不得视为不同 Task
+
 ### Requirement: Task type 与目标角色必须匹配
 
 `QUALITY_ANALYSIS→quality`、`PRODUCTION_ANALYSIS→production`、`SLA_ANALYSIS→sla`、`RISK_ASSESSMENT→risk`。v1 不允许 Coordinator 自派 Task 或动态角色。

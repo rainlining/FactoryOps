@@ -68,6 +68,23 @@ def test_task_key_is_stable_and_request_sensitive() -> None:
     assert first != compute_task_key(run_id, "TQR-" + "2" * 32)
 
 
+@pytest.mark.parametrize(
+    ("task_type", "role"),
+    [
+        ("QUALITY_ANALYSIS", "quality"),
+        ("PRODUCTION_ANALYSIS", "production"),
+        ("SLA_ANALYSIS", "sla"),
+        ("RISK_ASSESSMENT", "risk"),
+    ],
+)
+def test_accepts_every_frozen_task_type_role_mapping(task_type: str, role: str) -> None:
+    task = fixture("valid", "quality-pending.json")
+    assignment = task["assignment"]
+    assert isinstance(assignment, dict)
+    assignment.update(task_type=task_type, target_agent_role=role)
+    validate_task(task)
+
+
 def test_rejects_lifecycle_times_after_updated_at() -> None:
     task = fixture("valid", "risk-succeeded.json")
     lifecycle = task["lifecycle"]
@@ -134,6 +151,16 @@ def test_relation_identical_distinct_and_immutable_conflict() -> None:
     assert isinstance(assignment, dict)
     assignment["priority"] = 90
     assert classify_task_relation(task, changed) == "duplicate-conflicting"
+
+
+def test_same_dispatch_key_with_different_task_id_is_conflicting() -> None:
+    first = fixture("valid", "quality-pending.json")
+    second = copy.deepcopy(first)
+    identity = second["identity"]
+    assert isinstance(identity, dict)
+    identity["task_id"] = "TSK-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+    assert classify_task_relation(first, second) == "duplicate-conflicting"
 
 
 def test_canonical_form_ignores_key_order_and_integral_float() -> None:

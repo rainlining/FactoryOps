@@ -172,6 +172,11 @@ def classify_task_relation(
     first_id = first["identity"]
     second_id = second["identity"]
     assert isinstance(first_id, Mapping) and isinstance(second_id, Mapping)
+    if (
+        first_id["task_key"] == second_id["task_key"]
+        and first_id["task_id"] != second_id["task_id"]
+    ):
+        return "duplicate-conflicting"
     if first_id["task_id"] != second_id["task_id"]:
         return "distinct"
     if first_bytes == second_bytes:
