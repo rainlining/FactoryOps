@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-16-define-agent-task-contract`
-- `status`: `design-reviewed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `first_deep_reference`: `N/A`
 - `depends_on`: `[2026-08-16-define-agent-execution-contract]`
