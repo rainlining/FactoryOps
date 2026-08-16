@@ -227,6 +227,21 @@ def test_transition_retry_terminal_and_conflicts(mysql_engine: Engine) -> None:
         )
 
 
+def test_running_cancellation_retry_is_identical(mysql_engine: Engine) -> None:
+    run_id = _run(mysql_engine, "C")
+    service = _service(mysql_engine)
+    task_id = service.create_task(_create(run_id, "7")).task["identity"]["task_id"]
+    execution = "EXE-" + "7" * 32
+    service.transition_task(
+        _transition(task_id, "B", TaskStatus.PENDING, 0, TaskStatus.RUNNING, execution)
+    )
+    command = _transition(task_id, "C", TaskStatus.RUNNING, 1, TaskStatus.CANCELLED)
+    assert service.transition_task(command).outcome is OperationOutcome.APPLIED
+    assert (
+        service.transition_task(command).outcome is OperationOutcome.DUPLICATE_IDENTICAL
+    )
+
+
 def test_transition_history_failure_rolls_back_snapshot(mysql_engine: Engine) -> None:
     run_id = _run(mysql_engine, "5")
     service = _service(mysql_engine)

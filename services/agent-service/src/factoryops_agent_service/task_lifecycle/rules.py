@@ -57,6 +57,8 @@ def plan_transition(
         or not command.reason_message.strip()
     ):
         raise LifecycleRuleViolation("invalid status reason")
+    if not command.actor_kind.strip() or not command.actor_id.strip():
+        raise LifecycleRuleViolation("transition actor must not be blank")
     started, execution, attempts = (
         current_started_at,
         current_execution_id,
@@ -74,6 +76,8 @@ def plan_transition(
             raise LifecycleRuleViolation(
                 "terminal result must reference current execution"
             )
+    elif command.execution_id is not None:
+        raise LifecycleRuleViolation("CANCELLED or SKIPPED cannot carry execution_id")
     if (
         command.to_status is TaskStatus.SUCCEEDED
         and command.completion_execution_id != execution

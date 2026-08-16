@@ -6,5 +6,5 @@
 - [x] T4：实现创建、依赖校验、请求幂等与原子初始历史；通过创建测试。
 - [x] T5：实现状态规则、Contract 重建、transition 幂等和 revision 乐观锁；通过迁移测试。
 - [x] T6：补齐并发、失败注入、时钟回退和全量回归验证。
-- [ ] T7：执行独立代码审查并修复全部 Critical/Important 问题。
+- [x] T7：执行独立代码审查并修复全部 Critical/Important 问题。
 - [ ] T8：完成 verification/review handoff、提交并推送 feature branch。

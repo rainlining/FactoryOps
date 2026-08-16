@@ -287,7 +287,6 @@ class AgentTaskLifecycleService:
             "actor_id",
             "reason_code",
             "reason_message",
-            "execution_id",
             "completion_execution_id",
             "failure_code",
             "failure_message",
@@ -302,13 +301,18 @@ class AgentTaskLifecycleService:
             command.actor_id,
             command.reason_code,
             command.reason_message,
-            command.execution_id,
             command.completion_execution_id,
             command.failure_code,
             command.failure_message,
             command.failure_recoverability,
         )
         same = all(row[key] == value for key, value in zip(fields, values))
+        if command.to_status in {
+            TaskStatus.RUNNING,
+            TaskStatus.SUCCEEDED,
+            TaskStatus.FAILED,
+        }:
+            same = same and row["execution_id"] == command.execution_id
         return OperationResult(
             OperationOutcome.DUPLICATE_IDENTICAL
             if same
@@ -373,6 +377,17 @@ class AgentTaskLifecycleService:
                 "message": row["failure_message"],
                 "recoverability": row["failure_recoverability"],
             }
+        result_fields = (
+            row["failure_code"],
+            row["failure_message"],
+            row["failure_recoverability"],
+        )
+        if row["failure_execution_id"] is None and any(
+            value is not None for value in result_fields
+        ):
+            raise PersistenceIntegrityError(
+                "stored Task has failure details without a failure execution"
+            )
         try:
             validate_task(contract)
         except AgentTaskValidationError as error:

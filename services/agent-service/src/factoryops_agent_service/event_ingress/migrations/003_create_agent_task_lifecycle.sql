@@ -34,9 +34,12 @@ CREATE TABLE agent_tasks (
     OR (status IN ('CANCELLED','SKIPPED') AND ended_at IS NOT NULL)
   ),
   CONSTRAINT chk_agent_tasks_result CHECK (
-    (status='SUCCEEDED' AND completion_execution_id=current_execution_id AND failure_execution_id IS NULL)
-    OR (status='FAILED' AND failure_execution_id=current_execution_id AND completion_execution_id IS NULL AND failure_recoverability='non_retryable')
-    OR (status NOT IN ('SUCCEEDED','FAILED') AND completion_execution_id IS NULL AND failure_execution_id IS NULL)
+    (status='SUCCEEDED' AND completion_execution_id=current_execution_id
+      AND failure_execution_id IS NULL AND failure_code IS NULL AND failure_message IS NULL AND failure_recoverability IS NULL)
+    OR (status='FAILED' AND failure_execution_id=current_execution_id AND completion_execution_id IS NULL
+      AND failure_code IS NOT NULL AND failure_message IS NOT NULL AND failure_recoverability='non_retryable')
+    OR (status NOT IN ('SUCCEEDED','FAILED') AND completion_execution_id IS NULL AND failure_execution_id IS NULL
+      AND failure_code IS NULL AND failure_message IS NULL AND failure_recoverability IS NULL)
   ),
   UNIQUE KEY uk_agent_tasks_request (task_request_id),
   UNIQUE KEY uk_agent_tasks_key (task_key),
