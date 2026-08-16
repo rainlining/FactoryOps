@@ -1,0 +1,10 @@
+{
+  "contract_version":"1.0.0",
+  "identity":{"task_id":"TSK-22222222222222222222222222222222","task_request_id":"TQR-22222222222222222222222222222222","task_key":"TAK-E853FFA227140C3E666650DA2D19E28F36B0B0189B93D4079D181EAD9ED76D18","run_id":"RUN-11111111111111111111111111111111"},
+  "assignment":{"task_type":"RISK_ASSESSMENT","target_agent_role":"risk","created_by_execution_id":"EXE-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","priority":100},
+  "input":{"context_snapshot_id":"CTX-22222222222222222222222222222222","evidence_refs":["decision:DEC-1"],"dependency_task_ids":["TSK-11111111111111111111111111111111"]},
+  "lifecycle":{"status":"SUCCEEDED","revision":2,"created_at":"2026-08-16T03:00:00.000000Z","updated_at":"2026-08-16T03:00:03.000000Z","started_at":"2026-08-16T03:00:01.000000Z","ended_at":"2026-08-16T03:00:03.000000Z","status_reason":{"code":"TASK_SUCCEEDED","message":"Risk assessment completed."}},
+  "execution":{"current_execution_id":"EXE-22222222222222222222222222222222","attempt_count":1},
+  "completion":{"successful_execution_id":"EXE-22222222222222222222222222222222"},
+  "failure":null
+}

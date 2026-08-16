@@ -31,6 +31,7 @@ Workflow Run
 - key 必须匹配 version/Run/request；依赖和 Evidence 不重复；不得自依赖。
 - `created_at`、`started_at`、`ended_at` 不晚于 `updated_at`；`started_at` 写入后不变。
 - result/failure 与状态严格互斥。
+- 所有非 PENDING 状态必须记录稳定 reason；终态 FAILED 的 recoverability 必须是 `non_retryable`。
 
 ## 失败与测试
 

@@ -37,6 +37,12 @@ Task 输入必须包含 Context Snapshot、Evidence 和依赖 Task 引用。单�
 - **THEN** Task 可保持 `RUNNING`
 - **AND** 不得提前写入 Task failure
 
+#### Scenario: Task 已进入 FAILED 终态
+
+- **WHEN** retry policy 已决定 Task 不再创建 attempt
+- **THEN** failure 的 `recoverability` 必须为 `non_retryable`
+- **AND** 所有非 PENDING 状态必须具有稳定 status reason
+
 #### Scenario: 依赖失败导致跳过
 
 - **WHEN** Task 因前置 Task 失败而不应执行

@@ -1,0 +1,10 @@
+{
+  "contract_version":"1.0.0",
+  "identity":{"task_id":"TSK-33333333333333333333333333333333","task_request_id":"TQR-33333333333333333333333333333333","task_key":"TAK-8C7BC8F1FA2609E9B04458E6B64C3D1DD6A897D6F13B6ED1ECBD31D1B9A08AC3","run_id":"RUN-11111111111111111111111111111111"},
+  "assignment":{"task_type":"PRODUCTION_ANALYSIS","target_agent_role":"production","created_by_execution_id":"EXE-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","priority":40},
+  "input":{"context_snapshot_id":"CTX-33333333333333333333333333333333","evidence_refs":["batch:B17"],"dependency_task_ids":[]},
+  "lifecycle":{"status":"FAILED","revision":3,"created_at":"2026-08-16T04:00:00.000000Z","updated_at":"2026-08-16T04:00:04.000000Z","started_at":"2026-08-16T04:00:01.000000Z","ended_at":"2026-08-16T04:00:04.000000Z","status_reason":{"code":"RETRIES_EXHAUSTED","message":"Production analysis attempts exhausted."}},
+  "execution":{"current_execution_id":"EXE-33333333333333333333333333333333","attempt_count":2},
+  "completion":null,
+  "failure":{"failed_execution_id":"EXE-33333333333333333333333333333333","code":"MODEL_TIMEOUT","message":"All safe attempts timed out.","recoverability":"non_retryable"}
+}
