@@ -33,6 +33,7 @@ Workflow Run
 - 事务：N/A，本 Change 不持久化。后续 snapshot/history 必须共享事务。
 - `attempt >= 1`；key 必须等于 `run_id + role + task_id + attempt` 的规范 SHA-256 摘要。
 - immutable 区域在 revision 演进中不得变化。
+- `created_at`、`started_at`、`ended_at` 不得晚于快照的 `updated_at`；首次写入后 `started_at` 不得改写。
 - `SUCCEEDED` 仅有 result；`FAILED` 仅有 failure；`CANCELLED` 两者皆无。
 - Specialist 必须有 Task；Coordinator 可以没有 Task。
 - 引用数组有稳定顺序、非空值且无重复。

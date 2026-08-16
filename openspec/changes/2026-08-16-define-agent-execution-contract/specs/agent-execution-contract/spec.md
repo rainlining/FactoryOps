@@ -50,6 +50,12 @@
 - **WHEN** `ended_at` 早于 `started_at`
 - **THEN** Validator 必须拒绝
 
+#### Scenario: 已开始时间被下一 revision 改写
+
+- **GIVEN** Execution 已经具有 `started_at`
+- **WHEN** 下一 revision 携带不同 `started_at` 或任一生命周期时间晚于 `updated_at`
+- **THEN** Validator 或关系分类器必须拒绝合法演进分类
+
 ### Requirement: 输入和输出必须使用受限结构化引用
 
 输入必须分别保存 task、context snapshot 和 evidence 引用；成功结果必须使用 output artifact、decision 和 evidence 引用。引用数组不得重复，且 Coordinator 以外的执行必须具有 `task_id`。

@@ -81,6 +81,24 @@ def test_rejects_ended_at_before_started_at() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "expected_path"),
+    [
+        ("created_at", "2026-08-16T02:00:03.000000Z", "$.provenance.created_at"),
+        ("started_at", "2026-08-16T02:00:03.000000Z", "$.lifecycle.started_at"),
+        ("ended_at", "2026-08-16T02:00:03.000000Z", "$.lifecycle.ended_at"),
+    ],
+)
+def test_rejects_timestamps_after_updated_at(
+    field: str, value: str, expected_path: str
+) -> None:
+    payload = fixture("valid", "quality-succeeded.json")
+    owner = payload["provenance"] if field == "created_at" else payload["lifecycle"]
+    assert isinstance(owner, dict)
+    owner[field] = value
+    assert issue(payload) == ("lifecycle_timestamp_order_invalid", expected_path)
+
+
 def test_relation_distinguishes_next_revision_from_conflict() -> None:
     pending = fixture("valid", "coordinator-pending.json")
     running = copy.deepcopy(pending)
@@ -98,6 +116,31 @@ def test_relation_distinguishes_next_revision_from_conflict() -> None:
 
     lifecycle["revision"] = 2
     assert classify_execution_relation(pending, running) == "duplicate-conflicting"
+
+
+def test_next_revision_cannot_rewrite_started_at() -> None:
+    succeeded = fixture("valid", "quality-succeeded.json")
+    running = copy.deepcopy(succeeded)
+    lifecycle = running["lifecycle"]
+    assert isinstance(lifecycle, dict)
+    lifecycle.pop("ended_at")
+    lifecycle.update(
+        status="RUNNING",
+        revision=1,
+        updated_at="2026-08-16T02:00:01.000000Z",
+        status_reason=None,
+    )
+    running["result"] = None
+
+    assert classify_execution_relation(running, succeeded) == (
+        "same-execution-next-revision"
+    )
+
+    changed = copy.deepcopy(succeeded)
+    changed_lifecycle = changed["lifecycle"]
+    assert isinstance(changed_lifecycle, dict)
+    changed_lifecycle["started_at"] = "2026-08-16T02:00:00.500000Z"
+    assert classify_execution_relation(running, changed) == "duplicate-conflicting"
 
 
 def test_relation_identical_distinct_and_immutable_conflict() -> None:

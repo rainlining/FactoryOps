@@ -74,10 +74,12 @@ def validate_execution(
         )
 
     identity = execution["identity"]
+    provenance = execution["provenance"]
     input_refs = execution["input"]
     lifecycle = execution["lifecycle"]
     result = execution["result"]
     assert isinstance(identity, Mapping)
+    assert isinstance(provenance, Mapping)
     assert isinstance(input_refs, Mapping)
     assert isinstance(lifecycle, Mapping)
 
@@ -109,6 +111,21 @@ def validate_execution(
 
     started_at = lifecycle.get("started_at")
     ended_at = lifecycle.get("ended_at")
+    updated_at = _timestamp(lifecycle["updated_at"])
+    created_at = _timestamp(provenance["created_at"])
+    if created_at > updated_at:
+        _raise_issue(
+            "lifecycle_timestamp_order_invalid",
+            "$.provenance.created_at",
+            "created_at cannot be later than lifecycle.updated_at",
+        )
+    for field, value in (("started_at", started_at), ("ended_at", ended_at)):
+        if value is not None and _timestamp(value) > updated_at:
+            _raise_issue(
+                "lifecycle_timestamp_order_invalid",
+                f"$.lifecycle.{field}",
+                f"{field} cannot be later than updated_at",
+            )
     if (
         started_at is not None
         and ended_at is not None
@@ -165,6 +182,12 @@ def _is_next_revision(
     if (
         second_lifecycle["status"]
         not in LEGAL_TRANSITIONS[str(first_lifecycle["status"])]
+    ):
+        return False
+    first_started_at = first_lifecycle.get("started_at")
+    if (
+        first_started_at is not None
+        and second_lifecycle.get("started_at") != first_started_at
     ):
         return False
     return _timestamp(second_lifecycle["updated_at"]) >= _timestamp(
