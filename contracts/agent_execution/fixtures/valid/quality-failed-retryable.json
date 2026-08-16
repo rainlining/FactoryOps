@@ -1,0 +1,39 @@
+{
+  "contract_version": "1.0.0",
+  "identity": {
+    "execution_id": "EXE-33333333333333333333333333333333",
+    "execution_key": "EXK-E7881DCB5FD22475EE013EB617550E754D11AFF2062604920B99F0AE3620A753",
+    "run_id": "RUN-22222222222222222222222222222222",
+    "agent_role": "quality",
+    "attempt": 2
+  },
+  "provenance": {
+    "runtime_version": "agent-runtime/v1",
+    "prompt_version": "quality/v1",
+    "model_policy_version": "model-policy/v2",
+    "tool_policy_version": "tool-policy/v1",
+    "context_policy_version": "context-policy/v1",
+    "code_revision": "f2fc6b7",
+    "created_at": "2026-08-16T02:01:00.000000Z"
+  },
+  "input": {
+    "task_id": "TSK-22222222222222222222222222222222",
+    "context_snapshot_id": "CTX-22222222222222222222222222222222",
+    "evidence_refs": ["inspection:731", "batch:B17"]
+  },
+  "lifecycle": {
+    "status": "FAILED",
+    "revision": 2,
+    "updated_at": "2026-08-16T02:01:02.000000Z",
+    "started_at": "2026-08-16T02:01:01.000000Z",
+    "ended_at": "2026-08-16T02:01:02.000000Z",
+    "status_reason": {"code": "MODEL_TIMEOUT", "message": "Model call timed out."}
+  },
+  "result": null,
+  "failure": {
+    "code": "MODEL_TIMEOUT",
+    "message": "Model call exceeded the configured timeout.",
+    "recoverability": "retryable",
+    "failed_dependency_ref": "model:quality-primary"
+  }
+}

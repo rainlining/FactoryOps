@@ -1,0 +1,38 @@
+{
+  "contract_version": "1.0.0",
+  "identity": {
+    "execution_id": "EXE-22222222222222222222222222222222",
+    "execution_key": "EXK-C6C643E70178CAB1A19AE099BA6BA3CCA386046F6040A990423EF3A0E6F390DC",
+    "run_id": "RUN-22222222222222222222222222222222",
+    "agent_role": "quality",
+    "attempt": 1
+  },
+  "provenance": {
+    "runtime_version": "agent-runtime/v1",
+    "prompt_version": "quality/v1",
+    "model_policy_version": "model-policy/v1",
+    "tool_policy_version": "tool-policy/v1",
+    "context_policy_version": "context-policy/v1",
+    "code_revision": "f2fc6b7",
+    "created_at": "2026-08-16T02:00:00.000000Z"
+  },
+  "input": {
+    "task_id": "TSK-22222222222222222222222222222222",
+    "context_snapshot_id": "CTX-22222222222222222222222222222222",
+    "evidence_refs": ["inspection:731", "batch:B17"]
+  },
+  "lifecycle": {
+    "status": "SUCCEEDED",
+    "revision": 2,
+    "updated_at": "2026-08-16T02:00:02.000000Z",
+    "started_at": "2026-08-16T02:00:01.000000Z",
+    "ended_at": "2026-08-16T02:00:02.000000Z",
+    "status_reason": {"code": "EXECUTION_SUCCEEDED", "message": "Quality output validated."}
+  },
+  "result": {
+    "output_artifact_refs": ["artifact:quality-output-222"],
+    "decision_id": "DEC-22222222222222222222222222222222",
+    "evidence_refs": ["inspection:731", "batch:B17"]
+  },
+  "failure": null
+}

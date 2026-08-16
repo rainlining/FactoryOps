@@ -8,10 +8,11 @@
 
 - `execution_id`: `EXE-` + 32 位大写十六进制，稳定引用。
 - `execution_key`: `EXK-` + SHA-256 大写十六进制。
-- 摘要输入使用 UTF-8：`v1\n<run_id>\n<agent_role>\n<attempt>`。
-- attempt 从 1 开始；retry 新建 attempt，不更新旧 attempt。
+- 摘要输入使用 UTF-8：`v1\n<run_id>\n<agent_role>\n<task_id-or-dash>\n<attempt>`。
+- Coordinator 的空 Task 使用固定 `-`，Specialist 使用真实 Task ID。
+- attempt 从 1 开始且归属于一个 Task；retry 新建 attempt，不更新旧 attempt。
 
-摘要带版本前缀和换行分隔，避免简单拼接歧义，并允许未来升级算法。数据库唯一约束属于后续 Change。
+摘要带版本前缀和换行分隔，避免简单拼接歧义，并允许未来升级算法。Task 纳入摘要，避免同一角色处理多个专业任务时碰撞。数据库唯一约束属于后续 Change。
 
 ## 角色与 Task
 

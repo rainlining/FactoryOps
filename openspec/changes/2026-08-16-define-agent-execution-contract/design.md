@@ -31,7 +31,7 @@ Workflow Run
 
 - 状态：`PENDING -> RUNNING -> SUCCEEDED|FAILED|CANCELLED`；允许 `PENDING -> CANCELLED`。完整状态图由后续持久化 Change执行，本 Contract 约束快照形状。
 - 事务：N/A，本 Change 不持久化。后续 snapshot/history 必须共享事务。
-- `attempt >= 1`；key 必须等于规范 SHA-256 摘要。
+- `attempt >= 1`；key 必须等于 `run_id + role + task_id + attempt` 的规范 SHA-256 摘要。
 - immutable 区域在 revision 演进中不得变化。
 - `SUCCEEDED` 仅有 result；`FAILED` 仅有 failure；`CANCELLED` 两者皆无。
 - Specialist 必须有 Task；Coordinator 可以没有 Task。
@@ -59,7 +59,7 @@ Workflow Run
 
 - 选择独立 Agent Execution Contract，而非扩充 Run：避免 Workflow 与单次调用生命周期耦合。
 - 选择 attempt 为新对象，而非同对象 `retry_count`：保留每次 Prompt/Model/输出/失败 Provenance。
-- 选择 SHA-256 规范 key，而非调用方自由 UUID：能够重建、审计并识别同一 attempt。
+- 选择包含 Task 的 SHA-256 规范 key，而非调用方自由 UUID：能够重建、审计同一 Task attempt，并允许一个角色在同一 Run 执行多个 Task。
 - 选择显式版本字段，而非从 Run 继承：Agent retry 或 specialist 可使用不同实际策略，不能静默推断。
 - 选择引用而非内嵌内容：避免 Contract 膨胀、循环版本依赖和 Artifact 进入 MySQL。
 - 选择单步 revision relation，而非只比较全量相等：为后续乐观锁提供明确语义。

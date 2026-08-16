@@ -37,13 +37,13 @@
 
 ## Failure/Debug Exercise
 
-- 注入故障：把合法 Specialist fixture 的 `attempt` 从 1 改为 2，但保留旧 `execution_key`。
+- 注入故障：把合法 Specialist fixture 的 `attempt` 或 `task_id` 改掉，但保留旧 `execution_key`。
 - 操作步骤：运行单 fixture Validator，观察错误；用公开 key helper 重新计算后再次验证。
 - 预期行为：首次得到 `execution_key_mismatch` 和 `$.identity.execution_key`；修复后通过。
 - 观察证据：pytest 输出、错误码、JSON path 和新旧 key。
 - 常见错误行为：只校验 key 格式、使用自由 UUID、retry 改写旧 Execution 或摘要遗漏 role/attempt。
 - 清理/复位：还原临时 fixture；不得提交调试变更。
-- 完成后应能回答：为什么 `execution_id` 和 `execution_key` 都需要；retry 为什么必须新建 attempt。
+- 完成后应能回答：为什么 `execution_id` 和 `execution_key` 都需要；Task 为什么进入 key；retry 为什么必须新建 attempt。
 
 ## Learning Gate
 

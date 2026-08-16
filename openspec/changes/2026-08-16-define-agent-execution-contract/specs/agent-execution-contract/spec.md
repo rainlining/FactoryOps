@@ -12,7 +12,7 @@
 
 ### Requirement: Execution 身份必须支持确定性幂等
 
-`execution_id` 必须是稳定对象引用；`execution_key` 必须由 `run_id`、`agent_role` 和正整数 `attempt` 按规范形式计算。相同 key 不得代表不同 immutable input。
+`execution_id` 必须是稳定对象引用；`execution_key` 必须由 `run_id`、`agent_role`、`task_id` 和正整数 `attempt` 按规范形式计算。Coordinator 无 Task 时使用规范空值。相同 key 不得代表不同 immutable input。
 
 #### Scenario: 相同 attempt 重投
 
@@ -21,7 +21,7 @@
 
 #### Scenario: 幂等 key 与字段不一致
 
-- **WHEN** `execution_key` 不是规范字段的确定性摘要
+- **WHEN** `execution_key` 不是 Run、角色、Task 和 attempt 的确定性摘要
 - **THEN** Validator 必须在持久化或执行前拒绝
 
 ### Requirement: Execution 必须冻结实际执行 Provenance
