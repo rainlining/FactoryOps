@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-16-persist-agent-task-lifecycle`
-- `status`: `design-reviewed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `standard`
 - `first_deep_reference`: `2026-08-15-persist-agent-run-lifecycle`
 - `depends_on`: `[2026-08-15-persist-agent-run-lifecycle, 2026-08-16-define-agent-task-contract]`
