@@ -9,22 +9,22 @@
 
 ## 任务组 2：Contract Schema 与 Fixture
 
-- [ ] 先添加失败的 Schema/fixture tests。
-- [ ] 实现严格 v1.0.0 Schema 与合法/非法 fixture。
-- [ ] 运行局部测试并形成独立 commit。
+- [x] 先添加失败的 Schema/fixture tests。
+- [x] 实现严格 v1.0.0 Schema 与合法/非法 fixture。
+- [x] 运行局部测试并形成独立 commit。
 
 ## 任务组 3：Validator 与关系分类
 
-- [ ] 先添加 key、语义和 relation 失败测试。
-- [ ] 实现 Validator、canonical key/form 和 relation classifier。
-- [ ] 固定错误码与 JSON path，运行局部测试并形成独立 commit。
+- [x] 先添加 key、语义和 relation 失败测试。
+- [x] 实现 Validator、canonical key/form 和 relation classifier。
+- [x] 固定错误码与 JSON path，运行局部测试并形成独立 commit。
 
 ## 任务组 4：技术验收与 Handoff
 
-- [ ] 完成 README、全量 Contract/Agent/Java 回归及 diff 检查。
-- [ ] 独立代码审查并修复所有 Critical/Important 问题。
-- [ ] 填写真实 verification 和 review-handoff。
-- [ ] 推送 feature branch，更新为 `review-handoff-ready` 并停止。
+- [x] 完成 README、全量 Contract/Agent/Java 回归及 diff 检查。
+- [x] 独立代码审查并修复所有 Critical/Important 问题。
+- [x] 填写真实 verification 和 review-handoff。
+- [x] 推送 feature branch，更新为 `review-handoff-ready` 并停止。
 
 ## 任务组 5：独立 Review/Learning 会话
 
