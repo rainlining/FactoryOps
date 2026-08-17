@@ -27,6 +27,8 @@ git -C 'C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-agen
 - `execution_id + expected_status + expected_revision` 乐观并发控制。
 - Coordinator/Specialist 的 Run、Task、role 父关系校验。
 - migration 004 补齐 Execution → Run/Task，以及 Run/Task → Execution 的双向 FK，删除策略为 `RESTRICT`。
+- migration 004 在任何 DDL 前审计既有反向 Execution 引用，失败后不会留下无法重跑的半套表。
+- 数据库 CHECK 与 Service 重建双层拒绝终态 result/failure 残留列，避免脏数据被静默洗白。
 - 创建和迁移的 snapshot/history 同事务原子性，包含并发赢家重读分类。
 
 非目标：Worker claim/lease、自动 retry、Coordinator dispatch、LLM/Tool、Checkpoint/Resume/Replay、Java Business API、Evaluation 与 `dataset/`。
@@ -49,15 +51,16 @@ git -C 'C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-agen
 ## 验证与审查
 
 - Contract：99 passed。
-- Agent Service：106 passed；Ruff check/format 均通过。
+- Agent Service：109 passed；Ruff check/format 均通过。
 - Java 回归：65 tests，0 failure/error/skipped。
 - `git diff --check` 通过；相对 base 无 `dataset/` 修改。
-- 独立审查发现的 1 个 Important 竞态分类问题已在 `5be67a8` 修复；复审无 Critical/Important。
+- 实现期独立审查发现的 1 个 Important 竞态分类问题已在 `5be67a8` 修复。
+- Review/Learning 会话发现并修复 2 个 Important：终态残留列静默隐藏、004 DDL 失败后不可重跑。新增 3 个回归测试；复审无未处理 Critical/Important。
 - 完整命令、TDD RED 记录和证据见 `verification.md`。
 
 ## Review/Learning 待办
 
-- 实际运行 stale revision 与 history rollback 测试，并核对 snapshot/history 证据。
+- stale revision、并发赢家、history rollback 与 migration preflight recovery 已实际运行并通过。
 - 解释创建幂等、transition request 幂等、revision 冲突三类结果为何不同。
 - 解释双向 FK 为什么要求固定创建顺序，以及严格 migration 遇到孤立引用为何选择失败。
 - 沿一次成功创建和一次并发迁移失败调用链定位上述真实符号。

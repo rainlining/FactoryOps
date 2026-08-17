@@ -300,6 +300,26 @@ class AgentExecutionLifecycleService:
         def load(value: object) -> object:
             return json.loads(value) if isinstance(value, str) else value
 
+        result_columns = (
+            "output_artifact_refs",
+            "decision_id",
+            "result_evidence_refs",
+        )
+        failure_columns = (
+            "failure_code",
+            "failure_message",
+            "failure_recoverability",
+            "failed_dependency_ref",
+        )
+        if row["output_artifact_refs"] is None and any(
+            row[column] is not None for column in result_columns[1:]
+        ):
+            raise PersistenceIntegrityError("stored Execution has partial result data")
+        if row["failure_code"] is None and any(
+            row[column] is not None for column in failure_columns[1:]
+        ):
+            raise PersistenceIntegrityError("stored Execution has partial failure data")
+
         lifecycle = {
             "status": row["status"],
             "revision": row["revision"],
