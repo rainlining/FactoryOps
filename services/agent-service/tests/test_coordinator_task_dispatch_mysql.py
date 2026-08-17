@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import Engine, create_engine, text
 from test_coordinator_start_mysql import _command, _run, _service
@@ -11,6 +13,7 @@ from factoryops_agent_service.coordinator_task_dispatch.service import (
     DispatchOutcome,
 )
 from factoryops_agent_service.event_ingress.migration import migrate
+from factoryops_agent_service.task_lease import AgentTaskLeaseService, LeaseRejected
 
 
 @pytest.fixture(scope="module")
@@ -95,3 +98,56 @@ def test_history_failure_rolls_back_task(
             )
             == 0
         )
+
+
+def test_task_lease_claim_renew_release(mysql_engine: Engine) -> None:
+    run_id, execution_id = _started(mysql_engine, "1")
+    task = (
+        CoordinatorTaskDispatchService(mysql_engine)
+        .dispatch(_dispatch(run_id, execution_id, "1"))
+        .task
+    )
+    task_id = str(task["identity"]["task_id"])
+    leases = AgentTaskLeaseService(mysql_engine)
+    lease = leases.claim(task_id, "worker-1", 30)
+    with pytest.raises(LeaseRejected, match="held"):
+        leases.claim(task_id, "worker-2", 30)
+    renewed = leases.renew(lease, 60)
+    leases.release(renewed)
+    assert leases.claim(task_id, "worker-2", 30).owner_id == "worker-2"
+
+
+def test_expired_lease_takeover_fences_stale_owner(mysql_engine: Engine) -> None:
+    run_id, execution_id = _started(mysql_engine, "2")
+    task = (
+        CoordinatorTaskDispatchService(mysql_engine)
+        .dispatch(_dispatch(run_id, execution_id, "2"))
+        .task
+    )
+    task_id = str(task["identity"]["task_id"])
+    leases = AgentTaskLeaseService(mysql_engine)
+    now = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    stale = leases.claim(task_id, "worker-1", 30, now=now)
+    current = leases.claim(task_id, "worker-2", 30, now=now + timedelta(seconds=31))
+
+    with pytest.raises(LeaseRejected, match="does not match"):
+        leases.release(stale)
+    with pytest.raises(LeaseRejected, match="stale or expired"):
+        leases.renew(stale, 30, now=now + timedelta(seconds=31))
+    with pytest.raises(LeaseRejected, match="ttl is invalid"):
+        leases.renew(current, 0, now=now + timedelta(seconds=31))
+
+
+def test_lease_ttl_upper_boundary_is_inclusive(mysql_engine: Engine) -> None:
+    run_id, execution_id = _started(mysql_engine, "3")
+    task = (
+        CoordinatorTaskDispatchService(mysql_engine)
+        .dispatch(_dispatch(run_id, execution_id, "3"))
+        .task
+    )
+    task_id = str(task["identity"]["task_id"])
+    leases = AgentTaskLeaseService(mysql_engine)
+    lease = leases.claim(task_id, "worker-3", 3600)
+
+    with pytest.raises(LeaseRejected, match="ttl is invalid"):
+        leases.renew(lease, 3601)
