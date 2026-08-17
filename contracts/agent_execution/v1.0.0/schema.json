@@ -121,7 +121,7 @@
       "required": ["code", "message", "recoverability", "failed_dependency_ref"],
       "properties": {
         "code": {"type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[A-Z][A-Z0-9_]*$"},
-        "message": {"type": "string", "minLength": 1, "maxLength": 500},
+        "message": {"type": "string", "minLength": 1, "maxLength": 600},
         "recoverability": {"enum": ["retryable", "non_retryable"]},
         "failed_dependency_ref": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/reference"}]}
       }

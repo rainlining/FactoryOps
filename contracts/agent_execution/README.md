@@ -20,6 +20,8 @@ Coordinator 无 Task 时使用 `-`；Specialist 使用真实 Task ID。Retry 必
 
 正式角色为 `coordinator`、`quality`、`production`、`sla`、`risk`。Specialist 必须引用 Task；Coordinator 可以从 Run 入口直接启动。成功 execution 只携带结构化结果引用，失败 execution 只携带失败分类，两者互斥。
 
+失败详情 `failure.message` 必须为 1 至 600 个字符；该字段用于保存可审计的简短失败说明，不承载完整模型响应或大型诊断 Artifact。
+
 ## 使用
 
 ```python

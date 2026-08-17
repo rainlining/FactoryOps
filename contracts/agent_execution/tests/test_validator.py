@@ -81,6 +81,17 @@ def test_rejects_ended_at_before_started_at() -> None:
     )
 
 
+def test_failure_message_accepts_600_characters_and_rejects_601() -> None:
+    payload = fixture("valid", "quality-failed-retryable.json")
+    failure = payload["failure"]
+    assert isinstance(failure, dict)
+    failure["message"] = "x" * 600
+    validate_execution(payload)
+
+    failure["message"] = "x" * 601
+    assert issue(payload) == ("schema_validation_failed", "$.failure.message")
+
+
 @pytest.mark.parametrize(
     ("field", "value", "expected_path"),
     [
