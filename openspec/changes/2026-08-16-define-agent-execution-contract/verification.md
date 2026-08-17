@@ -65,3 +65,13 @@ git status --short --branch
 - `recoverability=retryable` 是失败事实，不授权运行时自动重试。
 - Task、Context、Artifact 和 Decision 只是引用；存在性由后续应用层验证。
 - 仓库根目录用当前全局 Ruff 扫描会报告 18 个既有文件问题；新目录和 Agent Service 在各自项目上下文均通过。本 Change 未修改无关历史文件。
+
+## Review/Learning 会话增量验证（2026-08-17）
+
+- Codex 代做 Owner 修改：`failure.message` 上限 500 → 600；同步 Schema、README 和 600/601 边界测试。该代做不能计为项目所有者亲自完成。
+- `python -m ruff check contracts/agent_execution`：通过。
+- `python -m ruff format --check contracts/agent_execution`：6 files already formatted。
+- `python -m pytest contracts/agent_execution/tests -q`：`19 passed in 0.32s`。
+- `python -m pytest contracts -q`：`76 passed in 0.93s`。
+- 故障实验：修改 `attempt` 并保留旧 key，实际得到 `execution_key_mismatch` 与 `$.identity.execution_key`；重算 key 后通过。
+- `git diff --check`：通过；仅涉及当前 Contract、测试、README 和 Change 记录。
