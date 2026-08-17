@@ -79,3 +79,11 @@ python -m pytest contracts/agent_execution/tests -q
 - 数据库唯一约束、引用存在性、状态事务、claim/lease 和 retry policy 尚未实现。
 - Contract 不证明 Agent 输出业务正确，只证明结构、身份和生命周期一致。
 - Learning Gate、Owner 修改和 failure/debug exercise 均待独立会话完成。
+
+## Review/Learning 会话增量（2026-08-17）
+
+- 已完成真实调用链 Walkthrough 和 failure/debug exercise。
+- 项目所有者要求 Codex 代做 Owner 修改；`failure.message` 上限已改为 600，并补 600/601 边界测试和 README。
+- 本次代做不算项目所有者亲自完成，因此 Deep Learning Gate 仍未通过。
+- 增量验证：Execution tests 19 passed；全部 Contract 76 passed；Ruff check/format 通过。
+- 后续 stacked branch 必须吸收本 Review commit 并重新验证。

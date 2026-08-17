@@ -5,7 +5,7 @@
 - `learning_level`: `deep`
 - `pattern_stage`: `first-deep`
 - `first_deep_reference`: `N/A`
-- `gate_status`: `not-started`
+- `gate_status`: `in-progress`
 
 ## 完成后应具备的能力
 
@@ -35,6 +35,8 @@
 - 验收方法：新增边界值测试，运行 Agent Execution Contract tests 和全部 Contract tests。
 - 安全边界：不改变 failure recoverability、生命周期、幂等 key 或生产安全控制。
 
+Review 会话记录（2026-08-17）：项目所有者明确要求由 Codex 代做。Codex 已将 `failure.message` 上限从 500 调整为 600，并同步 Schema、600/601 边界测试和 README。由于不是项目所有者亲自完成，本项不能计为 Owner 亲自修改，Deep Learning Gate 不自动通过。
+
 ## Failure/Debug Exercise
 
 - 注入故障：把合法 Specialist fixture 的 `attempt` 或 `task_id` 改掉，但保留旧 `execution_key`。
@@ -45,13 +47,15 @@
 - 清理/复位：还原临时 fixture；不得提交调试变更。
 - 完成后应能回答：为什么 `execution_id` 和 `execution_key` 都需要；Task 为什么进入 key；retry 为什么必须新建 attempt。
 
+Review 会话结果（2026-08-17）：已在内存中把合法 Quality Execution 的 `attempt` 从 1 改为 2并保留旧 key，实际得到 `execution_key_mismatch`、path `$.identity.execution_key`；随后调用 `compute_execution_key` 重算，验证通过。未修改或提交 fixture。
+
 ## Learning Gate
 
 - [ ] 能解释真实设计和关键取舍。
-- [ ] 能沿成功调用链定位核心代码。
-- [ ] 能定位并解释至少一条失败路径。
+- [x] 能沿成功调用链定位核心代码。
+- [x] 能定位并解释至少一条失败路径。
 - [ ] 已亲自完成约定的小修改。
-- [ ] 已完成故障实验并根据证据判断结果。
+- [x] 已完成故障实验并根据证据判断结果。
 - [ ] 能指出幂等与并发保护在 Contract 和后续持久化层各自的边界。
 - [ ] 已 review 最终 diff 并明确接受。
 
