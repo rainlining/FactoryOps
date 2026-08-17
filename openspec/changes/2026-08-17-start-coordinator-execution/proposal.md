@@ -3,7 +3,7 @@
 ## 元数据
 
 - `change_id`: `2026-08-17-start-coordinator-execution`
-- `status`: `review-handoff-ready`
+- `status`: `awaiting-learning-gate`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-15-start-agent-run-from-inbox, 2026-08-17-persist-agent-execution-lifecycle]`
 - `stacked_base_commit`: `8e73eb57a269dc453c78152f84d6a547fd02f633`
