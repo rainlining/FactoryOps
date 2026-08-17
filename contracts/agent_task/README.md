@@ -12,6 +12,8 @@ v1
 
 正式映射：`QUALITY_ANALYSIS→quality`、`PRODUCTION_ANALYSIS→production`、`SLA_ANALYSIS→sla`、`RISK_ASSESSMENT→risk`。
 
+Task 终态失败详情 `failure.message` 必须为 1 至 600 个字符；它保存简短、可审计的聚合失败说明，不承载完整 Execution 输出或大型诊断 Artifact。
+
 ```python
 from contracts.agent_task.validator import validate_task
 
