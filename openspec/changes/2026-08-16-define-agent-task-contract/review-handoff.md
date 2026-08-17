@@ -65,3 +65,12 @@ python -m pytest contracts/agent_task/tests -q
 - 跨对象 role/status/引用存在性和依赖 DAG 尚无数据库证明。
 - 并发 dispatch、状态事务、attempt 创建和恢复尚未实现。
 - 两个 stacked Change 均需各自通过 Learning Gate，不能因联合 review 跳过任一 Gate。
+
+## Review/Learning 会话增量（2026-08-17）
+
+- 已完成真实调用链 Walkthrough 和 failure/debug exercise。
+- 已吸收 Execution Review commit。
+- 项目所有者要求 Codex 代做 Owner 修改；Task `failure.message` 上限已改为 600，并补 600/601 边界测试和 README。
+- 本次代做不算项目所有者亲自完成，因此 Deep Learning Gate 仍未通过。
+- 增量验证：Task tests 23 passed；全部 Contract 99 passed；Ruff check/format 通过。
+- Persistence stacked branch 必须吸收本分支并把数据库 `failure_message` 容量同步到 600 后重新验证。

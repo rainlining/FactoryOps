@@ -54,3 +54,14 @@ git status --short --branch
 - Contract 不实现数据库唯一约束、依赖存在/同 Run/环检查、乐观锁或调度 ownership。
 - `created_by_execution_id` 的 Coordinator role、终态 Execution 状态须由后续应用/持久化层跨对象校验。
 - Task failure 的 non-retryable 是聚合终态；具体 Execution failure 仍保留自己的 recoverability。
+
+## Review/Learning 会话增量验证（2026-08-17）
+
+- 已吸收 Execution Review commit；Execution `failure.message` 上限现为 600。
+- Codex 代做 Task Owner 修改：Task `failure.message` 上限 500 → 600；同步 Schema、README 和 600/601 边界测试。该代做不能计为项目所有者亲自完成。
+- `python -m ruff check contracts/agent_task contracts/agent_execution`：通过。
+- `python -m ruff format --check contracts/agent_task contracts/agent_execution`：12 files already formatted。
+- `python -m pytest contracts/agent_task/tests -q`：`23 passed in 0.26s`。
+- `python -m pytest contracts -q`：`99 passed in 1.07s`。
+- 故障实验：修改 `task_request_id` 并保留旧 key，实际得到 `task_key_mismatch` 与 `$.identity.task_key`；重算 key 后通过。
+- `git diff --check`：通过；未修改 `dataset/`。

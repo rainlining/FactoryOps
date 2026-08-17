@@ -115,6 +115,17 @@ def test_terminal_failure_cannot_claim_it_is_retryable() -> None:
     )
 
 
+def test_failure_message_accepts_600_characters_and_rejects_601() -> None:
+    task = fixture("valid", "production-failed.json")
+    failure = task["failure"]
+    assert isinstance(failure, dict)
+    failure["message"] = "x" * 600
+    validate_task(task)
+
+    failure["message"] = "x" * 601
+    assert issue(task) == ("schema_validation_failed", "$.failure.message")
+
+
 def test_relation_recognizes_next_revision_and_conflicts() -> None:
     pending = fixture("valid", "quality-pending.json")
     running = copy.deepcopy(pending)
