@@ -8,6 +8,7 @@ MIGRATION_VERSIONS = (
     "001_create_agent_event_inbox",
     "002_create_agent_run_lifecycle",
     "003_create_agent_task_lifecycle",
+    "004_create_agent_execution_lifecycle",
 )
 
 
