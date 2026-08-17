@@ -116,7 +116,7 @@ def transition(
 
 def test_schema_and_creation_idempotency(mysql_engine: Engine) -> None:
     with mysql_engine.connect() as c:
-        assert c.scalar(text("SELECT COUNT(*) FROM agent_schema_history")) == 4
+        assert c.scalar(text("SELECT COUNT(*) FROM agent_schema_history")) == 5
     run_id = run(mysql_engine, "1")
     service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
     command = create(run_id)

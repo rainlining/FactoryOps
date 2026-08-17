@@ -1,0 +1,10 @@
+# 实施任务
+
+- [x] T1：完成 OpenSpec、规格与技术选型。
+- [x] T2：先写规则与真实 MySQL RED tests。
+- [x] T3：实现 receipt migration 与启动命令模型。
+- [x] T4：实现跨 Run/Execution 原子启动。
+- [x] T5：实现重放、竞态和失败恢复。
+- [x] T6：运行局部与全仓真实验证。
+- [x] T7：独立审查并修复 Critical/Important。
+- [x] T8：verification、handoff、提交和推送。

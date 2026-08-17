@@ -165,7 +165,7 @@ def test_migration_creates_task_tables(mysql_engine: Engine) -> None:
                 )
             ).all()
         )
-    assert versions[-1] == "004_create_agent_execution_lifecycle"
+    assert versions[-1] == "005_create_coordinator_start_requests"
     assert {
         "agent_tasks",
         "agent_task_dependencies",
