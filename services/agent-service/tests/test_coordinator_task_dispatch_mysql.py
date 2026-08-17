@@ -11,6 +11,7 @@ from factoryops_agent_service.coordinator_task_dispatch.service import (
     DispatchOutcome,
 )
 from factoryops_agent_service.event_ingress.migration import migrate
+from factoryops_agent_service.task_lease import AgentTaskLeaseService, LeaseRejected
 
 
 @pytest.fixture(scope="module")
@@ -95,3 +96,20 @@ def test_history_failure_rolls_back_task(
             )
             == 0
         )
+
+
+def test_task_lease_claim_renew_release(mysql_engine: Engine) -> None:
+    run_id, execution_id = _started(mysql_engine, "1")
+    task = (
+        CoordinatorTaskDispatchService(mysql_engine)
+        .dispatch(_dispatch(run_id, execution_id, "1"))
+        .task
+    )
+    task_id = str(task["identity"]["task_id"])
+    leases = AgentTaskLeaseService(mysql_engine)
+    lease = leases.claim(task_id, "worker-1", 30)
+    with pytest.raises(LeaseRejected, match="held"):
+        leases.claim(task_id, "worker-2", 30)
+    renewed = leases.renew(lease, 60)
+    leases.release(renewed)
+    assert leases.claim(task_id, "worker-2", 30).owner_id == "worker-2"
