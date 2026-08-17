@@ -77,3 +77,11 @@ python -m pytest tests/test_task_lifecycle_rules.py tests/test_task_lifecycle_my
 ```
 
 本 worktree 现在只供 Review/Learning 使用。Learning Gate 与 owner 最终接受前，不得归档、合并 `main` 或删除 branch/worktree。
+
+## Review/Learning 会话增量（2026-08-17）
+
+- 已完成创建、transition、并发冲突、事务回滚和 Contract 重建调用链 Walkthrough。
+- 已吸收两个上游 Contract 的 Review commits。
+- 为兼容 Task `failure.message` 600 上限，snapshot/history 两列扩为 `VARCHAR(600)`，并新增真实 MySQL round-trip 测试。
+- 增量验证：Task persistence 19 passed；全部 Contract 99 passed；完整 Agent Service 94 passed；Java `mvn verify` 退出码 0；Ruff 通过。
+- Standard 调试实验已由真实 MySQL 测试覆盖；最终 diff 接受仍需项目所有者明确确认。

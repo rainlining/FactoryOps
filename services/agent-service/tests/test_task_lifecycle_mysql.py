@@ -227,6 +227,34 @@ def test_transition_retry_terminal_and_conflicts(mysql_engine: Engine) -> None:
         )
 
 
+def test_failure_message_600_characters_round_trips(mysql_engine: Engine) -> None:
+    run_id = _run(mysql_engine, "A")
+    service = _service(mysql_engine)
+    task_id = service.create_task(_create(run_id, "0")).task["identity"]["task_id"]
+    execution_id = "EXE-" + "0" * 32
+    service.transition_task(
+        _transition(
+            task_id, "0", TaskStatus.PENDING, 0, TaskStatus.RUNNING, execution_id
+        )
+    )
+
+    result = service.transition_task(
+        _transition(
+            task_id,
+            "1",
+            TaskStatus.RUNNING,
+            1,
+            TaskStatus.FAILED,
+            execution_id,
+            failure_code="MODEL_TIMEOUT",
+            failure_message="x" * 600,
+            failure_recoverability="non_retryable",
+        )
+    )
+
+    assert result.task["failure"]["message"] == "x" * 600
+
+
 def test_running_cancellation_retry_is_identical(mysql_engine: Engine) -> None:
     run_id = _run(mysql_engine, "C")
     service = _service(mysql_engine)

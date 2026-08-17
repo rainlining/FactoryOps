@@ -3,7 +3,7 @@
 - `learning_level`: `standard`
 - `pattern_stage`: `then-standard`
 - `first_deep_reference`: `2026-08-15-persist-agent-run-lifecycle`
-- `gate_status`: `not-started`
+- `gate_status`: `in-progress`
 
 ## 学习目标
 
@@ -26,10 +26,12 @@ standard Change 不要求强制亲自修改。Review 时可选调整一个非安
 
 standard Change 不设置强制 Deep exercise。Review 应实际运行重复 transition 或 stale revision 测试，观察 identical/conflicting/concurrency-conflict 的区别。
 
+Review 会话结果（2026-08-17）：已实际运行 Task persistence MySQL 测试；重复 transition 返回 `duplicate-identical`，相同 request 不同命令由既有回归覆盖 `duplicate-conflicting`，不同 request 竞争旧 revision 返回 `concurrency-conflict`。并发测试证明最多一个 `applied`；history 失败测试证明 snapshot 回滚。
+
 ## Learning Gate
 
-- [ ] 解释边界、事务和主要取舍。
-- [ ] 定位一条成功链和一条失败链。
+- [x] 解释边界、事务和主要取舍。
+- [x] 定位一条成功链和一条失败链。
 - [ ] review 最终 diff 和真实验证证据。
 - [ ] 明确接受 Change。
 

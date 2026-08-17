@@ -63,3 +63,15 @@ git diff --name-only b39970f..HEAD | Select-String '^dataset/'
 - 本 Change stacked 在两个待 Learning Gate 的 Contract Change 上；上游 review commit 必须吸收后重验。
 
 技术验收通过；学习与 Owner 接受尚未开始，因此不得归档或合并 `main`。
+
+## Review/Learning 会话增量验证（2026-08-17）
+
+- 已依次吸收 Execution 与 Task Review commits；两个 Contract 的 `failure.message` 上限现为 600。
+- stacked 兼容修复：`agent_tasks.failure_message` 与 `agent_task_transitions.failure_message` 从 `VARCHAR(500)` 扩为 `VARCHAR(600)`。
+- 新增真实 MySQL round-trip：600 字符 Task failure 经 snapshot、history、reload 后完整返回。
+- `python -m pytest tests/test_task_lifecycle_rules.py tests/test_task_lifecycle_mysql.py -q`：`19 passed in 14.33s`。
+- `python -m pytest contracts -q`：`99 passed in 0.95s`。
+- `python -m pytest -q`（Agent Service）：`94 passed in 122.14s`。
+- Agent Service 与两个 Contract 目录 Ruff check/format：通过。
+- `mvn verify -q`：退出码 0；20 个 XML 报告汇总为 65 tests、0 failures/errors/skipped；既有 broker unavailable、missing topic 和 migration failure 日志来自负向测试。
+- `git diff --check`：通过；未修改 `dataset/`。
