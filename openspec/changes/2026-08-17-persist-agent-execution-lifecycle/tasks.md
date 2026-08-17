@@ -7,4 +7,4 @@
 - [x] T5：实现迁移、乐观锁、结果/失败和 Contract 重建。
 - [x] T6：并发、失败注入与全量回归。
 - [x] T7：独立审查并修复 Critical/Important。
-- [ ] T8：verification、handoff、提交和推送。
+- [x] T8：verification、handoff、提交和推送。
