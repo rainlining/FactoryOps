@@ -32,7 +32,7 @@ class AgentTaskLeaseService:
         *,
         now: datetime | None = None,
     ) -> Lease:
-        if not owner_id.strip() or not 1 <= ttl_seconds <= 3600:
+        if not owner_id.strip() or not self._valid_ttl(ttl_seconds):
             raise LeaseRejected("owner and ttl are invalid")
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         expires = now + timedelta(seconds=ttl_seconds)
@@ -98,6 +98,8 @@ class AgentTaskLeaseService:
     def renew(
         self, lease: Lease, ttl_seconds: int, *, now: datetime | None = None
     ) -> Lease:
+        if not self._valid_ttl(ttl_seconds):
+            raise LeaseRejected("ttl is invalid")
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         expires = now + timedelta(seconds=ttl_seconds)
         with self._engine.begin() as c:
@@ -131,3 +133,7 @@ class AgentTaskLeaseService:
             )
             if result.rowcount != 1:
                 raise LeaseRejected("lease owner/token does not match")
+
+    @staticmethod
+    def _valid_ttl(ttl_seconds: int) -> bool:
+        return 1 <= ttl_seconds <= 3600
