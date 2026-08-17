@@ -6,7 +6,9 @@
 - `status`: `review-handoff-ready`
 - `learning_level`: `standard`
 - `depends_on`: `[2026-08-16-define-agent-task-contract, 2026-08-16-persist-agent-task-lifecycle, 2026-08-17-persist-agent-execution-lifecycle, 2026-08-17-start-coordinator-execution]`
-- `stacked_base_commit`: `b8ff7eb01b4b51eca37d02db20a941dddf1e941e`
+- `stacked_base_commit`: `70a1309afa8a562bca0ce27fa18d415b591191c0`
+- `execution_persistence_upstream`: `49561e83739bc17a45c297043a11fae4bfc96305`
+- `coordinator_start_upstream`: `70a1309afa8a562bca0ce27fa18d415b591191c0`
 - `feature_branch`: `codex/dispatch-coordinator-task`
 
 ## 动机与范围
@@ -26,3 +28,7 @@ Coordinator 已能启动，但还不能把一个确定的专业工作单元持�
 ## 验收
 
 真实 MySQL 覆盖成功、同/冲突 request、非 Coordinator/非 RUNNING/跨 Run 拒绝、依赖校验和 history 回滚；全仓回归与独立审查通过后停在 review-handoff-ready。
+
+## 上游 Review 恢复
+
+2026-08-17 已通过 merge commit 吸收 Coordinator Start 最新 Review 树 `70a1309`；该树包含与 Execution Persistence `49561e8` 等价的完整性修复，以及 Coordinator Start Owner 测试和状态文档。完整性修复只加强 migration 004 preflight、Execution result/failure 数据库约束和持久化重建校验，不改变 dispatch 的 Task Contract 或事务不变量。

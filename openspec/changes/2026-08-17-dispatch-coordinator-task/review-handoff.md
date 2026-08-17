@@ -7,10 +7,13 @@
 - 状态：`review-handoff-ready`
 - 分支：`codex/dispatch-coordinator-task`
 - worktree：`C:\\Users\\小霖\\Desktop\\work\\project2\\FactoryOps\\.worktrees\\dispatch-coordinator-task`
-- base：`b8ff7eb01b4b51eca37d02db20a941dddf1e941e`
+- base / Coordinator Start upstream：`70a1309afa8a562bca0ce27fa18d415b591191c0`
+- Execution Persistence upstream：`49561e83739bc17a45c297043a11fae4bfc96305`
 - implementation head：`849a965`
+- upstream integration merge：`7966fe3`
+- final handoff head：以该分支最新远端 HEAD 为准
 
-该分支独立堆叠在 Coordinator Start handoff 之后。Review 期间禁止其他会话修改此 worktree；前两个 Change 的 Review 若产生生产代码提交，只有影响本 Change Contract/状态语义时才需显式吸收并重跑验证。
+该分支已吸收 Coordinator Start 最新 Review 树；该树包含等价的 Execution Persistence 完整性修复。没有修改已 Review 的上游 worktree。Review 期间禁止其他会话修改此 worktree；后续 claim 分支尚未同步，必须再基于本 Change 最终 HEAD 恢复。
 
 ## Walkthrough
 
@@ -26,7 +29,8 @@
 
 ## 验证与 Review 待办
 
-- Contract 99、Agent 116、Java 65 全部通过；Ruff 通过。
+- Dispatch 4、Contract 99、Agent 120、Java 65 全部通过；Ruff 通过。
+- 上游 migration preflight、Execution result/failure 完整性和 Coordinator Start Owner 测试与 dispatch 无冲突；未扩大范围。
 - 重要审查问题“Run RUNNING/Execution PENDING 状态缺口”已在本 Change 修复，复审无 Critical/Important。
 - Review 时解释为什么 dispatch 不直接调用通用 Task Service，以及为什么 Task 保持 PENDING。
 - 实际执行 history failure 注入并检查 Task/依赖/Execution history 证据；完成最终 diff review。
