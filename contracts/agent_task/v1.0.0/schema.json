@@ -1,0 +1,48 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://factoryops.dev/contracts/agent-task/1.0.0/schema.json",
+  "title":"FactoryOps Agent Task Contract 1.0.0",
+  "type":"object","additionalProperties":false,
+  "required":["contract_version","identity","assignment","input","lifecycle","execution","completion","failure"],
+  "properties":{
+    "contract_version":{"const":"1.0.0"},
+    "identity":{"title":"Agent Task Identity","type":"object","additionalProperties":false,
+      "required":["task_id","task_request_id","task_key","run_id"],
+      "properties":{"task_id":{"$ref":"#/$defs/taskId"},"task_request_id":{"$ref":"#/$defs/taskRequestId"},"task_key":{"$ref":"#/$defs/taskKey"},"run_id":{"$ref":"#/$defs/runId"}}},
+    "assignment":{"title":"Agent Task Assignment","type":"object","additionalProperties":false,
+      "required":["task_type","target_agent_role","created_by_execution_id","priority"],
+      "properties":{"task_type":{"enum":["QUALITY_ANALYSIS","PRODUCTION_ANALYSIS","SLA_ANALYSIS","RISK_ASSESSMENT"]},"target_agent_role":{"enum":["quality","production","sla","risk"]},"created_by_execution_id":{"$ref":"#/$defs/executionId"},"priority":{"type":"integer","minimum":0,"maximum":100}}},
+    "input":{"title":"Agent Task Input References","type":"object","additionalProperties":false,
+      "required":["context_snapshot_id","evidence_refs","dependency_task_ids"],
+      "properties":{"context_snapshot_id":{"$ref":"#/$defs/contextId"},"evidence_refs":{"$ref":"#/$defs/referenceArray"},"dependency_task_ids":{"type":"array","maxItems":64,"items":{"$ref":"#/$defs/taskId"}}}},
+    "lifecycle":{"title":"Agent Task Lifecycle","type":"object","additionalProperties":false,
+      "required":["status","revision","created_at","updated_at","status_reason"],
+      "properties":{"status":{"enum":["PENDING","RUNNING","SUCCEEDED","FAILED","CANCELLED","SKIPPED"]},"revision":{"type":"integer","minimum":0},"created_at":{"$ref":"#/$defs/timestamp"},"updated_at":{"$ref":"#/$defs/timestamp"},"started_at":{"$ref":"#/$defs/timestamp"},"ended_at":{"$ref":"#/$defs/timestamp"},"status_reason":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/reason"}]}}},
+    "execution":{"title":"Agent Task Execution Summary","type":"object","additionalProperties":false,
+      "required":["current_execution_id","attempt_count"],
+      "properties":{"current_execution_id":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/executionId"}]},"attempt_count":{"type":"integer","minimum":0}}},
+    "completion":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/completion"}]},
+    "failure":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/failure"}]}
+  },
+  "allOf":[
+    {"if":{"properties":{"lifecycle":{"properties":{"status":{"const":"PENDING"}},"required":["status"]}}},"then":{"properties":{"lifecycle":{"properties":{"revision":{"const":0}},"not":{"anyOf":[{"required":["started_at"]},{"required":["ended_at"]}]}},"execution":{"properties":{"current_execution_id":{"type":"null"},"attempt_count":{"const":0}}},"completion":{"type":"null"},"failure":{"type":"null"}}}},
+    {"if":{"properties":{"lifecycle":{"properties":{"status":{"const":"RUNNING"}},"required":["status"]}}},"then":{"properties":{"lifecycle":{"required":["started_at"],"not":{"required":["ended_at"]}},"execution":{"properties":{"current_execution_id":{"$ref":"#/$defs/executionId"},"attempt_count":{"minimum":1}}},"completion":{"type":"null"},"failure":{"type":"null"}}}},
+    {"if":{"properties":{"lifecycle":{"properties":{"status":{"const":"SUCCEEDED"}},"required":["status"]}}},"then":{"properties":{"lifecycle":{"required":["started_at","ended_at"]},"execution":{"properties":{"current_execution_id":{"$ref":"#/$defs/executionId"},"attempt_count":{"minimum":1}}},"completion":{"$ref":"#/$defs/completion"},"failure":{"type":"null"}}}},
+    {"if":{"properties":{"lifecycle":{"properties":{"status":{"const":"FAILED"}},"required":["status"]}}},"then":{"properties":{"lifecycle":{"required":["started_at","ended_at"]},"execution":{"properties":{"current_execution_id":{"$ref":"#/$defs/executionId"},"attempt_count":{"minimum":1}}},"completion":{"type":"null"},"failure":{"$ref":"#/$defs/failure"}}}},
+    {"if":{"properties":{"lifecycle":{"properties":{"status":{"enum":["CANCELLED","SKIPPED"]}},"required":["status"]}}},"then":{"properties":{"lifecycle":{"required":["ended_at"]},"completion":{"type":"null"},"failure":{"type":"null"}}}}
+  ],
+  "$defs":{
+    "taskId":{"type":"string","pattern":"^TSK-[0-9A-F]{32}$"},
+    "taskRequestId":{"type":"string","pattern":"^TQR-[0-9A-F]{32}$"},
+    "taskKey":{"type":"string","pattern":"^TAK-[0-9A-F]{64}$"},
+    "runId":{"type":"string","pattern":"^RUN-[0-9A-F]{32}$"},
+    "executionId":{"type":"string","pattern":"^EXE-[0-9A-F]{32}$"},
+    "contextId":{"type":"string","pattern":"^CTX-[0-9A-F]{32}$"},
+    "timestamp":{"type":"string","format":"date-time","pattern":"^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,6})?Z$"},
+    "reference":{"type":"string","minLength":1,"maxLength":255,"pattern":"^[A-Za-z0-9][A-Za-z0-9._:/-]*$"},
+    "referenceArray":{"type":"array","maxItems":64,"items":{"$ref":"#/$defs/reference"}},
+    "reason":{"title":"Agent Task Status Reason","type":"object","additionalProperties":false,"required":["code","message"],"properties":{"code":{"type":"string","minLength":3,"maxLength":128,"pattern":"^[A-Z][A-Z0-9_]*$"},"message":{"type":"string","minLength":1,"maxLength":500}}},
+    "completion":{"title":"Agent Task Completion","type":"object","additionalProperties":false,"required":["successful_execution_id"],"properties":{"successful_execution_id":{"$ref":"#/$defs/executionId"}}},
+    "failure":{"title":"Agent Task Failure","type":"object","additionalProperties":false,"required":["failed_execution_id","code","message","recoverability"],"properties":{"failed_execution_id":{"$ref":"#/$defs/executionId"},"code":{"type":"string","minLength":3,"maxLength":128,"pattern":"^[A-Z][A-Z0-9_]*$"},"message":{"type":"string","minLength":1,"maxLength":600},"recoverability":{"enum":["retryable","non_retryable"]}}}
+  }
+}

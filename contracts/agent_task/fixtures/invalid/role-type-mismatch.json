@@ -1,0 +1,5 @@
+{
+  "contract_version":"1.0.0","identity":{"task_id":"TSK-11111111111111111111111111111111","task_request_id":"TQR-11111111111111111111111111111111","task_key":"TAK-B03E8732DC6EA5CD6920C7BEC98F972F26D56C09D7786534C0CEC02C0949BF68","run_id":"RUN-11111111111111111111111111111111"},
+  "assignment":{"task_type":"QUALITY_ANALYSIS","target_agent_role":"sla","created_by_execution_id":"EXE-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","priority":50},"input":{"context_snapshot_id":"CTX-11111111111111111111111111111111","evidence_refs":[],"dependency_task_ids":[]},
+  "lifecycle":{"status":"PENDING","revision":0,"created_at":"2026-08-16T01:00:00Z","updated_at":"2026-08-16T01:00:00Z","status_reason":null},"execution":{"current_execution_id":null,"attempt_count":0},"completion":null,"failure":null
+}
