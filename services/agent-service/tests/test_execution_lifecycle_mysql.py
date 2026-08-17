@@ -3,8 +3,10 @@ from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy.exc import DBAPIError
 from testcontainers.community.mysql import MySqlContainer
 
+from factoryops_agent_service.event_ingress import migration as migration_module
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.execution_lifecycle.model import (
     CreateExecutionCommand,
@@ -15,6 +17,7 @@ from factoryops_agent_service.execution_lifecycle.model import (
 from factoryops_agent_service.execution_lifecycle.service import (
     AgentExecutionLifecycleService,
     ExecutionCreationRejected,
+    PersistenceIntegrityError,
 )
 from factoryops_agent_service.run_lifecycle.model import (
     OriginalRunCommand,
@@ -270,3 +273,125 @@ def test_failed_execution_round_trips(mysql_engine: Engine) -> None:
         )
     )
     assert result.execution["failure"] == failure
+
+
+def test_terminal_state_constraints_reject_opposite_payload_residue(
+    mysql_engine: Engine,
+) -> None:
+    run_id = run(mysql_engine, "7")
+    service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
+    eid = str(
+        service.create_execution(create(run_id)).execution["identity"]["execution_id"]
+    )
+    service.transition_execution(
+        transition(eid, "7", ExecutionStatus.PENDING, 0, ExecutionStatus.RUNNING)
+    )
+    with (
+        pytest.raises(DBAPIError, match="chk_agent_executions_result"),
+        mysql_engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                "UPDATE agent_executions SET status='SUCCEEDED',revision=2,ended_at=:now,"
+                "output_artifact_refs='[]',failure_message='residue' WHERE execution_id=:id"
+            ),
+            {"now": NOW, "id": eid},
+        )
+    with (
+        pytest.raises(DBAPIError, match="chk_agent_executions_result"),
+        mysql_engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                "UPDATE agent_executions SET status='FAILED',revision=2,ended_at=:now,"
+                "decision_id=:decision,failure_code='MODEL_TIMEOUT',failure_message='x',"
+                "failure_recoverability='retryable' WHERE execution_id=:id"
+            ),
+            {"now": NOW, "decision": "DEC-" + "1" * 32, "id": eid},
+        )
+
+
+def test_contract_rebuild_rejects_partial_terminal_payload(
+    mysql_engine: Engine,
+) -> None:
+    run_id = run(mysql_engine, "8")
+    service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
+    eid = str(
+        service.create_execution(create(run_id)).execution["identity"]["execution_id"]
+    )
+    row = dict(service._repository.find(eid))
+    row["decision_id"] = "DEC-" + "1" * 32
+    with pytest.raises(PersistenceIntegrityError, match="partial result"):
+        service._to_contract(row)
+    row["decision_id"] = None
+    row["failure_message"] = "residue"
+    with pytest.raises(PersistenceIntegrityError, match="partial failure"):
+        service._to_contract(row)
+
+
+def test_migration_004_preflight_failure_can_be_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with MySqlContainer("mysql:8.4") as mysql:
+        engine = create_engine(
+            mysql.get_connection_url().replace("mysql://", "mysql+pymysql://", 1)
+        )
+        try:
+            monkeypatch.setattr(
+                migration_module,
+                "MIGRATION_VERSIONS",
+                migration_module.MIGRATION_VERSIONS[:3],
+            )
+            migrate(engine)
+            run_id = run(engine, "9")
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE agent_runs SET coordinator_execution_id=:id "
+                        "WHERE run_id=:run_id"
+                    ),
+                    {"id": "EXE-" + "9" * 32, "run_id": run_id},
+                )
+            monkeypatch.setattr(
+                migration_module,
+                "MIGRATION_VERSIONS",
+                (
+                    "001_create_agent_event_inbox",
+                    "002_create_agent_run_lifecycle",
+                    "003_create_agent_task_lifecycle",
+                    "004_create_agent_execution_lifecycle",
+                ),
+            )
+            with pytest.raises(RuntimeError, match="audited and cleared"):
+                migrate(engine)
+            with engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT COUNT(*) FROM information_schema.tables "
+                            "WHERE table_schema=DATABASE() AND table_name='agent_executions'"
+                        )
+                    )
+                    == 0
+                )
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE agent_runs SET coordinator_execution_id=NULL "
+                        "WHERE run_id=:run_id"
+                    ),
+                    {"run_id": run_id},
+                )
+            migrate(engine)
+            with engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT COUNT(*) FROM agent_schema_history "
+                            "WHERE version='004_create_agent_execution_lifecycle'"
+                        )
+                    )
+                    == 1
+                )
+        finally:
+            engine.dispose()

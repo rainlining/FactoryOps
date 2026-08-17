@@ -38,8 +38,10 @@ CREATE TABLE agent_executions (
     OR (status IN ('SUCCEEDED','FAILED') AND started_at IS NOT NULL AND ended_at IS NOT NULL)
     OR (status='CANCELLED' AND ended_at IS NOT NULL)),
   CONSTRAINT chk_agent_executions_result CHECK (
-    (status='SUCCEEDED' AND output_artifact_refs IS NOT NULL AND failure_code IS NULL)
-    OR (status='FAILED' AND output_artifact_refs IS NULL AND failure_code IS NOT NULL AND failure_message IS NOT NULL AND failure_recoverability IS NOT NULL)
+    (status='SUCCEEDED' AND output_artifact_refs IS NOT NULL
+      AND failure_code IS NULL AND failure_message IS NULL AND failure_recoverability IS NULL AND failed_dependency_ref IS NULL)
+    OR (status='FAILED' AND output_artifact_refs IS NULL AND decision_id IS NULL AND result_evidence_refs IS NULL
+      AND failure_code IS NOT NULL AND failure_message IS NOT NULL AND failure_recoverability IS NOT NULL)
     OR (status NOT IN ('SUCCEEDED','FAILED') AND output_artifact_refs IS NULL AND decision_id IS NULL AND result_evidence_refs IS NULL AND failure_code IS NULL AND failure_message IS NULL AND failure_recoverability IS NULL AND failed_dependency_ref IS NULL)),
   UNIQUE KEY uk_agent_executions_key (execution_key),
   KEY idx_agent_executions_run_role (run_id, agent_role, created_at),
