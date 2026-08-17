@@ -79,7 +79,11 @@ def _run(engine: Engine, marker: str) -> str:
 
 
 def _command(
-    run_id: str, marker: str = "1", *, prompt: str = "coordinator/v1"
+    run_id: str,
+    marker: str = "1",
+    *,
+    prompt: str = "coordinator/v1",
+    evidence_refs: tuple[str, ...] | None = None,
 ) -> StartCoordinatorCommand:
     contract_marker = marker.upper()
     return StartCoordinatorCommand(
@@ -87,7 +91,9 @@ def _command(
         run_id=run_id,
         prompt_version=prompt,
         context_snapshot_id="CTX-" + contract_marker * 32,
-        evidence_refs=("inspection:" + marker, "incident:" + marker),
+        evidence_refs=evidence_refs
+        if evidence_refs is not None
+        else ("inspection:" + marker, "incident:" + marker),
     )
 
 
@@ -141,6 +147,22 @@ def test_replay_is_identical_or_conflicting(mysql_engine: Engine) -> None:
     assert same.execution == first.execution
 
 
+def test_non_empty_evidence_is_persisted_and_changes_request_digest(
+    mysql_engine: Engine,
+) -> None:
+    run_id = _run(mysql_engine, "c")
+    command = _command(run_id, "c", evidence_refs=("incident:c",))
+
+    first = _service(mysql_engine).start(command)
+    conflict = _service(mysql_engine).start(
+        _command(run_id, "c", evidence_refs=("incident:changed",))
+    )
+
+    assert first.outcome is StartOutcome.APPLIED
+    assert first.execution["input"]["evidence_refs"] == ["incident:c"]
+    assert conflict.outcome is StartOutcome.DUPLICATE_CONFLICTING
+
+
 def test_different_requests_have_one_concurrent_winner(mysql_engine: Engine) -> None:
     run_id = _run(mysql_engine, "7")
     commands = (_command(run_id, "7"), _command(run_id, "8"))
@@ -179,7 +201,12 @@ def test_run_history_failure_rolls_back_everything(
     mysql_engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_id = _run(mysql_engine, "a")
-    service = _service(mysql_engine)
+    execution_id = "EXE-" + "A" * 32
+    service = CoordinatorStartService(
+        mysql_engine,
+        clock=lambda: NOW,
+        execution_id_factory=lambda: execution_id,
+    )
 
     def fail(*args: object, **kwargs: object) -> None:
         raise RuntimeError("injected run history failure")
@@ -199,12 +226,24 @@ def test_run_history_failure_rolls_back_everything(
             text("SELECT COUNT(*) FROM agent_executions WHERE run_id=:id"),
             {"id": run_id},
         )
+        run_history = connection.scalar(
+            text("SELECT COUNT(*) FROM agent_run_transitions WHERE run_id=:id"),
+            {"id": run_id},
+        )
+        execution_history = connection.scalar(
+            text(
+                "SELECT COUNT(*) FROM agent_execution_transitions WHERE execution_id=:id"
+            ),
+            {"id": execution_id},
+        )
         receipts = connection.scalar(
             text("SELECT COUNT(*) FROM coordinator_start_requests WHERE run_id=:id"),
             {"id": run_id},
         )
     assert run == ("PENDING", 0, None)
     assert executions == 0
+    assert run_history == 1
+    assert execution_history == 0
     assert receipts == 0
 
 

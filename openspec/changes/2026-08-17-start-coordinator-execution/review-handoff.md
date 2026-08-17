@@ -4,10 +4,11 @@
 
 - Change：`2026-08-17-start-coordinator-execution`
 - 学习等级：`deep`
-- 状态：`review-handoff-ready`
+- 状态：`awaiting-learning-gate`
 - 分支：`codex/start-coordinator-execution`
 - worktree：`C:\\Users\\小霖\\Desktop\\work\\project2\\FactoryOps\\.worktrees\\start-coordinator-execution`
-- base commit：`8e73eb57a269dc453c78152f84d6a547fd02f633`
+- original base commit：`8e73eb57a269dc453c78152f84d6a547fd02f633`
+- reviewed upstream tree：`49561e83739bc17a45c297043a11fae4bfc96305`
 - reviewed implementation head：`3a0a9b9486ff0513ce38cd7c58726f302cedcb55`
 - final handoff commit：以该分支远端 HEAD 为准
 
@@ -34,15 +35,17 @@
 
 ## 验证与风险
 
-- Contract 99 passed；Agent 112 passed；Java 65 passed；Ruff 通过。
+- Contract 99 passed；Agent 116 passed；Java 65 passed；Ruff 通过。
 - 独立审查 1 Important 已修，复审无 Critical/Important。
 - 真实命令、RED 过程和数据库证据见 `verification.md`。
 - 剩余风险：只有瞬时数据库互斥，没有长期 Worker ownership；Context Snapshot 的存在性尚无本地 FK；当前 use case 通过既有 Service 的 Contract 重建方法校验数据库对象，后续可抽取公开 serializer，但本 Change 不做无关重构。
 
 ## Deep Learning Gate
 
-Owner 修改：为启动命令 evidence refs 增加一个非空合法边界测试，解释它是否影响 payload digest，并运行局部测试。Codex 尚未代做。
+Owner 修改已由 Codex 按项目所有者授权代做：单 evidence ref 会持久化，改变 evidence 会得到 `duplicate-conflicting`，证明 evidence 参与 payload digest。局部测试 `7 passed`。按现行 `AGENTS.md`，这不能记作项目所有者亲自完成。
 
-Failure/debug：注入 Run history INSERT 失败；观察 Run 仍 PENDING、Execution/history/receipt 不可见；解释为什么顺序调用两个现有 Service 不具备同等原子性。测试已有可复现实验入口，但须由 Review 会话实际完成。
+Failure/debug 已实际完成：注入 Run history INSERT 失败；Run 仍 PENDING，Run history 仅 1 条初始记录，Execution snapshot/history 与 receipt 均不可见。两个现有 Service 若顺序调用会各自提交事务，第二步失败无法回滚第一步；当前 Repository 用一个事务覆盖全部写入。
 
-建议先 review 上游 Execution Persistence，再 review 本 Change。完成真实 Walkthrough、Owner 修改、故障实验与最终 diff 接受前，保持 `awaiting-learning-gate`，不得归档或合并 `main`。
+最终 diff review 已完成：相对更新后的上游树仅包含本 Change 工件、005 migration、Coordinator Start 实现和测试；`dataset/` 未修改，`git diff --check` 通过，无新增 Critical/Important。
+
+真实 Walkthrough 已完成，Codex 代做修改、故障实验与 Codex diff review 已完成。项目所有者明确最终接受及现行 Deep Owner 亲自修改条件仍未满足，保持 `awaiting-learning-gate`，不得归档或合并 `main`。
