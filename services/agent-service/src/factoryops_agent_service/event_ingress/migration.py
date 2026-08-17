@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.resources import files
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
 
 MIGRATION_VERSIONS = (
     "001_create_agent_event_inbox",
@@ -10,6 +10,36 @@ MIGRATION_VERSIONS = (
     "003_create_agent_task_lifecycle",
     "004_create_agent_execution_lifecycle",
 )
+
+
+def _preflight_execution_references(connection: Connection) -> None:
+    count = connection.scalar(
+        text(
+            """
+            SELECT COUNT(*) FROM (
+              SELECT coordinator_execution_id AS execution_id FROM agent_runs
+                WHERE coordinator_execution_id IS NOT NULL
+              UNION ALL
+              SELECT created_by_execution_id FROM agent_tasks
+                WHERE created_by_execution_id IS NOT NULL
+              UNION ALL
+              SELECT current_execution_id FROM agent_tasks
+                WHERE current_execution_id IS NOT NULL
+              UNION ALL
+              SELECT completion_execution_id FROM agent_tasks
+                WHERE completion_execution_id IS NOT NULL
+              UNION ALL
+              SELECT failure_execution_id FROM agent_tasks
+                WHERE failure_execution_id IS NOT NULL
+            ) existing_execution_references
+            """
+        )
+    )
+    if count:
+        raise RuntimeError(
+            "migration 004 requires existing Run/Task execution references "
+            "to be audited and cleared before agent_executions is created"
+        )
 
 
 def migrate(engine: Engine) -> None:
@@ -32,6 +62,8 @@ def migrate(engine: Engine) -> None:
             ).first()
             if applied:
                 continue
+            if version == "004_create_agent_execution_lifecycle":
+                _preflight_execution_references(connection)
             migration_sql = (
                 files("factoryops_agent_service.event_ingress.migrations")
                 .joinpath(f"{version}.sql")
