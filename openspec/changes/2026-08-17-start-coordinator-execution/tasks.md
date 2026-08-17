@@ -5,6 +5,6 @@
 - [x] T3：实现 receipt migration 与启动命令模型。
 - [x] T4：实现跨 Run/Execution 原子启动。
 - [x] T5：实现重放、竞态和失败恢复。
-- [ ] T6：运行局部与全仓真实验证。
-- [ ] T7：独立审查并修复 Critical/Important。
-- [ ] T8：verification、handoff、提交和推送。
+- [x] T6：运行局部与全仓真实验证。
+- [x] T7：独立审查并修复 Critical/Important。
+- [x] T8：verification、handoff、提交和推送。
