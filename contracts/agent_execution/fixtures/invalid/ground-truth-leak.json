@@ -1,0 +1,8 @@
+{
+  "contract_version":"1.0.0",
+  "identity":{"execution_id":"EXE-11111111111111111111111111111111","execution_key":"EXK-EF3680DE751393D6684481B689CCBF5808F7729DCBB23315C8DE0C955863FEAB","run_id":"RUN-11111111111111111111111111111111","agent_role":"coordinator","attempt":1},
+  "provenance":{"runtime_version":"agent-runtime/v1","prompt_version":"coordinator/v1","model_policy_version":"model-policy/v1","tool_policy_version":"tool-policy/v1","context_policy_version":"context-policy/v1","code_revision":"f2fc6b7","created_at":"2026-08-16T01:00:00Z"},
+  "input":{"task_id":null,"context_snapshot_id":"CTX-11111111111111111111111111111111","evidence_refs":[]},
+  "lifecycle":{"status":"PENDING","revision":0,"updated_at":"2026-08-16T01:00:00Z","status_reason":null},
+  "result":null,"failure":null,"ground_truth":{"expected_action":"HOLD_BATCH"}
+}

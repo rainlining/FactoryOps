@@ -1,0 +1,1 @@
+"""FactoryOps Agent Execution Contract."""
