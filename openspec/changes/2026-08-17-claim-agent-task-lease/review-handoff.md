@@ -2,7 +2,7 @@
 
 - Change：`2026-08-17-claim-agent-task-lease`
 - 学习等级：`deep`
-- 状态：`review-handoff-ready`
+- 状态：`completed`
 - 分支：`codex/claim-agent-task-lease`
 - worktree：`C:\\Users\\小霖\\Desktop\\work\\project2\\FactoryOps\\.worktrees\\claim-agent-task-lease`
 - base / Dispatch upstream：`af23d07fa94355508378f3561fc505f08f18285c`
@@ -26,4 +26,4 @@
 - 时区、renew TTL 和陈旧 token fencing 问题已修复，复审无 Critical/Important。
 - 非目标：Task RUNNING、Execution、Worker runtime、Redis、retry、LLM/Tool、Checkpoint/Resume、`dataset/`。
 
-Owner 修改：调整 TTL 上限边界并运行局部测试。Failure exercise：让 lease 过期后由 worker-2 接管，再用 worker-1 的旧 token release，必须被拒绝且 worker-2 lease 保持。完成 Walkthrough、Owner 修改、故障实验和最终 diff 接受前，不得归档或合并 main。
+Owner 修改已完成：真实 MySQL 测试确认 TTL=3600 可接受、TTL=3601 被拒绝。Failure exercise 已完成：lease 过期后由 worker-2 接管，worker-1 的旧 token release/renew 均被拒绝，worker-2 lease 保持。最终 diff review 无未处理 Critical/Important；项目所有者已说明 Learning Gate 在其他地方完成，可进入归档准备。

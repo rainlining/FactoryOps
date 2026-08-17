@@ -1,7 +1,7 @@
 # Change 提案：Agent Task Lease
 
 - `change_id`: `2026-08-17-claim-agent-task-lease`
-- `status`: `review-handoff-ready`
+- `status`: `completed`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-17-dispatch-coordinator-task]`
 - `stacked_base_commit`: `af23d07fa94355508378f3561fc505f08f18285c`

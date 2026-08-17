@@ -12,4 +12,10 @@
 
 限制：lease 只提供短期 ownership，不推进 Task、不创建 Execution、不含 Worker heartbeat/background cleanup；过期行在下一 claim 原位接管。
 
-技术状态为 `review-handoff-ready`。这是 Deep Change，Owner 修改、陈旧 token 故障实验与 Learning Gate 尚未完成。
+## Review/Learning 验证
+
+- Owner 边界测试：`test_lease_ttl_upper_boundary_is_inclusive`，真实 MySQL；TTL=3600 成功，TTL=3601 被拒绝。
+- Failure/Debug Exercise：`test_expired_lease_takeover_fences_stale_owner`，真实 MySQL；worker-2 在过期后接管，worker-1 旧 token 的 release/renew 均被拒绝，worker-2 lease 未被删除或覆盖。
+- Claim/Dispatch 局部复验：`7 passed in 11.75s`。
+- 最终 diff review：仅当前 Change 的 lease 测试和工件发生变化；`dataset/` 未修改，`git diff --check` 通过，无未处理 Critical/Important。
+- 项目所有者已在其他地方完成 Learning Gate，本 Change 可进入归档准备。

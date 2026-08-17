@@ -136,3 +136,18 @@ def test_expired_lease_takeover_fences_stale_owner(mysql_engine: Engine) -> None
         leases.renew(stale, 30, now=now + timedelta(seconds=31))
     with pytest.raises(LeaseRejected, match="ttl is invalid"):
         leases.renew(current, 0, now=now + timedelta(seconds=31))
+
+
+def test_lease_ttl_upper_boundary_is_inclusive(mysql_engine: Engine) -> None:
+    run_id, execution_id = _started(mysql_engine, "3")
+    task = (
+        CoordinatorTaskDispatchService(mysql_engine)
+        .dispatch(_dispatch(run_id, execution_id, "3"))
+        .task
+    )
+    task_id = str(task["identity"]["task_id"])
+    leases = AgentTaskLeaseService(mysql_engine)
+    lease = leases.claim(task_id, "worker-3", 3600)
+
+    with pytest.raises(LeaseRejected, match="ttl is invalid"):
+        leases.renew(lease, 3601)
