@@ -211,3 +211,62 @@ def test_history_failure_rolls_back(mysql_engine: Engine) -> None:
     finally:
         event.remove(mysql_engine, "before_cursor_execute", fail)
     assert service.get_execution(eid)["lifecycle"]["revision"] == 0
+
+
+def test_initial_history_failure_rolls_back(mysql_engine: Engine) -> None:
+    run_id = run(mysql_engine, "5")
+    service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
+
+    def fail(
+        _c: object,
+        _cur: object,
+        statement: str,
+        _params: object,
+        _ctx: object,
+        _many: bool,
+    ) -> None:
+        if "INSERT INTO agent_execution_transitions" in statement:
+            raise RuntimeError("initial history failure")
+
+    event.listen(mysql_engine, "before_cursor_execute", fail)
+    try:
+        with pytest.raises(RuntimeError, match="initial history failure"):
+            service.create_execution(create(run_id))
+    finally:
+        event.remove(mysql_engine, "before_cursor_execute", fail)
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT COUNT(*) FROM agent_executions WHERE run_id=:run"),
+                {"run": run_id},
+            )
+            == 0
+        )
+
+
+def test_failed_execution_round_trips(mysql_engine: Engine) -> None:
+    run_id = run(mysql_engine, "6")
+    service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
+    eid = str(
+        service.create_execution(create(run_id)).execution["identity"]["execution_id"]
+    )
+    service.transition_execution(
+        transition(eid, "5", ExecutionStatus.PENDING, 0, ExecutionStatus.RUNNING)
+    )
+    failure = {
+        "code": "MODEL_TIMEOUT",
+        "message": "x" * 600,
+        "recoverability": "retryable",
+        "failed_dependency_ref": "model:primary",
+    }
+    result = service.transition_execution(
+        transition(
+            eid,
+            "6",
+            ExecutionStatus.RUNNING,
+            1,
+            ExecutionStatus.FAILED,
+            failure=failure,
+        )
+    )
+    assert result.execution["failure"] == failure

@@ -141,6 +141,9 @@ class AgentExecutionLifecycleService:
             return self._classify_transition(existing, command)
         current = self._repository.find(command.execution_id)
         if current is None:
+            existing = self._repository.find_transition(command.transition_request_id)
+            if existing:
+                return self._classify_transition(existing, command)
             raise ExecutionNotFound(command.execution_id)
         if (
             current["status"] != command.expected_status.value
@@ -155,9 +158,15 @@ class AgentExecutionLifecycleService:
                 )
             )
         now = self._now()
-        plan = plan_transition(
-            command, started_at=current["started_at"], occurred_at=now
-        )
+        try:
+            plan = plan_transition(
+                command, started_at=current["started_at"], occurred_at=now
+            )
+        except LifecycleRuleViolation:
+            existing = self._repository.find_transition(command.transition_request_id)
+            if existing:
+                return self._classify_transition(existing, command)
+            raise
         result, failure = command.result, command.failure
         candidate = {
             **current,
