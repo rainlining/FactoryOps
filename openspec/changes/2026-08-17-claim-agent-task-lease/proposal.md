@@ -1,6 +1,6 @@
 # Change 提案：Agent Task Lease
 
-- `change_id`: `2026-08-18-claim-agent-task-lease`
+- `change_id`: `2026-08-17-claim-agent-task-lease`
 - `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `[2026-08-17-dispatch-coordinator-task]`

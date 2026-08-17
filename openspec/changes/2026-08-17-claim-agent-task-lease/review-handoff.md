@@ -1,6 +1,6 @@
 # Review Handoff
 
-- Change：`2026-08-18-claim-agent-task-lease`
+- Change：`2026-08-17-claim-agent-task-lease`
 - 学习等级：`deep`
 - 状态：`review-handoff-ready`
 - 分支：`codex/claim-agent-task-lease`
