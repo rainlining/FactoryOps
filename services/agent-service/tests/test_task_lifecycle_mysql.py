@@ -7,6 +7,10 @@ from sqlalchemy import Engine, create_engine, event, text
 from testcontainers.community.mysql import MySqlContainer
 
 from factoryops_agent_service.event_ingress.migration import migrate
+from factoryops_agent_service.execution_lifecycle.model import CreateExecutionCommand
+from factoryops_agent_service.execution_lifecycle.service import (
+    AgentExecutionLifecycleService,
+)
 from factoryops_agent_service.run_lifecycle.model import (
     OriginalRunCommand,
     RunProvenance,
@@ -26,6 +30,7 @@ from factoryops_agent_service.task_lifecycle.service import (
 )
 
 NOW = datetime(2026, 8, 16, 8, 0, tzinfo=timezone.utc)
+RUN_CREATORS: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module")
@@ -69,7 +74,29 @@ def _run(engine: Engine, marker: str) -> str:
             ),
         )
     )
-    return str(result.run["identity"]["run_id"])
+    run_id = str(result.run["identity"]["run_id"])
+    execution = (
+        AgentExecutionLifecycleService(engine, clock=lambda: NOW)
+        .create_execution(
+            CreateExecutionCommand(
+                run_id,
+                "coordinator",
+                1,
+                None,
+                "runtime:1",
+                "coordinator:1",
+                "model:1",
+                "tool:1",
+                "context:1",
+                "a" * 40,
+                "CTX-" + marker * 32,
+                (),
+            )
+        )
+        .execution
+    )
+    RUN_CREATORS[run_id] = str(execution["identity"]["execution_id"])
+    return run_id
 
 
 def _create(
@@ -80,7 +107,7 @@ def _create(
         run_id,
         "QUALITY_ANALYSIS",
         "quality",
-        "EXE-" + "A" * 32,
+        RUN_CREATORS[run_id],
         50,
         "CTX-" + marker * 32,
         ("inspection:731",),
@@ -90,6 +117,40 @@ def _create(
 
 def _service(engine: Engine) -> AgentTaskLifecycleService:
     return AgentTaskLifecycleService(engine, clock=lambda: NOW)
+
+
+def _seed_specialist_execution(
+    engine: Engine, task_id: str, execution_id: str, attempt: int
+) -> None:
+    with engine.connect() as connection:
+        task = (
+            connection.execute(
+                text(
+                    "SELECT run_id,target_agent_role,context_snapshot_id FROM agent_tasks WHERE task_id=:id"
+                ),
+                {"id": task_id},
+            )
+            .mappings()
+            .one()
+        )
+    AgentExecutionLifecycleService(
+        engine, clock=lambda: NOW, execution_id_factory=lambda: execution_id
+    ).create_execution(
+        CreateExecutionCommand(
+            str(task["run_id"]),
+            str(task["target_agent_role"]),
+            attempt,
+            task_id,
+            "runtime:1",
+            "specialist:1",
+            "model:1",
+            "tool:1",
+            "context:1",
+            "a" * 40,
+            str(task["context_snapshot_id"]),
+            (),
+        )
+    )
 
 
 def test_migration_creates_task_tables(mysql_engine: Engine) -> None:
@@ -104,7 +165,7 @@ def test_migration_creates_task_tables(mysql_engine: Engine) -> None:
                 )
             ).all()
         )
-    assert versions[-1] == "003_create_agent_task_lifecycle"
+    assert versions[-1] == "004_create_agent_execution_lifecycle"
     assert {
         "agent_tasks",
         "agent_task_dependencies",
@@ -193,6 +254,8 @@ def test_transition_retry_terminal_and_conflicts(mysql_engine: Engine) -> None:
     service = _service(mysql_engine)
     task_id = service.create_task(_create(run_id, "5")).task["identity"]["task_id"]
     exe1, exe2 = "EXE-" + "1" * 32, "EXE-" + "2" * 32
+    _seed_specialist_execution(mysql_engine, task_id, exe1, 1)
+    _seed_specialist_execution(mysql_engine, task_id, exe2, 2)
     first = service.transition_task(
         _transition(task_id, "5", TaskStatus.PENDING, 0, TaskStatus.RUNNING, exe1)
     )
@@ -232,6 +295,7 @@ def test_failure_message_600_characters_round_trips(mysql_engine: Engine) -> Non
     service = _service(mysql_engine)
     task_id = service.create_task(_create(run_id, "0")).task["identity"]["task_id"]
     execution_id = "EXE-" + "0" * 32
+    _seed_specialist_execution(mysql_engine, task_id, execution_id, 1)
     service.transition_task(
         _transition(
             task_id, "0", TaskStatus.PENDING, 0, TaskStatus.RUNNING, execution_id
@@ -260,6 +324,7 @@ def test_running_cancellation_retry_is_identical(mysql_engine: Engine) -> None:
     service = _service(mysql_engine)
     task_id = service.create_task(_create(run_id, "7")).task["identity"]["task_id"]
     execution = "EXE-" + "7" * 32
+    _seed_specialist_execution(mysql_engine, task_id, execution, 1)
     service.transition_task(
         _transition(task_id, "B", TaskStatus.PENDING, 0, TaskStatus.RUNNING, execution)
     )
@@ -274,6 +339,7 @@ def test_transition_history_failure_rolls_back_snapshot(mysql_engine: Engine) ->
     run_id = _run(mysql_engine, "5")
     service = _service(mysql_engine)
     task_id = service.create_task(_create(run_id, "A")).task["identity"]["task_id"]
+    _seed_specialist_execution(mysql_engine, task_id, "EXE-" + "3" * 32, 1)
 
     def fail(
         _c: object,
@@ -343,6 +409,7 @@ def test_concurrent_transitions_allow_one_winner(mysql_engine: Engine) -> None:
     run_id = _run(mysql_engine, "8")
     service = _service(mysql_engine)
     task_id = service.create_task(_create(run_id, "E")).task["identity"]["task_id"]
+    _seed_specialist_execution(mysql_engine, task_id, "EXE-" + "E" * 32, 1)
     commands = (
         _transition(
             task_id, "E", TaskStatus.PENDING, 0, TaskStatus.RUNNING, "EXE-" + "E" * 32
