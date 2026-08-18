@@ -4,6 +4,7 @@
 - 分支：`codex/retry-worker-task-execution`
 - worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\retry-worker-task-execution`
 - base：`d6011370e7e8f5b722ec7b5e7200049766277741`
+- implementation commit：`8ee70ee`
 - 状态：`review-handoff-ready`
 
 ## 范围与调用链
