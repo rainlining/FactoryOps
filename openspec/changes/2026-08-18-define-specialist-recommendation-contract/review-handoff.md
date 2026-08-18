@@ -5,6 +5,7 @@
 - worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\define-specialist-recommendation-contract`
 - stacked base：`2628b5cc306645e898cbed7e3a18159774bf5fd6`
 - upstream：`codex/retry-worker-task-execution`
+- implementation commit：`8960d19`
 - 状态：`review-handoff-ready`
 
 ## 范围与调用链
