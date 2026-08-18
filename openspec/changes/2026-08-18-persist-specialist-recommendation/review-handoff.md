@@ -5,6 +5,7 @@
 - worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-specialist-recommendation`
 - stacked base：`36bd13f0532ce6d6860b513fe9de90a20fb65678`
 - upstream：`codex/define-specialist-recommendation-contract`
+- implementation commit：`469e3be`
 - 状态：`review-handoff-ready`
 
 ## 范围与调用链
