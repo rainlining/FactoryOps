@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
@@ -310,6 +311,18 @@ class WorkerTaskExecutionService:
         )
         if any(not value or value != value.strip() for value in required):
             raise WorkerExecutionRejected("command fields must be non-blank")
+        version_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+        versions = (
+            command.runtime_version,
+            command.prompt_version,
+            command.model_policy_version,
+            command.tool_policy_version,
+            command.context_policy_version,
+        )
+        if any(version_pattern.fullmatch(value) is None for value in versions):
+            raise WorkerExecutionRejected("version fields violate Execution Contract")
+        if re.fullmatch(r"[0-9a-f]{7,64}", command.code_revision) is None:
+            raise WorkerExecutionRejected("code revision violates Execution Contract")
 
     def _now(self) -> datetime:
         value = self._clock()
