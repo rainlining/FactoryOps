@@ -14,6 +14,7 @@ MIGRATION_VERSIONS = (
     "007_create_worker_task_execution_requests",
     "008_create_worker_task_completion_requests",
     "009_create_worker_task_retry_requests",
+    "010_create_specialist_recommendations",
 )
 
 
