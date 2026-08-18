@@ -120,6 +120,7 @@ def test_migrations_create_run_lifecycle_schema(mysql_engine: Engine) -> None:
         "004_create_agent_execution_lifecycle",
         "005_create_coordinator_start_requests",
         "006_create_agent_task_leases",
+        "007_create_worker_task_execution_requests",
     ]
     assert {"agent_runs", "agent_run_transitions"} <= tables
     assert {
@@ -152,7 +153,7 @@ def test_migration_runner_is_idempotent(mysql_engine: Engine) -> None:
     with mysql_engine.connect() as connection:
         count = connection.scalar(text("SELECT COUNT(*) FROM agent_schema_history"))
 
-    assert count == 6
+    assert count == 7
 
 
 def test_migration_runner_upgrades_database_that_only_has_001() -> None:
@@ -211,6 +212,7 @@ def test_migration_runner_upgrades_database_that_only_has_001() -> None:
             "004_create_agent_execution_lifecycle",
             "005_create_coordinator_start_requests",
             "006_create_agent_task_leases",
+            "007_create_worker_task_execution_requests",
         ]
         assert run_table == 1
     finally:
