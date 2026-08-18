@@ -1,7 +1,7 @@
 # Change 提案：启动 Worker Task Execution
 
 - `change_id`: `2026-08-18-start-worker-task-execution`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-17-claim-agent-task-lease`
 - `feature_branch`: `codex/start-worker-task-execution`
