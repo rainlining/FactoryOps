@@ -18,4 +18,4 @@
 
 按 proposal/design → Schema 公共 envelope → 三个 role details → valid/invalid fixtures → `compute_recommendation_key` → `validate_recommendation` preflight/Schema/key/unique → canonical/relation → tests 阅读。重点复现 NaN、role mismatch、ground truth 和同 key conflicting。
 
-验证：局部 `16 passed`，全 Contract `115 passed`，Agent `144 passed`，Java `65 tests`，Schema/Ruff/diff/dataset 检查通过。Owner 修改：为 Production affected order refs 增加合法上界测试并解释唯一性。Failure exercise：给合法 Quality payload 注入 `expected_action`，预期 `schema_validation_failed` at `$.expected_action`。Review 期间禁止并发修改本 worktree；Deep Learning Gate 前不得归档或合并 main。
+验证：实现移交时局部 `16 passed`、全 Contract `115 passed`、Agent `144 passed`、Java `65 tests`；Review 收尾后局部 `17 passed`、全 Contract `116 passed`，Schema/Ruff/diff/dataset 检查通过。Owner 修改由 Codex 代做：Production affected order refs 的 64 项唯一上界被接受，重复项精确拒绝。Failure exercise 使用合法 SLA payload 注入 `expected_action`，实际得到 `schema_validation_failed` at `$.expected_action`。由于 Owner 修改不是项目所有者亲自完成，Deep Learning Gate 不自动通过。Review 期间禁止并发修改本 worktree。

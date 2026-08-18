@@ -128,6 +128,21 @@ def test_role_specific_boundaries_are_strict() -> None:
     )
 
 
+def test_production_affected_order_refs_accept_unique_upper_bound() -> None:
+    production = fixture("valid", "production.json")
+    details = production["details"]
+    assert isinstance(details, dict)
+    details["affected_order_refs"] = [f"order:WO-{index:02d}" for index in range(64)]
+
+    validate_recommendation(production)
+
+    details["affected_order_refs"][-1] = details["affected_order_refs"][0]
+    assert issue(production) == (
+        "duplicate_reference",
+        "$.details.affected_order_refs[63]",
+    )
+
+
 def test_relation_classifies_identical_conflicting_and_distinct() -> None:
     first = fixture("valid", "quality.json")
     assert (
