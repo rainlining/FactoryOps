@@ -1,0 +1,1 @@
+"""FactoryOps Specialist Recommendation Contract."""
