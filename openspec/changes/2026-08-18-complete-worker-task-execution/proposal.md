@@ -1,7 +1,7 @@
 # Change 提案：完成 Worker Task Execution
 
 - `change_id`: `2026-08-18-complete-worker-task-execution`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `standard`
 - `depends_on`: `2026-08-18-start-worker-task-execution`
 - `feature_branch`: `codex/complete-worker-task-execution`
