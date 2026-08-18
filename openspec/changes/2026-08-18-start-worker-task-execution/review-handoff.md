@@ -8,7 +8,7 @@
 
 ## 范围与调用链
 
-migration 007 建立 start request 幂等事实。入口 `worker_task_execution.py::WorkerTaskExecutionService.start`：写前 Contract 校验 → request 查重 → Task 行锁 → request 并发重查 → lease 行锁 → dependency readiness → Execution snapshot/history → Task snapshot/history → request fact → commit。
+migration 007 建立 start request 幂等事实。入口 `worker_task_execution.py::WorkerTaskExecutionService.start`：写前 Contract 校验 → request-key advisory lock → request 查重 → Task 行锁 → lease 行锁 → dependency readiness → Execution snapshot/history → Task snapshot/history → request fact → commit → finally 释放 advisory lock。
 
 失败链：空/非法 provenance、错误或过期 lease、非 PENDING Task、未完成依赖、并发条件失败均拒绝；任一 SQL/history 失败整体回滚。lease token 只进入 SHA-256 command fingerprint，不明文保存到 request 表。
 
@@ -16,6 +16,8 @@ migration 007 建立 start request 幂等事实。入口 `worker_task_execution.
 
 ## Review 路线
 
-按 proposal/design → migration 007 → command/result → `start` 锁与重查 → `_insert_running_execution` → `_start_task` → replay/rollback 测试阅读。真实验证：局部 4、Agent 127、Contract 99、Java 65、Ruff/diff 全绿。
+按 proposal/design → migration 007 → command/result → `start` advisory/行锁 → `_insert_running_execution` → `_start_task` → 并发 replay/rollback 测试阅读。Review Important 已修复：跨 Task 同 request 不再泄漏数据库异常。最新局部验证为 6 passed；全量结果见 verification。
+
+最新真实验证：Start 局部 6、相关 MySQL 45、Agent 129、Contract 99、Java 65、Ruff/diff 全绿。
 
 Owner 修改：把测试中的合法 `runtime-v1` 改为另一个非空版本并确认数据库原样持久化。Failure exercise：注入 Execution history 失败，确认 Task 保持 PENDING，Execution/request 不存在。完成 Deep Learning Gate 前不得归档或合并 main；Review 期间禁止并发修改该 worktree。

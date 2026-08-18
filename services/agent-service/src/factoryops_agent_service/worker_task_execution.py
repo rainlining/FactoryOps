@@ -78,79 +78,99 @@ class WorkerTaskExecutionService:
         self._validate_command(command)
         now = self._now()
         command_hash = self._hash(command)
-        with self._engine.begin() as connection:
-            replay = self._find_start_request(connection, command.request_id)
-            if replay is not None:
-                return self._classify(replay, command_hash)
-
-            task = self._lock_task(connection, command.task_id)
-            replay = self._find_start_request(connection, command.request_id)
-            if replay is not None:
-                return self._classify(replay, command_hash)
-            lease = self._lock_lease(connection, command.task_id)
-            if task is None:
-                raise WorkerExecutionRejected("Task does not exist")
-            if task["status"] != "PENDING" or task["revision"] != 0:
-                raise WorkerExecutionRejected("Task is not PENDING")
-            if (
-                lease is None
-                or lease["owner_id"] != command.owner_id
-                or lease["lease_token"] != command.lease_token
-                or self._utc(lease["expires_at"]) <= now
-            ):
-                raise WorkerExecutionRejected("lease is missing, stale, or expired")
-            if connection.scalar(
-                text(
-                    """SELECT COUNT(*) FROM agent_task_dependencies d
-                    JOIN agent_tasks dependency ON dependency.task_id=d.dependency_task_id
-                    WHERE d.task_id=:task AND dependency.status<>'SUCCEEDED'"""
-                ),
-                {"task": command.task_id},
-            ):
-                raise WorkerExecutionRejected("Task dependencies are not satisfied")
-
-            execution_id = self._execution_id_factory()
-            attempt = int(task["attempt_count"]) + 1
-            execution = {
-                "execution_id": execution_id,
-                "execution_key": compute_execution_key(
-                    str(task["run_id"]),
-                    str(task["target_agent_role"]),
-                    command.task_id,
-                    attempt,
-                ),
-                "run_id": task["run_id"],
-                "agent_role": task["target_agent_role"],
-                "attempt": attempt,
-                "task_id": command.task_id,
-                "runtime_version": command.runtime_version,
-                "prompt_version": command.prompt_version,
-                "model_policy_version": command.model_policy_version,
-                "tool_policy_version": command.tool_policy_version,
-                "context_policy_version": command.context_policy_version,
-                "code_revision": command.code_revision,
-                "context_snapshot_id": task["context_snapshot_id"],
-                "input_evidence_refs": task["evidence_refs"],
-                "now": now,
-            }
-            self._insert_running_execution(connection, execution, command.owner_id)
-            self._start_task(
-                connection, task, execution_id, attempt, command.owner_id, now
+        lock_name = (
+            "worker-start:"
+            + hashlib.sha256(command.request_id.encode()).hexdigest()[:51]
+        )
+        with self._engine.connect() as connection:
+            acquired = connection.scalar(
+                text("SELECT GET_LOCK(:name, 10)"), {"name": lock_name}
             )
-            connection.execute(
-                text(
-                    """INSERT INTO worker_task_execution_start_requests
-                    (request_id,command_hash,task_id,execution_id,created_at)
-                    VALUES (:request,:hash,:task,:execution,:now)"""
-                ),
-                {
-                    "request": command.request_id,
-                    "hash": command_hash,
-                    "task": command.task_id,
-                    "execution": execution_id,
-                    "now": now,
-                },
-            )
+            connection.commit()
+            if acquired != 1:
+                raise WorkerExecutionRejected("request admission lock timed out")
+            try:
+                with connection.begin():
+                    replay = self._find_start_request(connection, command.request_id)
+                    if replay is not None:
+                        return self._classify(replay, command_hash)
+
+                    task = self._lock_task(connection, command.task_id)
+                    lease = self._lock_lease(connection, command.task_id)
+                    if task is None:
+                        raise WorkerExecutionRejected("Task does not exist")
+                    if task["status"] != "PENDING" or task["revision"] != 0:
+                        raise WorkerExecutionRejected("Task is not PENDING")
+                    if (
+                        lease is None
+                        or lease["owner_id"] != command.owner_id
+                        or lease["lease_token"] != command.lease_token
+                        or self._utc(lease["expires_at"]) <= now
+                    ):
+                        raise WorkerExecutionRejected(
+                            "lease is missing, stale, or expired"
+                        )
+                    if connection.scalar(
+                        text(
+                            """SELECT COUNT(*) FROM agent_task_dependencies d
+                            JOIN agent_tasks dependency ON dependency.task_id=d.dependency_task_id
+                            WHERE d.task_id=:task AND dependency.status<>'SUCCEEDED'"""
+                        ),
+                        {"task": command.task_id},
+                    ):
+                        raise WorkerExecutionRejected(
+                            "Task dependencies are not satisfied"
+                        )
+
+                    execution_id = self._execution_id_factory()
+                    attempt = int(task["attempt_count"]) + 1
+                    execution = {
+                        "execution_id": execution_id,
+                        "execution_key": compute_execution_key(
+                            str(task["run_id"]),
+                            str(task["target_agent_role"]),
+                            command.task_id,
+                            attempt,
+                        ),
+                        "run_id": task["run_id"],
+                        "agent_role": task["target_agent_role"],
+                        "attempt": attempt,
+                        "task_id": command.task_id,
+                        "runtime_version": command.runtime_version,
+                        "prompt_version": command.prompt_version,
+                        "model_policy_version": command.model_policy_version,
+                        "tool_policy_version": command.tool_policy_version,
+                        "context_policy_version": command.context_policy_version,
+                        "code_revision": command.code_revision,
+                        "context_snapshot_id": task["context_snapshot_id"],
+                        "input_evidence_refs": task["evidence_refs"],
+                        "now": now,
+                    }
+                    self._insert_running_execution(
+                        connection, execution, command.owner_id
+                    )
+                    self._start_task(
+                        connection, task, execution_id, attempt, command.owner_id, now
+                    )
+                    connection.execute(
+                        text(
+                            """INSERT INTO worker_task_execution_start_requests
+                            (request_id,command_hash,task_id,execution_id,created_at)
+                            VALUES (:request,:hash,:task,:execution,:now)"""
+                        ),
+                        {
+                            "request": command.request_id,
+                            "hash": command_hash,
+                            "task": command.task_id,
+                            "execution": execution_id,
+                            "now": now,
+                        },
+                    )
+            finally:
+                connection.execute(
+                    text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                )
+                connection.commit()
         return WorkerExecutionResult(
             WorkerExecutionOutcome.APPLIED, command.task_id, execution_id
         )
