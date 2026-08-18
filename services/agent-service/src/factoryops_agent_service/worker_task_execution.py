@@ -44,6 +44,18 @@ class WorkerExecutionResult:
     execution_id: str | None
 
 
+@dataclass(frozen=True)
+class CompleteWorkerExecutionCommand:
+    request_id: str
+    task_id: str
+    execution_id: str
+    owner_id: str
+    lease_token: str
+    final_status: str
+    result: Mapping[str, object] | None = None
+    failure: Mapping[str, object] | None = None
+
+
 def _new_id(prefix: str) -> str:
     return prefix + uuid.uuid4().hex.upper()
 
@@ -161,6 +173,229 @@ class WorkerTaskExecutionService:
                 connection.commit()
         return WorkerExecutionResult(
             WorkerExecutionOutcome.APPLIED, command.task_id, execution_id
+        )
+
+    def complete(
+        self, command: CompleteWorkerExecutionCommand
+    ) -> WorkerExecutionResult:
+        self._validate_completion(command)
+        now = self._now()
+        command_hash = self._completion_hash(command)
+        lock_name = (
+            "worker-complete:"
+            + hashlib.sha256(command.request_id.encode()).hexdigest()[:48]
+        )
+        with self._engine.connect() as connection:
+            acquired = connection.scalar(
+                text("SELECT GET_LOCK(:name, 10)"), {"name": lock_name}
+            )
+            connection.commit()
+            if acquired != 1:
+                raise WorkerExecutionRejected("request admission lock timed out")
+            try:
+                with connection.begin():
+                    replay = self._find_completion_request(
+                        connection, command.request_id
+                    )
+                    if replay is not None:
+                        return self._classify(replay, command_hash)
+                    task = self._lock_task(connection, command.task_id)
+                    lease = self._lock_lease(connection, command.task_id)
+                    execution = (
+                        connection.execute(
+                            text(
+                                "SELECT * FROM agent_executions WHERE execution_id=:execution FOR UPDATE"
+                            ),
+                            {"execution": command.execution_id},
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                    if task is None or execution is None:
+                        raise WorkerExecutionRejected(
+                            "Task or Execution does not exist"
+                        )
+                    if (
+                        task["status"] != "RUNNING"
+                        or task["current_execution_id"] != command.execution_id
+                        or execution["status"] != "RUNNING"
+                        or execution["task_id"] != command.task_id
+                        or execution["run_id"] != task["run_id"]
+                    ):
+                        raise WorkerExecutionRejected(
+                            "Task and Execution are not current RUNNING pair"
+                        )
+                    if (
+                        lease is None
+                        or lease["owner_id"] != command.owner_id
+                        or lease["lease_token"] != command.lease_token
+                        or self._utc(lease["expires_at"]) <= now
+                    ):
+                        raise WorkerExecutionRejected(
+                            "lease is missing, stale, or expired"
+                        )
+
+                    self._finish_execution(connection, execution, command, now)
+                    self._finish_task(connection, task, command, now)
+                    deleted = connection.execute(
+                        text(
+                            """DELETE FROM agent_task_leases WHERE task_id=:task AND owner_id=:owner
+                            AND lease_token=:token AND expires_at>:now"""
+                        ),
+                        {
+                            "task": command.task_id,
+                            "owner": command.owner_id,
+                            "token": command.lease_token,
+                            "now": now,
+                        },
+                    )
+                    if deleted.rowcount != 1:
+                        raise WorkerExecutionRejected("lease changed concurrently")
+                    connection.execute(
+                        text(
+                            """INSERT INTO worker_task_execution_completion_requests
+                            (request_id,command_hash,task_id,execution_id,final_status,created_at)
+                            VALUES (:request,:hash,:task,:execution,:status,:now)"""
+                        ),
+                        {
+                            "request": command.request_id,
+                            "hash": command_hash,
+                            "task": command.task_id,
+                            "execution": command.execution_id,
+                            "status": command.final_status,
+                            "now": now,
+                        },
+                    )
+            finally:
+                connection.execute(
+                    text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                )
+                connection.commit()
+        return WorkerExecutionResult(
+            WorkerExecutionOutcome.APPLIED, command.task_id, command.execution_id
+        )
+
+    def _finish_execution(
+        self,
+        connection: Connection,
+        execution: Mapping[str, object],
+        command: CompleteWorkerExecutionCommand,
+        now: datetime,
+    ) -> None:
+        result = command.result
+        failure = command.failure
+        updated = connection.execute(
+            text(
+                """UPDATE agent_executions SET status=:status,revision=2,updated_at=:now,ended_at=:now,
+                status_reason_code=:reason,status_reason_message=NULL,output_artifact_refs=:artifacts,
+                decision_id=:decision,result_evidence_refs=:evidence,failure_code=:failure_code,
+                failure_message=:failure_message,failure_recoverability=:recoverability,
+                failed_dependency_ref=:dependency WHERE execution_id=:execution AND status='RUNNING' AND revision=1"""
+            ),
+            {
+                "status": command.final_status,
+                "now": now,
+                "reason": "WORKER_COMPLETED" if result else "WORKER_FAILED",
+                "artifacts": json.dumps(result["output_artifact_refs"])
+                if result
+                else None,
+                "decision": result.get("decision_id") if result else None,
+                "evidence": json.dumps(result["evidence_refs"]) if result else None,
+                "failure_code": failure["code"] if failure else None,
+                "failure_message": failure["message"] if failure else None,
+                "recoverability": failure["recoverability"] if failure else None,
+                "dependency": failure.get("failed_dependency_ref") if failure else None,
+                "execution": command.execution_id,
+            },
+        )
+        if updated.rowcount != 1:
+            raise WorkerExecutionRejected("Execution changed concurrently")
+        self._insert_completion_history(connection, execution, command, now)
+
+    def _insert_completion_history(
+        self,
+        connection: Connection,
+        execution: Mapping[str, object],
+        command: CompleteWorkerExecutionCommand,
+        now: datetime,
+    ) -> None:
+        connection.execute(
+            text(
+                """INSERT INTO agent_execution_transitions(transition_id,transition_request_id,execution_id,from_status,
+                to_status,from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,result_json,failure_json,occurred_at)
+                VALUES (:transition,:request,:execution,'RUNNING',:status,1,2,'WORKER',:owner,:reason,NULL,:result,:failure,:now)"""
+            ),
+            {
+                "transition": self._transition_id_factory(),
+                "request": _new_id("ERQ-"),
+                "execution": execution["execution_id"],
+                "status": command.final_status,
+                "owner": command.owner_id,
+                "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "result": json.dumps(command.result, sort_keys=True)
+                if command.result
+                else None,
+                "failure": json.dumps(command.failure, sort_keys=True)
+                if command.failure
+                else None,
+                "now": now,
+            },
+        )
+
+    def _finish_task(
+        self,
+        connection: Connection,
+        task: Mapping[str, object],
+        command: CompleteWorkerExecutionCommand,
+        now: datetime,
+    ) -> None:
+        failure = command.failure
+        updated = connection.execute(
+            text(
+                """UPDATE agent_tasks SET status=:status,revision=2,updated_at=:now,ended_at=:now,
+                status_reason_code=:reason,status_reason_message=NULL,completion_execution_id=:completion,
+                failure_execution_id=:failure_execution,failure_code=:failure_code,failure_message=:failure_message,
+                failure_recoverability=:recoverability WHERE task_id=:task AND status='RUNNING' AND revision=1
+                AND current_execution_id=:execution"""
+            ),
+            {
+                "status": command.final_status,
+                "now": now,
+                "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "completion": command.execution_id if command.result else None,
+                "failure_execution": command.execution_id if failure else None,
+                "failure_code": failure["code"] if failure else None,
+                "failure_message": failure["message"] if failure else None,
+                "recoverability": failure["recoverability"] if failure else None,
+                "task": command.task_id,
+                "execution": command.execution_id,
+            },
+        )
+        if updated.rowcount != 1:
+            raise WorkerExecutionRejected("Task changed concurrently")
+        connection.execute(
+            text(
+                """INSERT INTO agent_task_transitions(transition_id,transition_request_id,task_id,from_status,to_status,
+                from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
+                completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
+                VALUES (:transition,:request,:task,'RUNNING',:status,1,2,'WORKER',:owner,:reason,NULL,:execution,
+                :attempt,:completion,:failure_code,:failure_message,:recoverability,:now)"""
+            ),
+            {
+                "transition": self._transition_id_factory(),
+                "request": _new_id("TRQ-"),
+                "task": command.task_id,
+                "status": command.final_status,
+                "owner": command.owner_id,
+                "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "execution": command.execution_id,
+                "attempt": task["attempt_count"],
+                "completion": command.execution_id if command.result else None,
+                "failure_code": failure["code"] if failure else None,
+                "failure_message": failure["message"] if failure else None,
+                "recoverability": failure["recoverability"] if failure else None,
+                "now": now,
+            },
         )
 
     def _insert_running_execution(
@@ -299,6 +534,21 @@ class WorkerTaskExecutionService:
         )
 
     @staticmethod
+    def _find_completion_request(
+        connection: Connection, request_id: str
+    ) -> Mapping[str, object] | None:
+        return (
+            connection.execute(
+                text(
+                    "SELECT * FROM worker_task_execution_completion_requests WHERE request_id=:request FOR UPDATE"
+                ),
+                {"request": request_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    @staticmethod
     def _classify(
         row: Mapping[str, object], command_hash: str
     ) -> WorkerExecutionResult:
@@ -343,6 +593,96 @@ class WorkerTaskExecutionService:
             raise WorkerExecutionRejected("version fields violate Execution Contract")
         if re.fullmatch(r"[0-9a-f]{7,64}", command.code_revision) is None:
             raise WorkerExecutionRejected("code revision violates Execution Contract")
+
+    @staticmethod
+    def _completion_hash(command: CompleteWorkerExecutionCommand) -> str:
+        payload = json.dumps(asdict(command), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    @staticmethod
+    def _validate_completion(command: CompleteWorkerExecutionCommand) -> None:
+        required = (
+            command.request_id,
+            command.task_id,
+            command.execution_id,
+            command.owner_id,
+            command.lease_token,
+        )
+        if any(not value or value != value.strip() for value in required):
+            raise WorkerExecutionRejected("command fields must be non-blank")
+        if command.final_status == "SUCCEEDED":
+            if command.result is None or command.failure is not None:
+                raise WorkerExecutionRejected("SUCCEEDED requires only result")
+            if set(command.result) != {
+                "output_artifact_refs",
+                "decision_id",
+                "evidence_refs",
+            }:
+                raise WorkerExecutionRejected(
+                    "result fields violate Execution Contract"
+                )
+            artifacts = command.result["output_artifact_refs"]
+            evidence = command.result["evidence_refs"]
+            if (
+                not isinstance(artifacts, (list, tuple))
+                or not 1 <= len(artifacts) <= 64
+            ):
+                raise WorkerExecutionRejected(
+                    "result artifacts violate Execution Contract"
+                )
+            if not isinstance(evidence, (list, tuple)) or len(evidence) > 64:
+                raise WorkerExecutionRejected(
+                    "result evidence violates Execution Contract"
+                )
+            if not WorkerTaskExecutionService._valid_refs((*artifacts, *evidence)):
+                raise WorkerExecutionRejected(
+                    "result references violate Execution Contract"
+                )
+            decision = command.result["decision_id"]
+            if (
+                decision is not None
+                and re.fullmatch(r"DEC-[0-9A-F]{32}", str(decision)) is None
+            ):
+                raise WorkerExecutionRejected("decision ID violates Execution Contract")
+        elif command.final_status == "FAILED":
+            if command.failure is None or command.result is not None:
+                raise WorkerExecutionRejected("FAILED requires only failure")
+            if set(command.failure) != {
+                "code",
+                "message",
+                "recoverability",
+                "failed_dependency_ref",
+            }:
+                raise WorkerExecutionRejected(
+                    "failure fields violate Execution Contract"
+                )
+            if (
+                re.fullmatch(
+                    r"[A-Z][A-Z0-9_]{2,127}",
+                    str(command.failure.get("code", "")),
+                )
+                is None
+                or not 1 <= len(str(command.failure.get("message", ""))) <= 600
+                or command.failure.get("recoverability") != "non_retryable"
+            ):
+                raise WorkerExecutionRejected("Task failure must be non_retryable")
+            dependency = command.failure["failed_dependency_ref"]
+            if dependency is not None and not WorkerTaskExecutionService._valid_refs(
+                (dependency,)
+            ):
+                raise WorkerExecutionRejected(
+                    "failure reference violates Execution Contract"
+                )
+        else:
+            raise WorkerExecutionRejected("final status must be SUCCEEDED or FAILED")
+
+    @staticmethod
+    def _valid_refs(refs: tuple[object, ...]) -> bool:
+        pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,254}$")
+        values = tuple(str(ref) for ref in refs)
+        return len(values) == len(set(values)) and all(
+            isinstance(ref, str) and pattern.fullmatch(ref) is not None for ref in refs
+        )
 
     def _now(self) -> datetime:
         value = self._clock()

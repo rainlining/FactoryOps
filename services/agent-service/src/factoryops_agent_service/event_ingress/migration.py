@@ -12,6 +12,7 @@ MIGRATION_VERSIONS = (
     "005_create_coordinator_start_requests",
     "006_create_agent_task_leases",
     "007_create_worker_task_execution_requests",
+    "008_create_worker_task_completion_requests",
 )
 
 
