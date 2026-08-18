@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from typing import ClassVar
 
 from contracts.agent_execution.validator import compute_execution_key
 from sqlalchemy import Connection, Engine, text
@@ -56,11 +57,37 @@ class CompleteWorkerExecutionCommand:
     failure: Mapping[str, object] | None = None
 
 
+@dataclass(frozen=True)
+class RetryWorkerExecutionCommand:
+    request_id: str
+    task_id: str
+    execution_id: str
+    owner_id: str
+    lease_token: str
+    failure: Mapping[str, object]
+    max_attempts: int
+    runtime_version: str
+    prompt_version: str
+    model_policy_version: str
+    tool_policy_version: str
+    context_policy_version: str
+    code_revision: str
+
+
 def _new_id(prefix: str) -> str:
     return prefix + uuid.uuid4().hex.upper()
 
 
 class WorkerTaskExecutionService:
+    SAFE_RETRY_CODES: ClassVar[frozenset[str]] = frozenset(
+        {
+            "MODEL_TIMEOUT",
+            "TOOL_TIMEOUT",
+            "TRANSIENT_UPSTREAM",
+            "RATE_LIMITED",
+        }
+    )
+
     def __init__(
         self,
         engine: Engine,
@@ -275,6 +302,216 @@ class WorkerTaskExecutionService:
             WorkerExecutionOutcome.APPLIED, command.task_id, command.execution_id
         )
 
+    def retry(self, command: RetryWorkerExecutionCommand) -> WorkerExecutionResult:
+        self._validate_retry(command)
+        now = self._now()
+        command_hash = self._retry_hash(command)
+        lock_name = (
+            "worker-retry:"
+            + hashlib.sha256(command.request_id.encode()).hexdigest()[:51]
+        )
+        with self._engine.connect() as connection:
+            acquired = connection.scalar(
+                text("SELECT GET_LOCK(:name, 10)"), {"name": lock_name}
+            )
+            connection.commit()
+            if acquired != 1:
+                raise WorkerExecutionRejected("request admission lock timed out")
+            try:
+                with connection.begin():
+                    replay = self._find_retry_request(connection, command.request_id)
+                    if replay is not None:
+                        return self._classify_retry(replay, command_hash)
+                    task = self._lock_task(connection, command.task_id)
+                    lease = self._lock_lease(connection, command.task_id)
+                    execution = (
+                        connection.execute(
+                            text(
+                                "SELECT * FROM agent_executions WHERE execution_id=:execution FOR UPDATE"
+                            ),
+                            {"execution": command.execution_id},
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                    if task is None or execution is None:
+                        raise WorkerExecutionRejected(
+                            "Task or Execution does not exist"
+                        )
+                    if (
+                        task["status"] != "RUNNING"
+                        or task["current_execution_id"] != command.execution_id
+                        or execution["status"] != "RUNNING"
+                        or execution["task_id"] != command.task_id
+                        or execution["run_id"] != task["run_id"]
+                    ):
+                        raise WorkerExecutionRejected(
+                            "Task and Execution are not current RUNNING pair"
+                        )
+                    if (
+                        lease is None
+                        or lease["owner_id"] != command.owner_id
+                        or lease["lease_token"] != command.lease_token
+                        or self._utc(lease["expires_at"]) <= now
+                    ):
+                        raise WorkerExecutionRejected(
+                            "lease is missing, stale, or expired"
+                        )
+                    attempt = int(execution["attempt"])
+                    if attempt >= command.max_attempts:
+                        raise WorkerExecutionRejected(
+                            "retry attempt budget is exhausted"
+                        )
+
+                    self._fail_retryable_execution(connection, execution, command, now)
+                    new_execution_id = self._execution_id_factory()
+                    new_attempt = attempt + 1
+                    new_execution = {
+                        "execution_id": new_execution_id,
+                        "execution_key": compute_execution_key(
+                            str(task["run_id"]),
+                            str(task["target_agent_role"]),
+                            command.task_id,
+                            new_attempt,
+                        ),
+                        "run_id": task["run_id"],
+                        "agent_role": task["target_agent_role"],
+                        "attempt": new_attempt,
+                        "task_id": command.task_id,
+                        "runtime_version": command.runtime_version,
+                        "prompt_version": command.prompt_version,
+                        "model_policy_version": command.model_policy_version,
+                        "tool_policy_version": command.tool_policy_version,
+                        "context_policy_version": command.context_policy_version,
+                        "code_revision": command.code_revision,
+                        "context_snapshot_id": task["context_snapshot_id"],
+                        "input_evidence_refs": task["evidence_refs"],
+                        "now": now,
+                    }
+                    self._insert_running_execution(
+                        connection, new_execution, command.owner_id
+                    )
+                    self._retry_task(
+                        connection,
+                        task,
+                        new_execution_id,
+                        new_attempt,
+                        command.owner_id,
+                        now,
+                    )
+                    connection.execute(
+                        text(
+                            """INSERT INTO worker_task_execution_retry_requests
+                            (request_id,command_hash,task_id,failed_execution_id,new_execution_id,created_at)
+                            VALUES (:request,:hash,:task,:failed,:new,:now)"""
+                        ),
+                        {
+                            "request": command.request_id,
+                            "hash": command_hash,
+                            "task": command.task_id,
+                            "failed": command.execution_id,
+                            "new": new_execution_id,
+                            "now": now,
+                        },
+                    )
+            finally:
+                connection.execute(
+                    text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                )
+                connection.commit()
+        return WorkerExecutionResult(
+            WorkerExecutionOutcome.APPLIED, command.task_id, new_execution_id
+        )
+
+    def _fail_retryable_execution(
+        self,
+        connection: Connection,
+        execution: Mapping[str, object],
+        command: RetryWorkerExecutionCommand,
+        now: datetime,
+    ) -> None:
+        failure = command.failure
+        updated = connection.execute(
+            text(
+                """UPDATE agent_executions SET status='FAILED',revision=2,updated_at=:now,ended_at=:now,
+                status_reason_code='WORKER_RETRY',failure_code=:code,failure_message=:message,
+                failure_recoverability='retryable',failed_dependency_ref=:dependency
+                WHERE execution_id=:execution AND status='RUNNING' AND revision=1"""
+            ),
+            {
+                "now": now,
+                "code": failure["code"],
+                "message": failure["message"],
+                "dependency": failure["failed_dependency_ref"],
+                "execution": command.execution_id,
+            },
+        )
+        if updated.rowcount != 1:
+            raise WorkerExecutionRejected("Execution changed concurrently")
+        connection.execute(
+            text(
+                """INSERT INTO agent_execution_transitions(transition_id,transition_request_id,execution_id,from_status,
+                to_status,from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,result_json,failure_json,occurred_at)
+                VALUES (:transition,:request,:execution,'RUNNING','FAILED',1,2,'WORKER',:owner,'WORKER_RETRY',NULL,NULL,:failure,:now)"""
+            ),
+            {
+                "transition": self._transition_id_factory(),
+                "request": _new_id("ERQ-"),
+                "execution": command.execution_id,
+                "owner": command.owner_id,
+                "failure": json.dumps(command.failure, sort_keys=True),
+                "now": now,
+            },
+        )
+
+    def _retry_task(
+        self,
+        connection: Connection,
+        task: Mapping[str, object],
+        execution_id: str,
+        attempt: int,
+        owner_id: str,
+        now: datetime,
+    ) -> None:
+        from_revision = int(task["revision"])
+        updated = connection.execute(
+            text(
+                """UPDATE agent_tasks SET revision=:revision,updated_at=:now,status_reason_code='WORKER_RETRY',
+                status_reason_message=NULL,current_execution_id=:execution,attempt_count=:attempt
+                WHERE task_id=:task AND status='RUNNING' AND revision=:from_revision"""
+            ),
+            {
+                "revision": from_revision + 1,
+                "now": now,
+                "execution": execution_id,
+                "attempt": attempt,
+                "task": task["task_id"],
+                "from_revision": from_revision,
+            },
+        )
+        if updated.rowcount != 1:
+            raise WorkerExecutionRejected("Task changed concurrently")
+        connection.execute(
+            text(
+                """INSERT INTO agent_task_transitions(transition_id,transition_request_id,task_id,from_status,to_status,
+                from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
+                completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
+                VALUES (:transition,:request,:task,'RUNNING','RUNNING',:from_revision,:to_revision,'WORKER',:owner,
+                'WORKER_RETRY',NULL,:execution,:attempt,NULL,NULL,NULL,NULL,:now)"""
+            ),
+            {
+                "transition": self._transition_id_factory(),
+                "request": _new_id("TRQ-"),
+                "task": task["task_id"],
+                "from_revision": from_revision,
+                "to_revision": from_revision + 1,
+                "owner": owner_id,
+                "execution": execution_id,
+                "attempt": attempt,
+                "now": now,
+            },
+        )
+
     def _finish_execution(
         self,
         connection: Connection,
@@ -350,16 +587,19 @@ class WorkerTaskExecutionService:
         now: datetime,
     ) -> None:
         failure = command.failure
+        from_revision = int(task["revision"])
         updated = connection.execute(
             text(
-                """UPDATE agent_tasks SET status=:status,revision=2,updated_at=:now,ended_at=:now,
+                """UPDATE agent_tasks SET status=:status,revision=:to_revision,updated_at=:now,ended_at=:now,
                 status_reason_code=:reason,status_reason_message=NULL,completion_execution_id=:completion,
                 failure_execution_id=:failure_execution,failure_code=:failure_code,failure_message=:failure_message,
-                failure_recoverability=:recoverability WHERE task_id=:task AND status='RUNNING' AND revision=1
+                failure_recoverability=:recoverability WHERE task_id=:task AND status='RUNNING' AND revision=:from_revision
                 AND current_execution_id=:execution"""
             ),
             {
                 "status": command.final_status,
+                "from_revision": from_revision,
+                "to_revision": from_revision + 1,
                 "now": now,
                 "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
                 "completion": command.execution_id if command.result else None,
@@ -378,7 +618,7 @@ class WorkerTaskExecutionService:
                 """INSERT INTO agent_task_transitions(transition_id,transition_request_id,task_id,from_status,to_status,
                 from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
                 completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
-                VALUES (:transition,:request,:task,'RUNNING',:status,1,2,'WORKER',:owner,:reason,NULL,:execution,
+                VALUES (:transition,:request,:task,'RUNNING',:status,:from_revision,:to_revision,'WORKER',:owner,:reason,NULL,:execution,
                 :attempt,:completion,:failure_code,:failure_message,:recoverability,:now)"""
             ),
             {
@@ -386,6 +626,8 @@ class WorkerTaskExecutionService:
                 "request": _new_id("TRQ-"),
                 "task": command.task_id,
                 "status": command.final_status,
+                "from_revision": from_revision,
+                "to_revision": from_revision + 1,
                 "owner": command.owner_id,
                 "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
                 "execution": command.execution_id,
@@ -549,6 +791,21 @@ class WorkerTaskExecutionService:
         )
 
     @staticmethod
+    def _find_retry_request(
+        connection: Connection, request_id: str
+    ) -> Mapping[str, object] | None:
+        return (
+            connection.execute(
+                text(
+                    "SELECT * FROM worker_task_execution_retry_requests WHERE request_id=:request FOR UPDATE"
+                ),
+                {"request": request_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    @staticmethod
     def _classify(
         row: Mapping[str, object], command_hash: str
     ) -> WorkerExecutionResult:
@@ -558,6 +815,18 @@ class WorkerTaskExecutionService:
             else WorkerExecutionOutcome.DUPLICATE_CONFLICTING,
             str(row["task_id"]),
             str(row["execution_id"]),
+        )
+
+    @staticmethod
+    def _classify_retry(
+        row: Mapping[str, object], command_hash: str
+    ) -> WorkerExecutionResult:
+        return WorkerExecutionResult(
+            WorkerExecutionOutcome.DUPLICATE_IDENTICAL
+            if row["command_hash"] == command_hash
+            else WorkerExecutionOutcome.DUPLICATE_CONFLICTING,
+            str(row["task_id"]),
+            str(row["new_execution_id"]),
         )
 
     @staticmethod
@@ -598,6 +867,61 @@ class WorkerTaskExecutionService:
     def _completion_hash(command: CompleteWorkerExecutionCommand) -> str:
         payload = json.dumps(asdict(command), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode()).hexdigest()
+
+    @staticmethod
+    def _retry_hash(command: RetryWorkerExecutionCommand) -> str:
+        payload = json.dumps(asdict(command), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    @classmethod
+    def _validate_retry(cls, command: RetryWorkerExecutionCommand) -> None:
+        required = (
+            command.request_id,
+            command.task_id,
+            command.execution_id,
+            command.owner_id,
+            command.lease_token,
+            command.runtime_version,
+            command.prompt_version,
+            command.model_policy_version,
+            command.tool_policy_version,
+            command.context_policy_version,
+            command.code_revision,
+        )
+        if any(not value or value != value.strip() for value in required):
+            raise WorkerExecutionRejected("command fields must be non-blank")
+        if not 2 <= command.max_attempts <= 10:
+            raise WorkerExecutionRejected("max attempts must be between 2 and 10")
+        if set(command.failure) != {
+            "code",
+            "message",
+            "recoverability",
+            "failed_dependency_ref",
+        }:
+            raise WorkerExecutionRejected("failure fields violate Execution Contract")
+        if (
+            command.failure["code"] not in cls.SAFE_RETRY_CODES
+            or command.failure["recoverability"] != "retryable"
+            or not 1 <= len(str(command.failure["message"])) <= 600
+        ):
+            raise WorkerExecutionRejected("failure is not safely retryable")
+        dependency = command.failure["failed_dependency_ref"]
+        if dependency is not None and not cls._valid_refs((dependency,)):
+            raise WorkerExecutionRejected(
+                "failure reference violates Execution Contract"
+            )
+        version_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+        versions = (
+            command.runtime_version,
+            command.prompt_version,
+            command.model_policy_version,
+            command.tool_policy_version,
+            command.context_policy_version,
+        )
+        if any(version_pattern.fullmatch(value) is None for value in versions):
+            raise WorkerExecutionRejected("version fields violate Execution Contract")
+        if re.fullmatch(r"[0-9a-f]{7,64}", command.code_revision) is None:
+            raise WorkerExecutionRejected("code revision violates Execution Contract")
 
     @staticmethod
     def _validate_completion(command: CompleteWorkerExecutionCommand) -> None:
