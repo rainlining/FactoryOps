@@ -18,3 +18,7 @@ migration 008 建立 completion request 幂等事实。入口 `WorkerTaskExecuti
 按 proposal/design → migration 008 → `CompleteWorkerExecutionCommand` → `_validate_completion` → `complete` advisory/行锁顺序 → `_finish_execution` → `_finish_task` → 并发 completion tests 阅读。Review Important 已修复；最新 completion 局部为 7 passed，最终 stacked 数字见 verification。
 
 Standard Review 需实际检查成功或失败路径的双方 revision 2、history 与 lease 删除，并解释为何 retryable failure 不在本 Change。非目标包括自动 retry、新 attempt、LLM/Tool、heartbeat、Checkpoint、Java API、Evaluation 和 `dataset/`。Review 期间禁止并发修改本 worktree；验收前不得归档或合并 main。
+
+## 归档结果
+
+项目所有者于 2026-08-18 确认可以归档；上述禁止归档文字是 handoff 阶段的历史约束。实现经 `a397ffb` 合入 `main`，规格已归并到 `openspec/specs/worker-task-execution-completion/`。

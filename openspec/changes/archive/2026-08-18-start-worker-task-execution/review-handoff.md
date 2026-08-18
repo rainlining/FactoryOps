@@ -21,3 +21,7 @@ migration 007 建立 start request 幂等事实。入口 `worker_task_execution.
 最新真实验证：Start 局部 6、相关 MySQL 45、Agent 129、Contract 99、Java 65、Ruff/diff 全绿。
 
 Owner 修改：把测试中的合法 `runtime-v1` 改为另一个非空版本并确认数据库原样持久化。Failure exercise：注入 Execution history 失败，确认 Task 保持 PENDING，Execution/request 不存在。完成 Deep Learning Gate 前不得归档或合并 main；Review 期间禁止并发修改该 worktree。
+
+## 归档结果
+
+项目所有者于 2026-08-18 确认可以归档；上述禁止归档文字是 handoff 阶段的历史约束。实现经 `9c15884` 合入 `main`，规格已归并到 `openspec/specs/worker-task-execution-start/`。
