@@ -150,6 +150,40 @@ def test_retry_rejects_unsafe_failure_and_exhausted_budget(mysql_engine: Engine)
         )
 
 
+def test_retry_accepts_worker_sandbox_unavailable(mysql_engine: Engine):
+    task_id, lease, execution_id = _running(mysql_engine, "2")
+    command = _retry(task_id, execution_id, lease.owner_id, lease.lease_token, "b")
+    command = replace(
+        command,
+        failure={
+            **command.failure,
+            "code": "WORKER_SANDBOX_UNAVAILABLE",
+            "message": "worker sandbox could not be allocated",
+        },
+    )
+
+    result = WorkerTaskExecutionService(mysql_engine).retry(command)
+
+    assert result.outcome is WorkerExecutionOutcome.APPLIED
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT failure_code FROM agent_executions WHERE execution_id=:id"
+                ),
+                {"id": execution_id},
+            )
+            == "WORKER_SANDBOX_UNAVAILABLE"
+        )
+        assert (
+            connection.scalar(
+                text("SELECT status FROM agent_executions WHERE execution_id=:id"),
+                {"id": result.execution_id},
+            )
+            == "RUNNING"
+        )
+
+
 def test_concurrent_request_across_tasks_has_one_winner(mysql_engine: Engine):
     first_task, first_lease, first_execution = _running(mysql_engine, "d")
     second_task, second_lease, second_execution = _running(mysql_engine, "e")

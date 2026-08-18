@@ -6,4 +6,4 @@ request advisory lock 在事务外取得并在 finally 释放，解决缺失 req
 
 Task revision 不是固定值：每次 retry 做 `n → n+1`，后续 Completion 也必须从已锁定 Task 的当前 revision 做 `n → n+1`。否则 attempt 2 虽能启动却无法完成。
 
-安全错误集合仅包含 `MODEL_TIMEOUT`、`TOOL_TIMEOUT`、`TRANSIENT_UPSTREAM`、`RATE_LIMITED`；它表示 attempt 可以重建，不表示自动重放已产生业务副作用的 Tool。max attempts 为 2..10，且必须大于当前 attempt。
+安全错误集合仅包含 `MODEL_TIMEOUT`、`TOOL_TIMEOUT`、`TRANSIENT_UPSTREAM`、`RATE_LIMITED`、`WORKER_SANDBOX_UNAVAILABLE`；它表示 attempt 可以重建，不表示自动重放已产生业务副作用的 Tool。`WORKER_SANDBOX_UNAVAILABLE` 表示 Worker 隔离运行环境分配失败，尚未开始业务 Tool 副作用。max attempts 为 2..10，且必须大于当前 attempt。

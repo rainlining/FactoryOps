@@ -85,6 +85,7 @@ class WorkerTaskExecutionService:
             "TOOL_TIMEOUT",
             "TRANSIENT_UPSTREAM",
             "RATE_LIMITED",
+            "WORKER_SANDBOX_UNAVAILABLE",
         }
     )
 
