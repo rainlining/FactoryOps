@@ -18,6 +18,14 @@ Task/Execution 必须是同一 RUNNING pair，且 task、owner、token、expiry 
 
 相同请求和命令返回 identical；相同请求不同命令返回 conflicting；终态和 history 不得重复写入。
 
+#### Scenario: 不同 Task 并发复用 completion request
+- **WHEN** 不同 RUNNING Task/Execution 并发使用相同 request ID 完成
+- **THEN** 一个 applied、另一个 conflicting；输家双方保持 RUNNING 且 lease 保留
+
+#### Scenario: 相同 completion 并发重放
+- **WHEN** 相同 request 和命令并发完成同一 Task/Execution
+- **THEN** 一个 applied、另一个 identical，且只写一份终态 history/request fact
+
 ### Requirement: retryable failure 不得伪装为终态
 
 本能力拒绝以 retryable failure 把 Task 置 FAILED；新 attempt 由独立 retry policy Change 负责。

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
 import pytest
@@ -148,6 +149,114 @@ def test_completion_replay_and_stale_lease_are_classified(mysql_engine: Engine) 
     with pytest.raises(WorkerExecutionRejected, match="lease"):
         service.complete(
             _success(other_task, other_execution, "wrong", other_lease.lease_token, "4")
+        )
+
+
+def test_concurrent_same_request_different_tasks_is_stably_conflicting(
+    mysql_engine: Engine,
+) -> None:
+    first_task, first_lease, first_execution = _running(mysql_engine, "7")
+    second_task, second_lease, second_execution = _running(mysql_engine, "8")
+    request_id = "WCR-" + "7" * 32
+    commands = (
+        replace(
+            _success(
+                first_task,
+                first_execution,
+                first_lease.owner_id,
+                first_lease.lease_token,
+                "7",
+            ),
+            request_id=request_id,
+        ),
+        replace(
+            _success(
+                second_task,
+                second_execution,
+                second_lease.owner_id,
+                second_lease.lease_token,
+                "8",
+            ),
+            request_id=request_id,
+        ),
+    )
+    service = WorkerTaskExecutionService(mysql_engine)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(service.complete, commands))
+
+    assert {result.outcome for result in results} == {
+        WorkerExecutionOutcome.APPLIED,
+        WorkerExecutionOutcome.DUPLICATE_CONFLICTING,
+    }
+    winner = next(
+        result for result in results if result.outcome is WorkerExecutionOutcome.APPLIED
+    )
+    loser_task = second_task if winner.task_id == first_task else first_task
+    loser_execution = second_execution if loser_task == second_task else first_execution
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM worker_task_execution_completion_requests WHERE request_id=:id"
+                ),
+                {"id": request_id},
+            )
+            == 1
+        )
+        assert (
+            connection.scalar(
+                text("SELECT status FROM agent_tasks WHERE task_id=:id"),
+                {"id": loser_task},
+            )
+            == "RUNNING"
+        )
+        assert (
+            connection.scalar(
+                text("SELECT status FROM agent_executions WHERE execution_id=:id"),
+                {"id": loser_execution},
+            )
+            == "RUNNING"
+        )
+        assert (
+            connection.scalar(
+                text("SELECT COUNT(*) FROM agent_task_leases WHERE task_id=:id"),
+                {"id": loser_task},
+            )
+            == 1
+        )
+
+
+def test_concurrent_identical_completion_writes_one_fact(mysql_engine: Engine) -> None:
+    task_id, lease, execution_id = _running(mysql_engine, "9")
+    command = _success(task_id, execution_id, lease.owner_id, lease.lease_token, "9")
+    service = WorkerTaskExecutionService(mysql_engine)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(service.complete, (command, command)))
+
+    assert {result.outcome for result in results} == {
+        WorkerExecutionOutcome.APPLIED,
+        WorkerExecutionOutcome.DUPLICATE_IDENTICAL,
+    }
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM worker_task_execution_completion_requests WHERE request_id=:id"
+                ),
+                {"id": command.request_id},
+            )
+            == 1
+        )
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM agent_execution_transitions WHERE execution_id=:id"
+                ),
+                {"id": execution_id},
+            )
+            == 3
         )
 
 

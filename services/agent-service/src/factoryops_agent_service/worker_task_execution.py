@@ -181,76 +181,96 @@ class WorkerTaskExecutionService:
         self._validate_completion(command)
         now = self._now()
         command_hash = self._completion_hash(command)
-        with self._engine.begin() as connection:
-            replay = self._find_completion_request(connection, command.request_id)
-            if replay is not None:
-                return self._classify(replay, command_hash)
-            task = self._lock_task(connection, command.task_id)
-            replay = self._find_completion_request(connection, command.request_id)
-            if replay is not None:
-                return self._classify(replay, command_hash)
-            lease = self._lock_lease(connection, command.task_id)
-            execution = (
-                connection.execute(
-                    text(
-                        "SELECT * FROM agent_executions WHERE execution_id=:execution FOR UPDATE"
-                    ),
-                    {"execution": command.execution_id},
-                )
-                .mappings()
-                .one_or_none()
+        lock_name = (
+            "worker-complete:"
+            + hashlib.sha256(command.request_id.encode()).hexdigest()[:48]
+        )
+        with self._engine.connect() as connection:
+            acquired = connection.scalar(
+                text("SELECT GET_LOCK(:name, 10)"), {"name": lock_name}
             )
-            if task is None or execution is None:
-                raise WorkerExecutionRejected("Task or Execution does not exist")
-            if (
-                task["status"] != "RUNNING"
-                or task["current_execution_id"] != command.execution_id
-                or execution["status"] != "RUNNING"
-                or execution["task_id"] != command.task_id
-                or execution["run_id"] != task["run_id"]
-            ):
-                raise WorkerExecutionRejected(
-                    "Task and Execution are not current RUNNING pair"
-                )
-            if (
-                lease is None
-                or lease["owner_id"] != command.owner_id
-                or lease["lease_token"] != command.lease_token
-                or self._utc(lease["expires_at"]) <= now
-            ):
-                raise WorkerExecutionRejected("lease is missing, stale, or expired")
+            connection.commit()
+            if acquired != 1:
+                raise WorkerExecutionRejected("request admission lock timed out")
+            try:
+                with connection.begin():
+                    replay = self._find_completion_request(
+                        connection, command.request_id
+                    )
+                    if replay is not None:
+                        return self._classify(replay, command_hash)
+                    task = self._lock_task(connection, command.task_id)
+                    lease = self._lock_lease(connection, command.task_id)
+                    execution = (
+                        connection.execute(
+                            text(
+                                "SELECT * FROM agent_executions WHERE execution_id=:execution FOR UPDATE"
+                            ),
+                            {"execution": command.execution_id},
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                    if task is None or execution is None:
+                        raise WorkerExecutionRejected(
+                            "Task or Execution does not exist"
+                        )
+                    if (
+                        task["status"] != "RUNNING"
+                        or task["current_execution_id"] != command.execution_id
+                        or execution["status"] != "RUNNING"
+                        or execution["task_id"] != command.task_id
+                        or execution["run_id"] != task["run_id"]
+                    ):
+                        raise WorkerExecutionRejected(
+                            "Task and Execution are not current RUNNING pair"
+                        )
+                    if (
+                        lease is None
+                        or lease["owner_id"] != command.owner_id
+                        or lease["lease_token"] != command.lease_token
+                        or self._utc(lease["expires_at"]) <= now
+                    ):
+                        raise WorkerExecutionRejected(
+                            "lease is missing, stale, or expired"
+                        )
 
-            self._finish_execution(connection, execution, command, now)
-            self._finish_task(connection, task, command, now)
-            deleted = connection.execute(
-                text(
-                    """DELETE FROM agent_task_leases WHERE task_id=:task AND owner_id=:owner
-                    AND lease_token=:token AND expires_at>:now"""
-                ),
-                {
-                    "task": command.task_id,
-                    "owner": command.owner_id,
-                    "token": command.lease_token,
-                    "now": now,
-                },
-            )
-            if deleted.rowcount != 1:
-                raise WorkerExecutionRejected("lease changed concurrently")
-            connection.execute(
-                text(
-                    """INSERT INTO worker_task_execution_completion_requests
-                    (request_id,command_hash,task_id,execution_id,final_status,created_at)
-                    VALUES (:request,:hash,:task,:execution,:status,:now)"""
-                ),
-                {
-                    "request": command.request_id,
-                    "hash": command_hash,
-                    "task": command.task_id,
-                    "execution": command.execution_id,
-                    "status": command.final_status,
-                    "now": now,
-                },
-            )
+                    self._finish_execution(connection, execution, command, now)
+                    self._finish_task(connection, task, command, now)
+                    deleted = connection.execute(
+                        text(
+                            """DELETE FROM agent_task_leases WHERE task_id=:task AND owner_id=:owner
+                            AND lease_token=:token AND expires_at>:now"""
+                        ),
+                        {
+                            "task": command.task_id,
+                            "owner": command.owner_id,
+                            "token": command.lease_token,
+                            "now": now,
+                        },
+                    )
+                    if deleted.rowcount != 1:
+                        raise WorkerExecutionRejected("lease changed concurrently")
+                    connection.execute(
+                        text(
+                            """INSERT INTO worker_task_execution_completion_requests
+                            (request_id,command_hash,task_id,execution_id,final_status,created_at)
+                            VALUES (:request,:hash,:task,:execution,:status,:now)"""
+                        ),
+                        {
+                            "request": command.request_id,
+                            "hash": command_hash,
+                            "task": command.task_id,
+                            "execution": command.execution_id,
+                            "status": command.final_status,
+                            "now": now,
+                        },
+                    )
+            finally:
+                connection.execute(
+                    text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                )
+                connection.commit()
         return WorkerExecutionResult(
             WorkerExecutionOutcome.APPLIED, command.task_id, command.execution_id
         )
