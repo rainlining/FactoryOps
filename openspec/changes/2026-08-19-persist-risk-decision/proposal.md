@@ -1,7 +1,7 @@
 # Change 提案：持久化 Risk Decision
 
 - `change_id`: `2026-08-19-persist-risk-decision`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `delegated`
 - `depends_on`: `2026-08-19-define-risk-decision-contract`
 - `feature_branch`: `codex/persist-risk-decision`
