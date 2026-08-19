@@ -1,0 +1,22 @@
+CREATE TABLE risk_decisions (
+  decision_id VARCHAR(36) PRIMARY KEY,
+  decision_key CHAR(68) NOT NULL UNIQUE,
+  recommendation_id VARCHAR(36) NOT NULL UNIQUE,
+  recommendation_key CHAR(68) NOT NULL UNIQUE,
+  run_id VARCHAR(36) NOT NULL,
+  task_id VARCHAR(36) NOT NULL,
+  proposed_action VARCHAR(32) NOT NULL,
+  decision VARCHAR(24) NOT NULL,
+  risk_level VARCHAR(16) NOT NULL,
+  approval_required BOOLEAN NOT NULL,
+  canonical_sha256 CHAR(64) NOT NULL,
+  payload_json LONGTEXT NOT NULL,
+  generated_at TIMESTAMP(6) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT fk_risk_decision_recommendation FOREIGN KEY (recommendation_id) REFERENCES specialist_recommendations(recommendation_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_risk_decision_run FOREIGN KEY (run_id) REFERENCES agent_runs(run_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_risk_decision_task FOREIGN KEY (task_id) REFERENCES agent_tasks(task_id) ON DELETE RESTRICT,
+  CONSTRAINT chk_risk_decision_value CHECK (decision IN ('ALLOW','BLOCK','REQUIRE_APPROVAL')),
+  CONSTRAINT chk_risk_decision_level CHECK (risk_level IN ('LOW','MEDIUM','HIGH')),
+  CONSTRAINT chk_risk_decision_payload CHECK (JSON_VALID(payload_json))
+) ENGINE=InnoDB;
