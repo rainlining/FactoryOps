@@ -14,11 +14,11 @@
 
 ## 真实调用链与文件
 
-Contract 使用者入口为 `contracts.risk_decision.validator.validate_risk_decision`；随后可调用 `canonicalize_risk_decision` 和 `classify_risk_decision_relation`。Schema 在 `contracts/risk_decision/v1.0.0/schema.json`，回归在 `contracts/risk_decision/tests/test_validator.py`。失败路径包括未知字段、非法 key、重复数组、非有限 confidence、ground truth 注入、STOP_LINE 审批不一致和 allowed action 不一致。
+Contract 使用者入口为 `contracts.risk_decision.validator.validate_risk_decision(payload, recommendation_identity)`；它先校验 payload，再逐字段验证源 Recommendation binding。随后可调用 `canonicalize_risk_decision` 和 `classify_risk_decision_relation`。Schema 在 `contracts/risk_decision/v1.0.0/schema.json`，回归在 `contracts/risk_decision/tests/test_validator.py`。失败路径包括 identity mismatch、未知字段、非法 key、重复数组、非有限 confidence、ground truth 注入、STOP_LINE 审批不一致和 allowed action 不一致。
 
 ## 验证
 
-详见 `verification.md`：局部 5 passed、全 Contract 121 passed、Agent 152 passed、Java 65 tests 全通过、Ruff/Schema/diff/dataset 检查通过。
+详见 `verification.md`：审查修复后局部 8 passed、全 Contract 124 passed、Agent 152 passed；Java 65 tests 全通过，Ruff/Schema/diff/dataset 检查通过。
 
 ## Learning Gate
 

@@ -4,7 +4,7 @@
 
 ### Requirement: Risk Decision 必须绑定 Recommendation
 
-每份 Risk Decision 必须绑定 recommendation_id/key、run/task 和生成时间；binding 不一致必须拒绝。
+每份 Risk Decision 必须绑定 recommendation_id/key、run/task 和生成时间；接收边界必须向 validator 提供源 Recommendation identity 并逐字段比对，binding 不一致必须拒绝。
 
 ### Requirement: 高风险动作必须要求审批
 
@@ -18,4 +18,4 @@
 
 ### Requirement: Contract 必须严格版本化、可规范化和幂等分类
 
-未知字段、NaN/Infinity、非法动作和空 policy refs 必须拒绝；相同 decision key canonical identical，不同内容 conflicting，不同 key distinct。
+未知字段、NaN/Infinity、非法动作和空 policy refs 必须拒绝；canonical 必须归一化整数与等值整数浮点，相同 decision key canonical identical，不同内容 conflicting，不同 key distinct。

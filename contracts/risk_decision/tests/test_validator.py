@@ -24,15 +24,24 @@ def fixture() -> dict[str, object]:
     return payload
 
 
+def recommendation_identity() -> dict[str, object]:
+    identity = fixture()["identity"]
+    assert isinstance(identity, dict)
+    return {
+        field: identity[field]
+        for field in ("recommendation_id", "recommendation_key", "run_id", "task_id")
+    }
+
+
 def issue(payload: dict[str, object]) -> tuple[str, str]:
     with pytest.raises(RiskDecisionValidationError) as caught:
-        validate_risk_decision(payload)
+        validate_risk_decision(payload, recommendation_identity())
     found = caught.value.issues[0]
     return found.code, found.path
 
 
 def test_accepts_stop_line_only_with_approval() -> None:
-    validate_risk_decision(fixture())
+    validate_risk_decision(fixture(), recommendation_identity())
     assert (
         compute_decision_key(
             "RCK-B221BE3D3DBC757E9FD394930157F16E2098D539CB244DC70A5899232ED9D33E"
@@ -100,6 +109,28 @@ def test_rejects_key_mismatch_duplicates_nonfinite_and_ground_truth() -> None:
     assert issue(payload) == ("schema_validation_failed", "$.ground_truth")
 
 
+@pytest.mark.parametrize(
+    "field,replacement",
+    [
+        ("recommendation_id", "REC-" + "F" * 32),
+        ("run_id", "RUN-" + "F" * 32),
+        ("task_id", "TSK-" + "F" * 32),
+    ],
+)
+def test_rejects_source_recommendation_identity_mismatch(
+    field: str, replacement: str
+) -> None:
+    expected = recommendation_identity()
+    expected[field] = replacement
+    with pytest.raises(RiskDecisionValidationError) as caught:
+        validate_risk_decision(fixture(), expected)
+    found = caught.value.issues[0]
+    assert (found.code, found.path) == (
+        "recommendation_identity_mismatch",
+        f"$.identity.{field}",
+    )
+
+
 def test_relation_identical_conflicting_distinct_and_canonical() -> None:
     first = fixture()
     assert (
@@ -119,4 +150,16 @@ def test_relation_identical_conflicting_distinct_and_canonical() -> None:
     assert classify_risk_decision_relation(first, other) == "distinct"
     assert canonicalize_risk_decision(first) == canonicalize_risk_decision(
         dict(reversed(list(first.items())))
+    )
+    integral_float = copy.deepcopy(first)
+    gate = integral_float["gate"]
+    assert isinstance(gate, dict)
+    gate["confidence"] = 1.0
+    integer = copy.deepcopy(integral_float)
+    integer_gate = integer["gate"]
+    assert isinstance(integer_gate, dict)
+    integer_gate["confidence"] = 1
+    assert (
+        classify_risk_decision_relation(integral_float, integer)
+        == "duplicate-identical"
     )

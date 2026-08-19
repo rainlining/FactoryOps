@@ -34,6 +34,23 @@ def compute_decision_key(recommendation_key: str) -> str:
 
 
 def validate_risk_decision(
+    payload: Mapping[str, object],
+    recommendation_identity: Mapping[str, object],
+    supported_versions: Collection[str] = ("1.0.0",),
+) -> None:
+    _validate_risk_decision_payload(payload, supported_versions)
+    identity = payload["identity"]
+    assert isinstance(identity, Mapping)
+    for field in ("recommendation_id", "recommendation_key", "run_id", "task_id"):
+        if identity[field] != recommendation_identity.get(field):
+            _raise(
+                "recommendation_identity_mismatch",
+                f"$.identity.{field}",
+                "risk decision identity does not match source recommendation",
+            )
+
+
+def _validate_risk_decision_payload(
     payload: Mapping[str, object], supported_versions: Collection[str] = ("1.0.0",)
 ) -> None:
     version = payload.get("contract_version")
@@ -79,9 +96,9 @@ def validate_risk_decision(
 
 
 def canonicalize_risk_decision(payload: Mapping[str, object]) -> bytes:
-    validate_risk_decision(payload)
+    _validate_risk_decision_payload(payload)
     return json.dumps(
-        payload,
+        _normalize_numbers(payload),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -153,6 +170,16 @@ def _unique(value: object, path: str) -> None:
         if item in seen:
             _raise("duplicate_value", f"{path}[{index}]", "array values must be unique")
         seen.add(item)
+
+
+def _normalize_numbers(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {key: _normalize_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_numbers(item) for item in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _path(error: ValidationError) -> str:
