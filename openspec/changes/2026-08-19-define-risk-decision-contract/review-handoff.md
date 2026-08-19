@@ -5,7 +5,8 @@
 - 分支：`codex/define-risk-decision-contract`
 - Worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\define-risk-decision-contract`
 - Stacked base：`67fc8160c78946ea4bcb53cdf9b17de2f2f9f5ee`
-- 实现提交：待提交后回填；最终 HEAD：待推送后回填。
+- 实现提交：`5514dc7`（`feat(contract): define risk decisions`）。
+- 最终 HEAD：包含本 handoff 回填的随后文档提交；Review 恢复时以 `git rev-parse origin/codex/define-risk-decision-contract` 为唯一远端事实。
 
 ## 实现范围
 

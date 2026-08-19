@@ -1,6 +1,7 @@
 # Verification
 
 - stacked base：`67fc8160c78946ea4bcb53cdf9b17de2f2f9f5ee`（`codex/persist-specialist-recommendation`）。
+- 实现提交：`5514dc7`（`feat(contract): define risk decisions`）。
 - RED/局部 Contract：`python -m pytest -q contracts/risk_decision/tests` → `5 passed`。
 - 全 Contract：`python -m pytest -q contracts` → `121 passed`。
 - Agent Service 全量：`python -m pytest -q services/agent-service/tests` → `152 passed`。
