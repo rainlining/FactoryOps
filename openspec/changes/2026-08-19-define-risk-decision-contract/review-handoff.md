@@ -20,6 +20,8 @@ Contract 使用者入口为 `contracts.risk_decision.validator.validate_risk_dec
 
 详见 `verification.md`：审查修复后局部 8 passed、全 Contract 124 passed、Agent 152 passed；Java 65 tests 全通过，Ruff/Schema/diff/dataset 检查通过。
 
+独立子 Agent 复审 `d924339`：此前两个 Important 均关闭，未发现新的 Critical/Important。非阻塞 Minor：identity mismatch 参数化测试未单列 recommendation_key，但生产循环已覆盖该字段。
+
 ## Learning Gate
 
 Owner 修改任务：新增一个 `HOLD_BATCH` 的合法 ALLOW fixture，并说明为什么 proposed action 必须出现在 allowed_actions。Failure/debug exercise：将 STOP_LINE 改为 ALLOW 且 `approval_required=false`，观察 `high_risk_approval_required`；再将 REQUIRE_APPROVAL 的 allowed_actions 加回 STOP_LINE，观察 `allowed_action_mismatch`。清理：恢复 fixture 并重新运行 Contract tests。当前未由 Owner 完成，禁止标记 completed/archive。

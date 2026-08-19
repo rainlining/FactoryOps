@@ -12,7 +12,7 @@
 
 独立审查修复：补充 `decision` 与 `allowed_actions` 一致性，避免 BLOCK/REQUIRE_APPROVAL 同时声称 proposed action 已授权；新增 2 个负向断言。未发现 Critical/Important 遗留问题。
 
-第二次独立子 Agent 审查发现 2 个 Important：跨 Recommendation identity 未真实比对；整数与等值整数浮点未 canonical 归一化。现已要求公开 validator 接收源 identity 并逐字段比对，同时增加数字归一化及 3 组 mismatch、1 组 relation 回归。待复审确认后关闭。
+第二次独立子 Agent 审查发现 2 个 Important：跨 Recommendation identity 未真实比对；整数与等值整数浮点未 canonical 归一化。现已要求公开 validator 接收源 identity 并逐字段比对，同时增加数字归一化及 3 组 mismatch、1 组 relation 回归。子 Agent 对 `d924339` 复审通过，两个 Important 均关闭，0 Critical、0 Important。
 
 审查修复后 Agent Service 全量再次执行：`152 passed`。Java 无代码变化，沿用本 Change 首次全量 `mvn verify -q` 的 65 tests 通过证据。
 
