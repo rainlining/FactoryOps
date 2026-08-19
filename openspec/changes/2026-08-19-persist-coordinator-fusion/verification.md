@@ -12,8 +12,8 @@
 - `git diff --check`：通过。
 - `git status --short -- dataset`：无输出。
 
-Agent 全量首跑因 migration 版本断言仍固定为 11 出现 5 failures；更新为包含 `012_create_coordinator_fusions` 后，migration 回归 39 passed、全量 166 passed。
+Agent 全量首跑因 migration 版本断言仍固定为 11 出现 5 failures；更新为包含 `012_create_coordinator_fusions` 后，migration 回归 39 passed；Important 修复后的最终全量为 168 passed。
 
-独立子 Agent 首审发现 2 个 Important：读取未重验 Coordinator Execution role/run 绑定，以及并发 conflicting/identity split 缺真实覆盖。已增加读取期 parent binding 校验，并补真实 MySQL conflicting、同 key 不同 ID、同 ID 不同 key、错误 Coordinator 与 parent corruption 测试。最终复审与重跑结果见分支 HEAD。
+独立子 Agent 首审发现 2 个 Important：读取未重验 Coordinator Execution role/run 绑定，以及并发 conflicting/identity split 缺真实覆盖。已增加读取期 parent binding 校验，并补真实 MySQL conflicting、同 key 不同 ID、同 ID 不同 key、错误 Coordinator 与 parent corruption 测试。复审为 0 Critical、0 Important；子 Agent 实跑局部 7 passed。
 
 已知非目标：不生成 Fusion、不推进 Coordinator Execution、不扩展 Risk subject binding。

@@ -7,7 +7,9 @@
 - 分支：`codex/persist-coordinator-fusion`
 - Worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-coordinator-fusion`
 - stacked base：`5c2c737115a8450f689d84a3c351ede3129d2b05`
-- head：待最终提交
+- 实现提交：`57c08d9`
+- Important 修复提交：`a7bb08b`
+- 最终文档提交：见分支 HEAD
 
 ## 实现与边界
 
@@ -17,6 +19,6 @@
 
 ## 验证与审查
 
-首审发现并修复 2 个 Important：读取期 Coordinator Execution binding 完整性，以及并发 conflicting/identity split 测试缺口。修复后局部 MySQL 7 passed、Agent 全量 168 passed、Contract 133 passed、Java 65/65；等待同一子 Agent 复审。
+首审发现并修复 2 个 Important：读取期 Coordinator Execution binding 完整性，以及并发 conflicting/identity split 测试缺口。修复后局部 MySQL 7 passed、Agent 全量 168 passed、Contract 133 passed、Java 65/65；同一子 Agent 复审为 0 Critical、0 Important（仅文档数字/HEAD 两项 Minor，已收尾）。
 
 建议阅读：proposal/spec/design → migration 012 → `coordinator_fusion.py::save`/`_decode`/`_read_sources` → `test_coordinator_fusion_mysql.py`。Review/Learning 延后期间禁止并行修改本 worktree。
