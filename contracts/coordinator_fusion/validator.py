@@ -11,7 +11,10 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
 
-from contracts.specialist_recommendation.validator import validate_recommendation
+from contracts.specialist_recommendation.validator import (
+    SpecialistRecommendationValidationError,
+    validate_recommendation,
+)
 
 ROOT = Path(__file__).resolve().parent
 ROLE_ORDER = {"quality": 0, "production": 1, "sla": 2}
@@ -47,8 +50,16 @@ def validate_coordinator_fusion(
     references = inputs["recommendations"]
     assert isinstance(references, list)
     sources_by_key: dict[object, Mapping[str, object]] = {}
-    for source in source_recommendations:
-        validate_recommendation(source)
+    for index, source in enumerate(source_recommendations):
+        try:
+            validate_recommendation(source)
+        except SpecialistRecommendationValidationError as error:
+            issue = error.issues[0]
+            _raise(
+                "invalid_source_recommendation",
+                f"$.source_recommendations[{index}]{issue.path[1:]}",
+                issue.message,
+            )
         source_identity = source["identity"]
         assert isinstance(source_identity, Mapping)
         key = source_identity["recommendation_key"]
@@ -174,6 +185,9 @@ def _validate_payload(
     _unique(references, "agent_role", "$.inputs.recommendations")
     _unique_values(missing_roles, "$.inputs.missing_roles")
     present_roles = {reference["agent_role"] for reference in references}
+    action_by_role = {
+        reference["agent_role"]: reference["action"] for reference in references
+    }
     if present_roles & set(missing_roles) or present_roles | set(missing_roles) != set(
         ROLE_ORDER
     ):
@@ -210,6 +224,18 @@ def _validate_payload(
                 "candidate_role_mismatch",
                 f"$.fusion.candidates[{index}]",
                 "candidate roles must be disjoint present roles",
+            )
+        if any(action_by_role[role] != candidate["action"] for role in supporting):
+            _raise(
+                "candidate_support_mismatch",
+                f"$.fusion.candidates[{index}].supporting_roles",
+                "supporting roles must recommend the candidate action",
+            )
+        if any(action_by_role[role] == candidate["action"] for role in opposing):
+            _raise(
+                "candidate_opposition_mismatch",
+                f"$.fusion.candidates[{index}].opposing_roles",
+                "opposing roles must recommend a different action",
             )
     for field in ("conflict_codes", "evidence_refs", "reason_codes"):
         _unique_values(fusion[field], f"$.fusion.{field}")

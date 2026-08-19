@@ -93,6 +93,67 @@ def test_rejects_role_coverage_duplicates_and_bad_rank() -> None:
     assert issue(payload)[0] == "candidate_rank_mismatch"
 
 
+def test_candidate_attribution_matches_source_actions() -> None:
+    payload = fixture()
+    fusion = payload["fusion"]
+    assert isinstance(fusion, dict)
+    candidates = fusion["candidates"]
+    assert isinstance(candidates, list)
+    candidates[0]["supporting_roles"] = ["production", "sla"]
+    candidates[0]["opposing_roles"] = ["quality"]
+    assert issue(payload) == (
+        "candidate_support_mismatch",
+        "$.fusion.candidates[0].supporting_roles",
+    )
+
+    payload = fixture()
+    fusion = payload["fusion"]
+    assert isinstance(fusion, dict)
+    candidates = fusion["candidates"]
+    assert isinstance(candidates, list)
+    candidates[0]["opposing_roles"] = ["production", "quality"]
+    candidates[0]["supporting_roles"] = ["sla"]
+    assert issue(payload) == (
+        "candidate_opposition_mismatch",
+        "$.fusion.candidates[0].opposing_roles",
+    )
+
+
+def test_accepts_two_specialists_and_rejects_missing_role_attribution() -> None:
+    payload = fixture()
+    inputs = payload["inputs"]
+    fusion = payload["fusion"]
+    assert isinstance(inputs, dict) and isinstance(fusion, dict)
+    inputs["recommendations"] = inputs["recommendations"][:2]
+    inputs["missing_roles"] = ["sla"]
+    candidates = fusion["candidates"]
+    assert isinstance(candidates, list)
+    candidates[0]["supporting_roles"] = ["quality"]
+    candidates[0]["opposing_roles"] = ["production"]
+    candidates[1]["supporting_roles"] = ["production"]
+    candidates[1]["opposing_roles"] = ["quality"]
+    validate_coordinator_fusion(payload, sources()[:2])
+
+    candidates[0]["supporting_roles"] = ["quality", "sla"]
+    with pytest.raises(CoordinatorFusionValidationError) as caught:
+        validate_coordinator_fusion(payload, sources()[:2])
+    found = caught.value.issues[0]
+    assert (found.code, found.path) == (
+        "candidate_role_mismatch",
+        "$.fusion.candidates[0]",
+    )
+
+
+def test_wraps_invalid_source_contract_as_fusion_error() -> None:
+    invalid_sources = sources()
+    invalid_sources[0]["contract_version"] = "9.0.0"
+    with pytest.raises(CoordinatorFusionValidationError) as caught:
+        validate_coordinator_fusion(fixture(), invalid_sources)
+    found = caught.value.issues[0]
+    assert found.code == "invalid_source_recommendation"
+    assert found.path == "$.source_recommendations[0].contract_version"
+
+
 def test_rejects_authorization_ground_truth_nonfinite_and_conflict_mismatch() -> None:
     payload = fixture()
     fusion = payload["fusion"]
