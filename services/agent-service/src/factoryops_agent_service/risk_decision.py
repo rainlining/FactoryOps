@@ -169,6 +169,8 @@ class RiskDecisionService:
             )
         try:
             payload = json.loads(payload_text)
+            if canonicalize_risk_decision(payload) != payload_text.encode():
+                raise ValueError("Risk Decision payload is not canonical")
             source = self._read_recommendation(
                 connection, str(row["recommendation_key"])
             )

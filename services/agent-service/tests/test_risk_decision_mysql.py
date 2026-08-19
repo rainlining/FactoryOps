@@ -180,8 +180,29 @@ def test_same_id_for_other_recommendation_is_conflicting(mysql_engine: Engine):
     second = _decision(second_recommendation, "6")
     service = RiskDecisionService(mysql_engine)
 
-    service.save(first)
-    assert service.save(second).outcome is RiskDecisionSaveOutcome.DUPLICATE_CONFLICTING
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+    assert {result.outcome for result in results} == {
+        RiskDecisionSaveOutcome.APPLIED,
+        RiskDecisionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
+
+
+def test_same_key_with_different_ids_is_concurrently_conflicting(mysql_engine: Engine):
+    _, _, _, recommendation = _parent(mysql_engine, "a")
+    first = _decision(recommendation, "a")
+    second = copy.deepcopy(first)
+    identity = second["identity"]
+    assert isinstance(identity, dict)
+    identity["decision_id"] = "RSK-" + "B" * 32
+    service = RiskDecisionService(mysql_engine)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+    assert {result.outcome for result in results} == {
+        RiskDecisionSaveOutcome.APPLIED,
+        RiskDecisionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
 
 
 @pytest.mark.parametrize("column", ["canonical_sha256", "risk_level"])
@@ -205,4 +226,31 @@ def test_corrupt_storage_is_rejected_on_read(mysql_engine: Engine, column: str):
         )
 
     with pytest.raises(RiskDecisionPersistenceIntegrityError):
+        service.get_by_key(str(key))
+
+
+def test_noncanonical_payload_with_matching_hash_is_rejected(mysql_engine: Engine):
+    _, _, _, recommendation = _parent(mysql_engine, "c")
+    payload = _decision(recommendation, "c")
+    service = RiskDecisionService(mysql_engine)
+    service.save(payload)
+    key = payload["identity"]["decision_key"]
+    noncanonical = json.dumps(payload, indent=2)
+    import hashlib
+
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                """UPDATE risk_decisions
+                SET payload_json=:payload,canonical_sha256=:hash
+                WHERE decision_key=:key"""
+            ),
+            {
+                "payload": noncanonical,
+                "hash": hashlib.sha256(noncanonical.encode()).hexdigest(),
+                "key": key,
+            },
+        )
+
+    with pytest.raises(RiskDecisionPersistenceIntegrityError, match="Contract"):
         service.get_by_key(str(key))
