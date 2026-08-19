@@ -2,10 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from contracts.agent_task.validator import compute_task_key
-from sqlalchemy import Engine, create_engine, event, text
-from testcontainers.community.mysql import MySqlContainer
-
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.execution_lifecycle.model import CreateExecutionCommand
 from factoryops_agent_service.execution_lifecycle.service import (
@@ -28,6 +24,10 @@ from factoryops_agent_service.task_lifecycle.service import (
     PersistenceIntegrityError,
     TaskCreationRejected,
 )
+from sqlalchemy import Engine, create_engine, event, text
+from testcontainers.community.mysql import MySqlContainer
+
+from contracts.agent_task.validator import compute_task_key
 
 NOW = datetime(2026, 8, 16, 8, 0, tzinfo=timezone.utc)
 RUN_CREATORS: dict[str, str] = {}
@@ -165,7 +165,7 @@ def test_migration_creates_task_tables(mysql_engine: Engine) -> None:
                 )
             ).all()
         )
-    assert versions[-1] == "011_create_risk_decisions"
+    assert versions[-1] == "012_create_coordinator_fusions"
     assert "worker_task_execution_start_requests" in tables
     assert "worker_task_execution_completion_requests" in tables
     assert {

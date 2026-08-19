@@ -5,9 +5,6 @@ from datetime import datetime, timedelta, timezone
 from importlib.resources import files
 
 import pytest
-from sqlalchemy import Engine, create_engine, event, text
-from testcontainers.community.mysql import MySqlContainer
-
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.run_lifecycle.model import (
     ActorKind,
@@ -23,6 +20,8 @@ from factoryops_agent_service.run_lifecycle.service import (
     AgentRunLifecycleService,
     RunCreationRejected,
 )
+from sqlalchemy import Engine, create_engine, event, text
+from testcontainers.community.mysql import MySqlContainer
 
 FIXED_TIME = datetime(2026, 8, 15, 5, 0, tzinfo=timezone.utc)
 
@@ -125,6 +124,7 @@ def test_migrations_create_run_lifecycle_schema(mysql_engine: Engine) -> None:
         "009_create_worker_task_retry_requests",
         "010_create_specialist_recommendations",
         "011_create_risk_decisions",
+        "012_create_coordinator_fusions",
     ]
     assert {"agent_runs", "agent_run_transitions"} <= tables
     assert {
@@ -157,7 +157,7 @@ def test_migration_runner_is_idempotent(mysql_engine: Engine) -> None:
     with mysql_engine.connect() as connection:
         count = connection.scalar(text("SELECT COUNT(*) FROM agent_schema_history"))
 
-    assert count == 11
+    assert count == 12
 
 
 def test_migration_runner_upgrades_database_that_only_has_001() -> None:
@@ -221,6 +221,7 @@ def test_migration_runner_upgrades_database_that_only_has_001() -> None:
             "009_create_worker_task_retry_requests",
             "010_create_specialist_recommendations",
             "011_create_risk_decisions",
+            "012_create_coordinator_fusions",
         ]
         assert run_table == 1
     finally:

@@ -2,10 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import Engine, create_engine, event, text
-from sqlalchemy.exc import DBAPIError
-from testcontainers.community.mysql import MySqlContainer
-
 from factoryops_agent_service.event_ingress import migration as migration_module
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.execution_lifecycle.model import (
@@ -24,6 +20,9 @@ from factoryops_agent_service.run_lifecycle.model import (
     RunProvenance,
 )
 from factoryops_agent_service.run_lifecycle.service import AgentRunLifecycleService
+from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy.exc import DBAPIError
+from testcontainers.community.mysql import MySqlContainer
 
 NOW = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
 
@@ -116,7 +115,7 @@ def transition(
 
 def test_schema_and_creation_idempotency(mysql_engine: Engine) -> None:
     with mysql_engine.connect() as c:
-        assert c.scalar(text("SELECT COUNT(*) FROM agent_schema_history")) == 11
+        assert c.scalar(text("SELECT COUNT(*) FROM agent_schema_history")) == 12
     run_id = run(mysql_engine, "1")
     service = AgentExecutionLifecycleService(mysql_engine, clock=lambda: NOW)
     command = create(run_id)
