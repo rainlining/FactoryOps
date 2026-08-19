@@ -17,6 +17,6 @@
 
 ## 验证与审查
 
-局部 MySQL 5 passed，migration 回归 39 passed，Agent 全量 166 passed，Contract 133 passed，Java 65/65；Ruff、diff check、dataset check 通过。独立子 Agent 结果将在最终 HEAD 记录。
+首审发现并修复 2 个 Important：读取期 Coordinator Execution binding 完整性，以及并发 conflicting/identity split 测试缺口。修复后局部 MySQL 7 passed、Agent 全量 168 passed、Contract 133 passed、Java 65/65；等待同一子 Agent 复审。
 
 建议阅读：proposal/spec/design → migration 012 → `coordinator_fusion.py::save`/`_decode`/`_read_sources` → `test_coordinator_fusion_mysql.py`。Review/Learning 延后期间禁止并行修改本 worktree。

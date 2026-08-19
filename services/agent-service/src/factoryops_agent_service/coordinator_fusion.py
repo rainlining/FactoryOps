@@ -7,14 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError
-
 from contracts.coordinator_fusion.validator import (
     canonicalize_coordinator_fusion,
     validate_coordinator_fusion,
 )
 from contracts.specialist_recommendation.validator import canonicalize_recommendation
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import IntegrityError
 
 
 class FusionPersistenceRejected(ValueError):
@@ -168,6 +167,24 @@ class CoordinatorFusionService:
                 "Fusion payload or source binding is inconsistent"
             ) from error
         identity, block = payload["identity"], payload["fusion"]
+        execution = (
+            connection.execute(
+                text(
+                    "SELECT run_id,agent_role FROM agent_executions WHERE execution_id=:id"
+                ),
+                {"id": identity["coordinator_execution_id"]},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            execution is None
+            or execution["agent_role"] != "coordinator"
+            or execution["run_id"] != identity["run_id"]
+        ):
+            raise FusionPersistenceIntegrityError(
+                "Fusion Coordinator Execution binding is inconsistent"
+            )
         typed = {
             "fusion_id": row["fusion_id"],
             "fusion_key": row["fusion_key"],

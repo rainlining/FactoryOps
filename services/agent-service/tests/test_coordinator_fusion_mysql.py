@@ -7,6 +7,17 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from contracts.coordinator_fusion.validator import (
+    canonicalize_coordinator_fusion,
+    compute_fusion_key,
+)
+from contracts.specialist_recommendation.validator import compute_recommendation_key
+from sqlalchemy import Engine, create_engine, text
+from test_coordinator_start_mysql import _command, _run, _service
+from test_coordinator_task_dispatch_mysql import _dispatch
+from test_worker_task_execution_mysql import _start_command
+from testcontainers.community.mysql import MySqlContainer
+
 from factoryops_agent_service.coordinator_fusion import (
     CoordinatorFusionService,
     FusionPersistenceIntegrityError,
@@ -22,17 +33,6 @@ from factoryops_agent_service.specialist_recommendation import (
 )
 from factoryops_agent_service.task_lease import AgentTaskLeaseService
 from factoryops_agent_service.worker_task_execution import WorkerTaskExecutionService
-from sqlalchemy import Engine, create_engine, text
-from test_coordinator_start_mysql import _command, _run, _service
-from test_coordinator_task_dispatch_mysql import _dispatch
-from test_worker_task_execution_mysql import _start_command
-from testcontainers.community.mysql import MySqlContainer
-
-from contracts.coordinator_fusion.validator import (
-    canonicalize_coordinator_fusion,
-    compute_fusion_key,
-)
-from contracts.specialist_recommendation.validator import compute_recommendation_key
 
 ROOT = Path(__file__).resolve().parents[3] / "contracts"
 
@@ -173,17 +173,72 @@ def test_concurrent_identical_and_conflicting_are_stable(mysql_engine: Engine):
         FusionSaveOutcome.APPLIED,
         FusionSaveOutcome.DUPLICATE_IDENTICAL,
     }
-    changed = copy.deepcopy(payload)
-    changed["fusion"]["reason_codes"] = ["MANUAL_REVIEW_SELECTED"]
-    assert service.save(changed).outcome is FusionSaveOutcome.DUPLICATE_CONFLICTING
+
+    run_id, coordinator_id, sources = _parents(mysql_engine, "f")
+    first = _fusion(run_id, coordinator_id, sources, "f")
+    second = copy.deepcopy(first)
+    second["fusion"]["reason_codes"] = ["MANUAL_REVIEW_SELECTED"]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+    assert {r.outcome for r in results} == {
+        FusionSaveOutcome.APPLIED,
+        FusionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
 
 
-def test_missing_source_or_wrong_coordinator_is_rejected(mysql_engine: Engine):
+def test_concurrent_identity_splits_are_conflicting(mysql_engine: Engine):
+    service = CoordinatorFusionService(mysql_engine)
+    run_id, coordinator_id, sources = _parents(mysql_engine, "6")
+    first = _fusion(run_id, coordinator_id, sources, "6")
+    second = copy.deepcopy(first)
+    second["identity"]["fusion_id"] = "FUS-" + "7" * 32
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+    assert {r.outcome for r in results} == {
+        FusionSaveOutcome.APPLIED,
+        FusionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
+
+    run_id, coordinator_id, sources = _parents(mysql_engine, "8")
+    first = _fusion(run_id, coordinator_id, sources, "8")
+    second = copy.deepcopy(first)
+    second["identity"]["round"] = 2
+    second["identity"]["fusion_key"] = compute_fusion_key(run_id, coordinator_id, 2)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+    assert {r.outcome for r in results} == {
+        FusionSaveOutcome.APPLIED,
+        FusionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
+
+
+def test_missing_source_and_wrong_coordinator_are_rejected(mysql_engine: Engine):
     run_id, coordinator_id, sources = _parents(mysql_engine, "c")
     payload = _fusion(run_id, coordinator_id, sources, "c")
     payload["inputs"]["recommendations"][0]["recommendation_key"] = "RCK-" + "F" * 64
     with pytest.raises(FusionPersistenceRejected, match="Recommendation"):
         CoordinatorFusionService(mysql_engine).save(payload)
+
+    run_id, _, sources = _parents(mysql_engine, "9")
+    worker_execution_id = str(sources[0]["identity"]["execution_id"])
+    payload = _fusion(run_id, worker_execution_id, sources, "9")
+    with pytest.raises(FusionPersistenceRejected, match="Coordinator Execution"):
+        CoordinatorFusionService(mysql_engine).save(payload)
+
+
+def test_read_rejects_coordinator_execution_run_corruption(mysql_engine: Engine):
+    run_id, coordinator_id, sources = _parents(mysql_engine, "7")
+    payload = _fusion(run_id, coordinator_id, sources, "7")
+    service = CoordinatorFusionService(mysql_engine)
+    service.save(payload)
+    other_run = _run(mysql_engine, "0")
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text("UPDATE agent_executions SET run_id=:run WHERE execution_id=:id"),
+            {"run": other_run, "id": coordinator_id},
+        )
+    with pytest.raises(FusionPersistenceIntegrityError, match="Coordinator"):
+        service.get_by_key(str(payload["identity"]["fusion_key"]))
 
 
 @pytest.mark.parametrize("column", ["canonical_sha256", "proposed_action"])
