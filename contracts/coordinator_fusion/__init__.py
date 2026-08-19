@@ -1,0 +1,1 @@
+"""FactoryOps Coordinator Fusion Contract."""

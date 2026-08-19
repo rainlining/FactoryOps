@@ -1,0 +1,1 @@
+"""Coordinator Fusion Contract tests."""
