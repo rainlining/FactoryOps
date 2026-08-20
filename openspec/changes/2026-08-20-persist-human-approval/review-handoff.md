@@ -6,7 +6,7 @@
 - worktree：`.worktrees/persist-human-approval`
 - stacked base：`631206318cc3da93a2ac57889c902649e3a67728`
 - 实现 commits：`d1ce68c`、`39a8c14`、`b43e481`
-- 最终 HEAD：待本 handoff 提交后填写
+- 已验证内容 HEAD：`715df29a220bf68ed99ada6df578724e87d9e1f8`；仅含本字段与 T6 状态的收尾 commit 以远端分支 HEAD 为准
 
 ## 已实现范围
 
