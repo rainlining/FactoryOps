@@ -1,0 +1,23 @@
+{
+  "contract_version": "1.0.0",
+  "identity": {
+    "approval_id": "APR-28BB1D59E0933638D81B8BB6F2F6EF91",
+    "approval_key": "APK-28BB1D59E0933638D81B8BB6F2F6EF91DA8C03BC7BA0D7E3E61A8D1B157E3B97",
+    "decision_id": "RSK-11111111111111111111111111111111",
+    "decision_key": "RDK-CD2D313EB41C4D608FC227CF5E54E2F33411A23955E68F9D2A8F2C55C8B0E4A5",
+    "fusion_id": "FUS-22222222222222222222222222222222",
+    "fusion_key": "FUK-2222222222222222222222222222222222222222222222222222222222222222",
+    "run_id": "RUN-33333333333333333333333333333333",
+    "coordinator_execution_id": "EXE-44444444444444444444444444444444",
+    "round": 1
+  },
+  "request": {
+    "proposed_action": "STOP_LINE",
+    "risk_level": "HIGH",
+    "policy_refs": ["policy:risk-action-v1", "policy:production-stop-v1"],
+    "reason_codes": ["HIGH_RISK_ACTION", "STOP_LINE_REQUIRES_APPROVAL"],
+    "requested_at": "2026-08-20T11:00:00Z",
+    "expires_at": "2026-08-20T12:00:00Z"
+  },
+  "state": {"revision": 1, "status": "PENDING"}
+}
