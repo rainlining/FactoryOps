@@ -26,23 +26,34 @@ class RiskDecisionValidationError(ValueError):
         super().__init__("; ".join(f"{i.path}: {i.message}" for i in self.issues))
 
 
-def compute_decision_key(recommendation_key: str) -> str:
-    return (
-        "RDK-"
-        + hashlib.sha256(f"v1\n{recommendation_key}".encode()).hexdigest().upper()
-    )
+def compute_decision_key(subject_key: str) -> str:
+    return "RDK-" + hashlib.sha256(f"v1\n{subject_key}".encode()).hexdigest().upper()
 
 
 def validate_risk_decision(
     payload: Mapping[str, object],
-    recommendation_identity: Mapping[str, object],
-    supported_versions: Collection[str] = ("1.0.0",),
+    recommendation_identity: Mapping[str, object] | None = None,
+    fusion_identity: Mapping[str, object] | None = None,
+    supported_versions: Collection[str] = ("1.0.0", "1.1.0"),
 ) -> None:
     _validate_risk_decision_payload(payload, supported_versions)
     identity = payload["identity"]
     assert isinstance(identity, Mapping)
-    for field in ("recommendation_id", "recommendation_key", "run_id", "task_id"):
-        if identity[field] != recommendation_identity.get(field):
+    subject_type = identity.get("subject_type", "RECOMMENDATION")
+    source = fusion_identity if subject_type == "FUSION" else recommendation_identity
+    if source is None or (subject_type == "FUSION") != (fusion_identity is not None):
+        _raise(
+            "subject_binding_missing",
+            "$.identity.subject_type",
+            "source subject identity is required",
+        )
+    fields = (
+        ("fusion_id", "fusion_key", "run_id", "coordinator_execution_id", "round")
+        if subject_type == "FUSION"
+        else ("recommendation_id", "recommendation_key", "run_id", "task_id")
+    )
+    for field in fields:
+        if identity.get(field) != source.get(field):
             _raise(
                 "recommendation_identity_mismatch",
                 f"$.identity.{field}",
@@ -82,9 +93,12 @@ def _validate_risk_decision_payload(
         _raise("schema_validation_failed", _path(error), error.message)
     identity = payload["identity"]
     assert isinstance(identity, Mapping)
-    if identity["decision_key"] != compute_decision_key(
-        str(identity["recommendation_key"])
-    ):
+    subject_key = (
+        identity.get("fusion_key")
+        if identity.get("subject_type") == "FUSION"
+        else identity.get("recommendation_key")
+    )
+    if identity["decision_key"] != compute_decision_key(str(subject_key)):
         _raise(
             "decision_key_mismatch",
             "$.identity.decision_key",

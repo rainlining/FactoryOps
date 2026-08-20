@@ -33,6 +33,33 @@ def recommendation_identity() -> dict[str, object]:
     }
 
 
+def fusion_fixture() -> dict[str, object]:
+    payload = json.loads(
+        (ROOT / "fixtures" / "valid" / "fusion-stop-line-approval.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    identity = payload["identity"]
+    assert isinstance(identity, dict)
+    identity["decision_key"] = compute_decision_key(str(identity["fusion_key"]))
+    return payload
+
+
+def fusion_identity() -> dict[str, object]:
+    identity = fusion_fixture()["identity"]
+    assert isinstance(identity, dict)
+    return {
+        field: identity[field]
+        for field in (
+            "fusion_id",
+            "fusion_key",
+            "run_id",
+            "coordinator_execution_id",
+            "round",
+        )
+    }
+
+
 def issue(payload: dict[str, object]) -> tuple[str, str]:
     with pytest.raises(RiskDecisionValidationError) as caught:
         validate_risk_decision(payload, recommendation_identity())
@@ -53,6 +80,22 @@ def test_accepts_stop_line_only_with_approval() -> None:
     assert isinstance(gate, dict)
     gate.update(decision="ALLOW", approval_required=False)
     assert issue(payload) == ("high_risk_approval_required", "$.gate")
+
+
+def test_accepts_fusion_subject_and_rejects_cross_subject_binding() -> None:
+    payload = fusion_fixture()
+    validate_risk_decision(payload, fusion_identity=fusion_identity())
+    changed = copy.deepcopy(payload)
+    changed["identity"]["run_id"] = "RUN-" + "F" * 32
+    with pytest.raises(RiskDecisionValidationError) as caught:
+        validate_risk_decision(changed, fusion_identity=fusion_identity())
+    assert caught.value.issues[0].code == "recommendation_identity_mismatch"
+
+    with pytest.raises(RiskDecisionValidationError) as caught:
+        validate_risk_decision(
+            payload, recommendation_identity=recommendation_identity()
+        )
+    assert caught.value.issues[0].code == "subject_binding_missing"
 
 
 def test_low_risk_action_cannot_claim_high_risk() -> None:
