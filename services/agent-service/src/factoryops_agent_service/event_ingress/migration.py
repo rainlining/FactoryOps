@@ -19,6 +19,7 @@ MIGRATION_VERSIONS = (
     "012_create_coordinator_fusions",
     "013_extend_risk_decision_subject",
     "014_create_human_approvals",
+    "015_bind_human_approval_incident",
 )
 
 
@@ -130,9 +131,33 @@ def _validate_table_shape(
             {"table": table},
         )
     )
-    if columns != expected_columns or constraints != expected_constraints:
+    allowed_columns = {frozenset(expected_columns)}
+    if table == "human_approvals":
+        allowed_columns.add(frozenset(expected_columns | {"incident_id"}))
+    if frozenset(columns) not in allowed_columns or constraints != expected_constraints:
         raise RuntimeError(
             f"migration 014 found unexpected {table} structure; audit before retry"
+        )
+
+
+def _apply_human_approval_incident_migration(
+    connection: Connection, statements: list[str]
+) -> None:
+    column = connection.execute(
+        text(
+            "SELECT data_type AS data_type,"
+            "character_maximum_length AS character_maximum_length,"
+            "is_nullable AS is_nullable "
+            "FROM information_schema.columns WHERE table_schema=DATABASE() "
+            "AND table_name='human_approvals' AND column_name='incident_id'"
+        )
+    ).one_or_none()
+    if column is None:
+        connection.exec_driver_sql(statements[0])
+        return
+    if column[0] != "varchar" or int(column[1]) != 67 or column[2] != "YES":
+        raise RuntimeError(
+            "migration 015 found unexpected incident_id structure; audit before retry"
         )
 
 
@@ -255,6 +280,8 @@ def migrate(engine: Engine) -> None:
                 _apply_risk_decision_subject_migration(connection, statements)
             elif version == "014_create_human_approvals":
                 _apply_human_approval_migration(connection, statements)
+            elif version == "015_bind_human_approval_incident":
+                _apply_human_approval_incident_migration(connection, statements)
             else:
                 for statement in statements:
                     connection.exec_driver_sql(statement)

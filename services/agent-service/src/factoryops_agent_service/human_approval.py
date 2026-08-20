@@ -19,6 +19,12 @@ from factoryops_agent_service.risk_decision import (
     RiskDecisionPersistenceIntegrityError,
     RiskDecisionService,
 )
+from factoryops_agent_service.run_lifecycle.service import (
+    AgentRunLifecycleService,
+)
+from factoryops_agent_service.run_lifecycle.service import (
+    PersistenceIntegrityError as RunPersistenceIntegrityError,
+)
 
 
 class HumanApprovalPersistenceRejected(ValueError):
@@ -104,7 +110,12 @@ class HumanApprovalService:
                             raise HumanApprovalPersistenceIntegrityError(
                                 "Risk Decision provenance is inconsistent"
                             ) from error
-                        validate_human_approval(payload, source)
+                        source_run = self._read_source_run(
+                            connection,
+                            str(identity["run_id"]),
+                            for_update=True,
+                        )
+                        validate_human_approval(payload, source, source_run)
                         existing = self._read_by_identity(
                             connection, key, approval_id, for_update=True
                         )
@@ -118,7 +129,7 @@ class HumanApprovalService:
                             return HumanApprovalSaveResult(
                                 HumanApprovalSaveOutcome.APPLIED, payload
                             )
-                        stored = self._decode(connection, existing)
+                        stored = self._decode(connection, existing, for_update=True)
                         relation = classify_human_approval_relation(stored, payload)
                         if relation == "duplicate-identical":
                             return HumanApprovalSaveResult(
@@ -174,7 +185,11 @@ class HumanApprovalService:
             return None if row is None else self._decode(connection, row)
 
     def _decode(
-        self, connection: Connection, row: Mapping[str, object]
+        self,
+        connection: Connection,
+        row: Mapping[str, object],
+        *,
+        for_update: bool = False,
     ) -> Mapping[str, object]:
         payload_text = str(row["payload_json"])
         if hashlib.sha256(payload_text.encode()).hexdigest() != row["canonical_sha256"]:
@@ -193,11 +208,15 @@ class HumanApprovalService:
             if source_row is None:
                 raise ValueError("Risk Decision is missing")
             source = RiskDecisionService(self._engine)._decode(connection, source_row)
-            validate_human_approval(payload, source)
+            source_run = self._read_source_run(
+                connection, str(row["run_id"]), for_update=for_update
+            )
+            validate_human_approval(payload, source, source_run)
         except (
             json.JSONDecodeError,
             ValueError,
             RiskDecisionPersistenceIntegrityError,
+            RunPersistenceIntegrityError,
         ) as error:
             raise HumanApprovalPersistenceIntegrityError(
                 "Approval payload or provenance is inconsistent"
@@ -218,6 +237,12 @@ class HumanApprovalService:
             "coordinator_execution_id": row["coordinator_execution_id"],
             "round": row["fusion_round"],
         }
+        if payload["contract_version"] == "1.1.0":
+            typed["incident_id"] = row["incident_id"]
+        elif row["incident_id"] is not None:
+            raise HumanApprovalPersistenceIntegrityError(
+                "legacy Approval has unexpected incident binding"
+            )
         if any(identity[field] != value for field, value in typed.items()) or (
             state["revision"] != row["revision"]
             or state["status"] != row["status"]
@@ -258,7 +283,7 @@ class HumanApprovalService:
                     != history_text.encode()
                 ):
                     raise ValueError("history payload is not canonical")
-                validate_human_approval(history_payload, source)
+                validate_human_approval(history_payload, source, source_run)
                 if (
                     history_payload["state"]["revision"] != item["revision"]
                     or history_payload["state"]["status"] != item["status"]
@@ -307,6 +332,29 @@ class HumanApprovalService:
             )
         return rows[0] if rows else None
 
+    def _read_source_run(
+        self,
+        connection: Connection,
+        run_id: str,
+        *,
+        for_update: bool = False,
+    ) -> Mapping[str, object] | None:
+        if not for_update:
+            suffix = ""
+        else:
+            suffix = " FOR UPDATE"
+        row = (
+            connection.execute(
+                text("SELECT * FROM agent_runs WHERE run_id=:run" + suffix),
+                {"run": run_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            return None
+        return AgentRunLifecycleService(self._engine).to_contract(row)
+
     @staticmethod
     def _insert_current(
         connection: Connection, payload: Mapping[str, object], canonical: bytes
@@ -319,10 +367,10 @@ class HumanApprovalService:
         connection.execute(
             text(
                 "INSERT INTO human_approvals (approval_id,approval_key,decision_id,decision_key,"
-                "fusion_id,fusion_key,run_id,coordinator_execution_id,fusion_round,revision,status,"
+                "fusion_id,fusion_key,run_id,incident_id,coordinator_execution_id,fusion_round,revision,status,"
                 "canonical_sha256,payload_json,requested_at,expires_at,updated_at,created_at) VALUES "
-                "(:id,:key,:decision_id,:decision_key,:fusion_id,:fusion_key,:run_id,:execution_id,"
-                ":round,:revision,:status,:hash,:payload,:requested,:expires,CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6))"
+                "(:id,:key,:decision_id,:decision_key,:fusion_id,:fusion_key,:run_id,:incident_id,"
+                ":execution_id,:round,:revision,:status,:hash,:payload,:requested,:expires,CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6))"
             ),
             {
                 "id": identity["approval_id"],
@@ -332,6 +380,7 @@ class HumanApprovalService:
                 "fusion_id": identity["fusion_id"],
                 "fusion_key": identity["fusion_key"],
                 "run_id": identity["run_id"],
+                "incident_id": identity.get("incident_id"),
                 "execution_id": identity["coordinator_execution_id"],
                 "round": identity["round"],
                 "revision": state["revision"],

@@ -44,7 +44,7 @@ def mysql_engine() -> Engine:
         engine.dispose()
 
 
-def _facts(engine: Engine, marker: str):
+def _facts(engine: Engine, marker: str, version: str = "1.0.0"):
     run_id, coordinator_id, sources = _parents(engine, marker)
     fusion = _fusion(run_id, coordinator_id, sources, marker)
     CoordinatorFusionService(engine).save(fusion)
@@ -60,7 +60,7 @@ def _facts(engine: Engine, marker: str):
     decision_key = str(risk["identity"]["decision_key"])
     requested = datetime(2026, 8, 20, 9, tzinfo=timezone.utc)
     approval = {
-        "contract_version": "1.0.0",
+        "contract_version": version,
         "identity": {
             "approval_id": compute_approval_id(decision_key),
             "approval_key": compute_approval_key(decision_key),
@@ -94,7 +94,58 @@ def _facts(engine: Engine, marker: str):
         },
         "state": {"revision": 1, "status": "PENDING"},
     }
+    if version == "1.1.0":
+        with engine.connect() as connection:
+            approval["identity"]["incident_id"] = connection.scalar(
+                text("SELECT incident_id FROM agent_runs WHERE run_id=:run"),
+                {"run": run_id},
+            )
     return approval
+
+
+def test_v11_persists_incident_binding(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "8", "1.1.0")
+    service = HumanApprovalService(mysql_engine)
+    assert service.save(pending).outcome is HumanApprovalSaveOutcome.APPLIED
+    assert service.get_by_key(str(pending["identity"]["approval_key"])) == pending
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT incident_id FROM human_approvals WHERE approval_id=:id"),
+                {"id": pending["identity"]["approval_id"]},
+            )
+            == pending["identity"]["incident_id"]
+        )
+
+
+def test_v11_rejects_wrong_run_incident_without_rows(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "9", "1.1.0")
+    pending["identity"]["incident_id"] = "QI-" + "F" * 64
+    with pytest.raises(ValueError, match="incident"):
+        HumanApprovalService(mysql_engine).save(pending)
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT COUNT(*) FROM human_approvals WHERE approval_id=:id"),
+                {"id": pending["identity"]["approval_id"]},
+            )
+            == 0
+        )
+
+
+def test_v11_rejects_typed_incident_corruption(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "a", "1.1.0")
+    service = HumanApprovalService(mysql_engine)
+    service.save(pending)
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE human_approvals SET incident_id=:incident WHERE approval_id=:id"
+            ),
+            {"incident": "QI-" + "F" * 64, "id": pending["identity"]["approval_id"]},
+        )
+    with pytest.raises(HumanApprovalPersistenceIntegrityError):
+        service.get_by_key(str(pending["identity"]["approval_key"]))
 
 
 def _approved(pending):
@@ -312,3 +363,21 @@ def test_migration_recovers_current_only_partial_state(mysql_engine: Engine):
             )
             == 2
         )
+
+
+def test_migration_015_recovers_after_ddl_without_history(mysql_engine: Engine):
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "DELETE FROM agent_schema_history "
+                "WHERE version='015_bind_human_approval_incident'"
+            )
+        )
+    migrate(mysql_engine)
+    with mysql_engine.connect() as connection:
+        assert connection.scalar(
+            text(
+                "SELECT COUNT(*) FROM agent_schema_history "
+                "WHERE version='015_bind_human_approval_incident'"
+            )
+        ) == 1

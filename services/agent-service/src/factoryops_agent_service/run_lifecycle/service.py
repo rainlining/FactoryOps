@@ -4,9 +4,10 @@ import uuid
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 
-from contracts.agent_run.validator import AgentRunValidationError, validate_run
 from sqlalchemy import Engine
 from sqlalchemy.exc import IntegrityError
+
+from contracts.agent_run.validator import AgentRunValidationError, validate_run
 
 from .model import (
     OperationOutcome,
@@ -152,7 +153,7 @@ class AgentRunLifecycleService:
 
     def get_run(self, run_id: str) -> Mapping[str, object] | None:
         row = self._repository.find_run(run_id)
-        return None if row is None else self._to_contract(row)
+        return None if row is None else self.to_contract(row)
 
     def transition_run(
         self,
@@ -204,7 +205,7 @@ class AgentRunLifecycleService:
         if command.to_status is RunStatus.SUSPENDED:
             candidate["latest_checkpoint_id"] = command.checkpoint_id
         try:
-            self._to_contract(candidate)
+            self.to_contract(candidate)
         except PersistenceIntegrityError as error:
             existing_result = self._find_existing_transition_result(command)
             if existing_result is not None:
@@ -320,7 +321,7 @@ class AgentRunLifecycleService:
         command: object,
     ) -> RunOperationResult:
         try:
-            self._to_contract(run)
+            self.to_contract(run)
         except PersistenceIntegrityError as error:
             existing = find_existing()
             if existing is not None:
@@ -343,13 +344,13 @@ class AgentRunLifecycleService:
                 if matches(existing, command)
                 else OperationOutcome.DUPLICATE_CONFLICTING
             )
-            return RunOperationResult(outcome, self._to_contract(existing))
+            return RunOperationResult(outcome, self.to_contract(existing))
         created = self._repository.find_run(str(run["run_id"]))
         if created is None:
             raise PersistenceIntegrityError("created Run could not be reloaded")
         return RunOperationResult(
             OperationOutcome.APPLIED,
-            self._to_contract(created),
+            self.to_contract(created),
         )
 
     def _classify_existing_creation(
@@ -363,7 +364,7 @@ class AgentRunLifecycleService:
             if matches(existing, command)
             else OperationOutcome.DUPLICATE_CONFLICTING
         )
-        return RunOperationResult(outcome, self._to_contract(existing))
+        return RunOperationResult(outcome, self.to_contract(existing))
 
     def _initial_run(
         self,
@@ -493,7 +494,7 @@ class AgentRunLifecycleService:
             "code_revision": provenance.code_revision,
         }
 
-    def _to_contract(self, row: Mapping[str, object]) -> Mapping[str, object]:
+    def to_contract(self, row: Mapping[str, object]) -> Mapping[str, object]:
         identity: dict[str, object] = {
             "run_id": row["run_id"],
             "run_kind": row["run_kind"],
@@ -553,6 +554,9 @@ class AgentRunLifecycleService:
                 f"stored Run violates Contract: {error}"
             ) from error
         return contract
+
+    # Kept for existing collaborators while the public conversion boundary is adopted.
+    _to_contract = to_contract
 
     def _now(self) -> datetime:
         value = self._clock()
