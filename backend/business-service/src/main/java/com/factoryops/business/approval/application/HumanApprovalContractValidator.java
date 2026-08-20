@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -18,19 +19,17 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Component
 public final class HumanApprovalContractValidator {
-  private final Schema schema;
+  private final Map<String, Schema> schemas;
 
   public HumanApprovalContractValidator(JsonMapper mapper) {
-    try (var input = getClass().getResourceAsStream("/contracts/human_approval/v1.0.0/schema.json")) {
-      if (input == null) throw new IllegalStateException("Human Approval schema is missing");
-      schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-          .getSchema(mapper.readTree(input));
-    } catch (IOException error) {
-      throw new IllegalStateException("Cannot load Human Approval schema", error);
-    }
+    schemas = Map.of("1.0.0", load(mapper, "1.0.0"), "1.1.0", load(mapper, "1.1.0"));
   }
 
   public ValidatedApproval validate(JsonNode input) {
+    var version = input.path("contract_version").asText();
+    var schema = schemas.get(version);
+    if (schema == null)
+      throw problem("approval_contract_invalid", "$.contract_version", "Unsupported Human Approval contract version");
     var errors = schema.validate(input);
     if (!errors.isEmpty()) {
       var first = errors.stream().min(Comparator.comparing(e -> e.getInstanceLocation().toString())).orElseThrow();
@@ -70,14 +69,25 @@ public final class HumanApprovalContractValidator {
     }
     var canonical = CanonicalJson.canonicalize(payload);
     return new ValidatedApproval(
-        identity.path("approval_id").asText(), expectedKey,
+        version, identity.path("approval_id").asText(), expectedKey,
         identity.path("decision_id").asText(), decisionKey,
         identity.path("fusion_id").asText(), identity.path("fusion_key").asText(),
-        identity.path("run_id").asText(), identity.path("coordinator_execution_id").asText(),
+        identity.path("run_id").asText(), identity.has("incident_id") ? identity.path("incident_id").asText() : null,
+        identity.path("coordinator_execution_id").asText(),
         identity.path("round").asInt(), request.path("proposed_action").asText(),
         request.path("risk_level").asText(), requestedAt, expiresAt,
         state.path("revision").asInt(), state.path("status").asText(), actor, decidedAt,
         reason, comment, payload, canonical, CanonicalJson.sha256(payload));
+  }
+
+  private Schema load(JsonMapper mapper, String version) {
+    try (var input = getClass().getResourceAsStream("/contracts/human_approval/v" + version + "/schema.json")) {
+      if (input == null) throw new IllegalStateException("Human Approval schema is missing: " + version);
+      return SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
+          .getSchema(mapper.readTree(input));
+    } catch (IOException error) {
+      throw new IllegalStateException("Cannot load Human Approval schema: " + version, error);
+    }
   }
 
   private static String approvalKey(String decisionKey) {

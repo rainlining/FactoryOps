@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.factoryops.business.approval.application.HumanApprovalContractValidator;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -20,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(
     properties = {
@@ -41,6 +44,8 @@ class HumanApprovalHttpIT {
 
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate jdbc;
+  @Autowired JsonMapper mapper;
+  @Autowired HumanApprovalContractValidator validator;
 
   @BeforeEach
   void clean() {
@@ -70,6 +75,36 @@ class HumanApprovalHttpIT {
     create(pending().replace("\"PENDING\"", "\"APPROVED\""))
         .andExpect(status().isUnprocessableEntity());
     assertThat(count("business_approvals")).isZero();
+  }
+
+  @Test
+  void create_requires_incident_bound_v11() throws Exception {
+    create(pending().replace("\"1.1.0\"", "\"1.0.0\"")
+            .replace(",\n    \"incident_id\": \"QI-5555555555555555555555555555555555555555555555555555555555555555\"", ""))
+        .andExpect(status().isUnprocessableEntity());
+    assertThat(count("business_approvals")).isZero();
+  }
+
+  @Test
+  void reads_legacy_v10_without_incident_binding() throws Exception {
+    var legacy = pending().replace("\"1.1.0\"", "\"1.0.0\"")
+        .replace(",\n    \"incident_id\": \"QI-5555555555555555555555555555555555555555555555555555555555555555\"", "");
+    var value = validator.validate(mapper.readTree(legacy));
+    var now = Instant.parse("2026-08-20T11:00:00Z");
+    var text = new String(value.canonical(), StandardCharsets.UTF_8);
+    jdbc.update(
+        "INSERT INTO business_approvals (approval_id,approval_key,decision_id,decision_key,fusion_id,fusion_key,run_id,incident_id,coordinator_execution_id,fusion_round,proposed_action,risk_level,requested_at,expires_at,revision,status,canonical_sha256,payload,created_at,updated_at) VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,1,'PENDING',?,?,?,?)",
+        value.approvalId(), value.approvalKey(), value.decisionId(), value.decisionKey(),
+        value.fusionId(), value.fusionKey(), value.runId(), value.coordinatorExecutionId(),
+        value.round(), value.proposedAction(), value.riskLevel(), value.requestedAt(),
+        value.expiresAt(), value.sha256(), text, now, now);
+    jdbc.update(
+        "INSERT INTO business_approval_history (approval_id,revision,status,actor_id,canonical_sha256,payload,recorded_at) VALUES (?,1,'PENDING',NULL,?,?,?)",
+        value.approvalId(), value.sha256(), text, now);
+    mvc.perform(get("/api/v1/approvals/" + key()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.approval.contract_version").value("1.0.0"))
+        .andExpect(jsonPath("$.approval.identity.incident_id").doesNotExist());
   }
 
   @Test
@@ -128,6 +163,15 @@ class HumanApprovalHttpIT {
     create(pending()).andExpect(status().isCreated());
     decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
     jdbc.update("UPDATE business_approvals SET actor_id='different-actor'");
+    mvc.perform(get("/api/v1/approvals/" + key()))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.code").value("approval_integrity_error"));
+  }
+
+  @Test
+  void query_fails_closed_on_incident_projection_corruption() throws Exception {
+    create(pending()).andExpect(status().isCreated());
+    jdbc.update("UPDATE business_approvals SET incident_id='QI-" + "F".repeat(64) + "'");
     mvc.perform(get("/api/v1/approvals/" + key()))
         .andExpect(status().isInternalServerError())
         .andExpect(jsonPath("$.code").value("approval_integrity_error"));

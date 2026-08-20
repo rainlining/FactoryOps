@@ -110,6 +110,13 @@
                     <include>schema.json</include>
                 </includes>
             </resource>
+            <resource>
+                <directory>${project.basedir}/../../contracts/human_approval/v1.1.0</directory>
+                <targetPath>contracts/human_approval/v1.1.0</targetPath>
+                <includes>
+                    <include>schema.json</include>
+                </includes>
+            </resource>
         </resources>
         <testResources>
             <testResource>

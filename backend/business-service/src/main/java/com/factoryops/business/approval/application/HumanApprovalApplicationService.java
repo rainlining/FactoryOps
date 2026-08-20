@@ -44,6 +44,8 @@ public final class HumanApprovalApplicationService {
 
   public ApprovalOutcome create(JsonNode input) {
     var candidate = validator.validate(input);
+    if (!"1.1.0".equals(candidate.contractVersion()))
+      throw problem(422, "approval_incident_binding_required", "$.contract_version", "Creation requires incident-bound Human Approval v1.1.0");
     if (!"PENDING".equals(candidate.status()) || candidate.revision() != 1)
       throw problem(422, "approval_must_be_pending", "$.state.status", "Creation accepts only revision 1 PENDING");
     return write.execute(status -> {
@@ -103,8 +105,8 @@ public final class HumanApprovalApplicationService {
     var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
     jdbc.queryForObject("SELECT LAST_INSERT_ID(1)", Long.class);
     jdbc.update(
-        "INSERT INTO business_approvals (approval_id,approval_key,decision_id,decision_key,fusion_id,fusion_key,run_id,coordinator_execution_id,fusion_round,proposed_action,risk_level,requested_at,expires_at,revision,status,canonical_sha256,payload,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,'PENDING',?,?,?,?) ON DUPLICATE KEY UPDATE revision=revision+(0*LAST_INSERT_ID(0))",
-        value.approvalId(), value.approvalKey(), value.decisionId(), value.decisionKey(), value.fusionId(), value.fusionKey(), value.runId(), value.coordinatorExecutionId(), value.round(), value.proposedAction(), value.riskLevel(), value.requestedAt(), value.expiresAt(), value.sha256(), text(value), now, now);
+        "INSERT INTO business_approvals (approval_id,approval_key,decision_id,decision_key,fusion_id,fusion_key,run_id,incident_id,coordinator_execution_id,fusion_round,proposed_action,risk_level,requested_at,expires_at,revision,status,canonical_sha256,payload,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'PENDING',?,?,?,?) ON DUPLICATE KEY UPDATE revision=revision+(0*LAST_INSERT_ID(0))",
+        value.approvalId(), value.approvalKey(), value.decisionId(), value.decisionKey(), value.fusionId(), value.fusionKey(), value.runId(), value.incidentId(), value.coordinatorExecutionId(), value.round(), value.proposedAction(), value.riskLevel(), value.requestedAt(), value.expiresAt(), value.sha256(), text(value), now, now);
     var marker = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     return marker != null && marker == 1L;
   }
@@ -136,6 +138,7 @@ public final class HumanApprovalApplicationService {
           || !value.fusionId().equals(row.get("fusion_id"))
           || !value.fusionKey().equals(row.get("fusion_key"))
           || !value.runId().equals(row.get("run_id"))
+          || !java.util.Objects.equals(value.incidentId(), row.get("incident_id"))
           || !value.coordinatorExecutionId().equals(row.get("coordinator_execution_id"))
           || value.round() != ((Number) row.get("fusion_round")).intValue()
           || !value.proposedAction().equals(row.get("proposed_action"))

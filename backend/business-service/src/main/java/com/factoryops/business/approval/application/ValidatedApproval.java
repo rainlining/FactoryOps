@@ -4,6 +4,7 @@ import java.time.Instant;
 import tools.jackson.databind.node.ObjectNode;
 
 public record ValidatedApproval(
+    String contractVersion,
     String approvalId,
     String approvalKey,
     String decisionId,
@@ -11,6 +12,7 @@ public record ValidatedApproval(
     String fusionId,
     String fusionKey,
     String runId,
+    String incidentId,
     String coordinatorExecutionId,
     int round,
     String proposedAction,
