@@ -1,7 +1,7 @@
 # Change 提案：持久化 Human Approval
 
 - `change_id`: `2026-08-20-persist-human-approval`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-define-human-approval-contract`
 - `feature_branch`: `codex/persist-human-approval`
