@@ -1,7 +1,7 @@
 # Change 提案：绑定 Approval 动作目标
 
 - `change_id`: `2026-08-20-bind-approval-action-target`
-- `status`: `applying`
+- `status`: `technically-verified`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-operate-human-approval`
 - `feature_branch`: `codex/bind-approval-action-target`
