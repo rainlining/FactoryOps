@@ -29,7 +29,7 @@ _RISK_BY_ACTION = {
     "REJECT_ITEM": "MEDIUM",
     "HOLD_BATCH": "MEDIUM",
     "STOP_LINE": "HIGH",
-    "ESCALATE": "HIGH",
+    "ESCALATE": "LOW",
 }
 
 
@@ -68,7 +68,9 @@ def evaluate_fusion_policy(fusion: Mapping[str, object]) -> dict[str, object]:
     approval_required = risk_level == "HIGH" or (
         risk_level == "MEDIUM" and has_conflict
     )
-    if risk_level == "HIGH":
+    if action == "ESCALATE":
+        reason = "HUMAN_ESCALATION_ALLOWED"
+    elif risk_level == "HIGH":
         reason = "HIGH_RISK_ACTION_REQUIRES_APPROVAL"
     elif approval_required:
         reason = "SPECIALIST_CONFLICT_REQUIRES_APPROVAL"

@@ -90,7 +90,9 @@ class RiskDecisionService:
                                 raise RiskDecisionPersistenceRejected(
                                     "Fusion does not exist"
                                 )
-                            source_payload = self._decode_fusion(connection, source)
+                            source_payload = self._decode_fusion(
+                                connection, source, for_update=True
+                            )
                         else:
                             source = self._lock_recommendation(
                                 connection, str(identity["recommendation_key"])
@@ -266,10 +268,16 @@ class RiskDecisionService:
         return payload
 
     def _decode_fusion(
-        self, connection: Connection, row: Mapping[str, object]
+        self,
+        connection: Connection,
+        row: Mapping[str, object],
+        *,
+        for_update: bool = False,
     ) -> Mapping[str, object]:
         try:
-            return CoordinatorFusionService(self._engine)._decode(connection, row)
+            return CoordinatorFusionService(self._engine)._decode(
+                connection, row, for_update=for_update
+            )
         except FusionPersistenceIntegrityError as error:
             raise RiskDecisionPersistenceIntegrityError(
                 "Fusion payload or provenance is inconsistent"

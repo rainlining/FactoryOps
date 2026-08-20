@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -14,7 +16,10 @@ from factoryops_agent_service.fusion_risk_evaluation import (
     FusionRiskEvaluationService,
     evaluate_fusion_policy,
 )
-from factoryops_agent_service.risk_decision import RiskDecisionSaveOutcome
+from factoryops_agent_service.risk_decision import (
+    RiskDecisionSaveOutcome,
+    RiskDecisionService,
+)
 from sqlalchemy import Engine, create_engine, text
 from test_coordinator_fusion_mysql import _fusion, _parents
 from testcontainers.community.mysql import MySqlContainer
@@ -41,7 +46,7 @@ def mysql_engine() -> Engine:
         ("REJECT_ITEM", False, "ALLOW", "MEDIUM"),
         ("HOLD_BATCH", True, "REQUIRE_APPROVAL", "MEDIUM"),
         ("STOP_LINE", False, "REQUIRE_APPROVAL", "HIGH"),
-        ("ESCALATE", True, "REQUIRE_APPROVAL", "HIGH"),
+        ("ESCALATE", True, "ALLOW", "LOW"),
     ),
 )
 def test_policy_matrix(action: str, conflict: bool, decision: str, risk: str):
@@ -146,3 +151,63 @@ def test_missing_or_corrupt_fusion_is_rejected_without_decision(mysql_engine: En
         )
     with mysql_engine.connect() as connection:
         assert connection.scalar(text("SELECT COUNT(*) FROM risk_decisions")) == before
+
+
+def test_save_locks_complete_fusion_provenance_until_decision_commits(
+    mysql_engine: Engine, monkeypatch: pytest.MonkeyPatch
+):
+    run_id, coordinator_id, sources = _parents(mysql_engine, "7")
+    fusion = _fusion(run_id, coordinator_id, sources, "7")
+    CoordinatorFusionService(mysql_engine).save(fusion)
+    command = FusionRiskEvaluationCommand(
+        fusion_key=str(fusion["identity"]["fusion_key"]), generated_at=GENERATED_AT
+    )
+    source_id = sources[0]["identity"]["recommendation_id"]
+    validated = threading.Event()
+    mutation_started = threading.Event()
+    release_save = threading.Event()
+    commit_order: list[str] = []
+    original = RiskDecisionService._decode_fusion
+
+    def pause_after_locked_validation(
+        service: RiskDecisionService, connection, row, *, for_update: bool = False
+    ):
+        payload = original(service, connection, row, for_update=for_update)
+        if for_update:
+            validated.set()
+            assert release_save.wait(5)
+        return payload
+
+    monkeypatch.setattr(
+        RiskDecisionService, "_decode_fusion", pause_after_locked_validation
+    )
+
+    def evaluate():
+        result = FusionRiskEvaluationService(mysql_engine).evaluate(command)
+        commit_order.append("decision")
+        return result
+
+    def corrupt_source():
+        with mysql_engine.begin() as connection:
+            mutation_started.set()
+            connection.execute(
+                text(
+                    "UPDATE specialist_recommendations SET canonical_sha256=:hash "
+                    "WHERE recommendation_id=:recommendation_id"
+                ),
+                {"hash": "0" * 64, "recommendation_id": source_id},
+            )
+        commit_order.append("corruption")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        decision_future = pool.submit(evaluate)
+        assert validated.wait(5)
+        mutation_future = pool.submit(corrupt_source)
+        assert mutation_started.wait(5)
+        time.sleep(0.25)
+        assert not mutation_future.done()
+        release_save.set()
+        assert decision_future.result().outcome is RiskDecisionSaveOutcome.APPLIED
+        mutation_future.result()
+
+    assert commit_order == ["decision", "corruption"]

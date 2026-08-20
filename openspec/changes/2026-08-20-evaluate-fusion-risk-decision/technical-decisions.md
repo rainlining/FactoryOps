@@ -4,4 +4,5 @@
 - 以显式 command timestamp 保证调用重试内容稳定；不在 service 内读取系统时钟。
 - 复用现有 Fusion 完整性读取和 Risk persistence 的事务/advisory locks，不复制 SQL 或扩大事务范围。
 - HIGH 与 MEDIUM-conflict 只产出 REQUIRE_APPROVAL，不伪装成人工审批已完成；Approval 是后续独立 Change。
+- ESCALATE 是进入人工流程的安全路由，定为 LOW/ALLOW，避免循环审批；这不是沿用总纲中不存在的风险等级。
 - 当前没有足够产品规则定义 BLOCK，保持枚举能力但不生成该分支。

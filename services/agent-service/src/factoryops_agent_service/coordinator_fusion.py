@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import IntegrityError
+
 from contracts.coordinator_fusion.validator import (
     canonicalize_coordinator_fusion,
     validate_coordinator_fusion,
 )
 from contracts.specialist_recommendation.validator import canonicalize_recommendation
-from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError
 
 
 class FusionPersistenceRejected(ValueError):
@@ -149,7 +150,11 @@ class CoordinatorFusionService:
         return FusionSaveResult(outcome, stored)
 
     def _decode(
-        self, connection: Connection, row: Mapping[str, object]
+        self,
+        connection: Connection,
+        row: Mapping[str, object],
+        *,
+        for_update: bool = False,
     ) -> Mapping[str, object]:
         raw = str(row["payload_json"])
         if hashlib.sha256(raw.encode()).hexdigest() != row["canonical_sha256"]:
@@ -160,23 +165,26 @@ class CoordinatorFusionService:
             payload = json.loads(raw)
             if canonicalize_coordinator_fusion(payload) != raw.encode():
                 raise ValueError("noncanonical Fusion")
-            sources = self._read_sources(connection, payload)
+            identity = payload["identity"]
+            execution_suffix = " FOR UPDATE" if for_update else ""
+            execution = (
+                connection.execute(
+                    text(
+                        "SELECT run_id,agent_role FROM agent_executions "
+                        "WHERE execution_id=:id" + execution_suffix
+                    ),
+                    {"id": identity["coordinator_execution_id"]},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            sources = self._read_sources(connection, payload, for_update)
             validate_coordinator_fusion(payload, sources)
         except (json.JSONDecodeError, ValueError) as error:
             raise FusionPersistenceIntegrityError(
                 "Fusion payload or source binding is inconsistent"
             ) from error
         identity, block = payload["identity"], payload["fusion"]
-        execution = (
-            connection.execute(
-                text(
-                    "SELECT run_id,agent_role FROM agent_executions WHERE execution_id=:id"
-                ),
-                {"id": identity["coordinator_execution_id"]},
-            )
-            .mappings()
-            .one_or_none()
-        )
         if (
             execution is None
             or execution["agent_role"] != "coordinator"
@@ -202,10 +210,13 @@ class CoordinatorFusionService:
             raise FusionPersistenceIntegrityError(
                 "Fusion typed columns are inconsistent"
             )
+        link_suffix = " FOR UPDATE" if for_update else ""
         links = (
             connection.execute(
                 text(
-                    "SELECT recommendation_id,recommendation_key,agent_role FROM coordinator_fusion_recommendations WHERE fusion_id=:id"
+                    "SELECT recommendation_id,recommendation_key,agent_role "
+                    "FROM coordinator_fusion_recommendations WHERE fusion_id=:id"
+                    + link_suffix
                 ),
                 {"id": row["fusion_id"]},
             )

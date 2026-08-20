@@ -10,10 +10,11 @@ Decision key 继续使用冻结的 `compute_decision_key(fusion_key)`；Decision
 |---|---|---|---|
 | PASS / RECHECK | LOW | ALLOW | ALLOW |
 | REJECT_ITEM / HOLD_BATCH | MEDIUM | ALLOW | REQUIRE_APPROVAL |
-| STOP_LINE / ESCALATE | HIGH | REQUIRE_APPROVAL | REQUIRE_APPROVAL |
+| STOP_LINE | HIGH | REQUIRE_APPROVAL | REQUIRE_APPROVAL |
+| ESCALATE | LOW | ALLOW | ALLOW |
 
 `ALLOW` 的 `allowed_actions` 只包含 proposed action；`REQUIRE_APPROVAL` 为空，明确表示审批前没有动作获得授权，且本 Change 不替审批系统选择 fallback。Policy refs 固定版本化为 `policy:risk-action-v1`，冲突升级另记录 `policy:risk-conflict-v1`。reason codes 由规则分支确定；confidence 继承 Fusion rank 1 candidate score，而不是声称新的模型置信度。
 
-失败路径：Fusion 不存在或完整性损坏时拒绝且不写 Decision；rank 1 与 proposed action 的关系已由 Fusion Contract 保证，但纯 policy 仍拒绝无法匹配的候选；Risk persistence 的 identical/conflicting 分类原样透传。服务不推进任何生命周期，因此不引入跨表状态事务。
+失败路径：Fusion 不存在或完整性损坏时拒绝且不写 Decision；rank 1 与 proposed action 的关系已由 Fusion Contract 保证，但纯 policy 仍拒绝无法匹配的候选；Risk persistence 的 identical/conflicting 分类原样透传。保存事务锁定 Fusion 主行、Coordinator Execution、按 key 排序的 Recommendation 来源和 link rows，再完成完整性校验与 Decision insert，防止校验后来源先被并发改写。服务不推进任何生命周期。
 
 测试使用真实 MySQL 覆盖 LOW、MEDIUM conflict、HIGH、identical replay、concurrent identical、missing/corrupt Fusion 和无生命周期副作用；纯函数覆盖完整动作矩阵。
