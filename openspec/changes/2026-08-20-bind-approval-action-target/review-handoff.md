@@ -7,7 +7,8 @@
 - stacked base：`4319d2b93df025139a5fd846acf6133cd6cf1bc6`
 - pre-review HEAD：`6485af1`
 - 首审修复 commit：`095ece8`
-- 状态：两项 Important 已修复并完成全量回归，等待同一子 Agent 复审。
+- reviewed implementation HEAD：`5d4195360c7cc26d89aeb44ded695cd196bf6c6f`
+- 状态：`review-handoff-ready`；首审 2 Important 已修复，同一子 Agent 复审 0 Critical / 0 Important。
 
 ## 已实现范围
 

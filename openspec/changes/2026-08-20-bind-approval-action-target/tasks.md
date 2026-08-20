@@ -4,5 +4,5 @@
 - [x] T2 Contract RED：incident 缺失/错绑、Run 错绑、canonical/relation。
 - [x] T3 Agent RED/GREEN：migration 015、保存/读取 Run lock 与 typed integrity。
 - [x] T4 Java RED/GREEN：V7、v1.1 schema、create required、legacy read。
-- [ ] T5 全量验证、独立审查、修复并复审。
-- [ ] T6 提交并按 stacked 顺序推送。
+- [x] T5 全量验证、独立审查、修复并复审。
+- [x] T6 提交并按 stacked 顺序推送。

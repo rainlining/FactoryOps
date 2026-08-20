@@ -1,6 +1,6 @@
 # Verification
 
-状态：`technically-verified`，等待独立子 Agent 审查。
+状态：`review-handoff-ready`；独立首审 2 Important 均已修复，同一子 Agent 复审为 0 Critical / 0 Important。
 
 ## 实际验证
 
