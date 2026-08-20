@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 
 from factoryops_agent_service.approved_action_resume import (
     ApprovedActionResumeIntegrityError,
@@ -66,13 +68,18 @@ class ApprovedWorkflowCompletionService:
         *,
         after_coordinator_hook: Callable[[], None] | None = None,
         admission_wait_seconds: float = 35,
+        admission_deadline_seconds: float = 120,
     ) -> None:
         if admission_wait_seconds <= 0:
             raise ValueError("admission_wait_seconds must be positive")
+        if admission_deadline_seconds <= 0:
+            raise ValueError("admission_deadline_seconds must be positive")
         self._engine = engine
+        self._admission_engine = create_engine(engine.url, poolclass=NullPool)
         self._business = business_client
         self._after_coordinator_hook = after_coordinator_hook or (lambda: None)
         self._admission_wait_seconds = admission_wait_seconds
+        self._admission_deadline_seconds = admission_deadline_seconds
 
     def complete(
         self, terminal_approval: Mapping[str, object]
@@ -86,47 +93,57 @@ class ApprovedWorkflowCompletionService:
             "workflow-complete:"
             + hashlib.sha256(str(identity["approval_id"]).encode()).hexdigest()[:45]
         )
-        with self._engine.connect() as admission:
-            while True:
+        deadline = time.monotonic() + self._admission_deadline_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ApprovedWorkflowCompletionIntegrityError(
+                    "workflow completion admission deadline exceeded"
+                )
+            with self._admission_engine.connect() as admission:
                 acquired = admission.scalar(
                     text("SELECT GET_LOCK(:name,:timeout)"),
-                    {"name": lock_name, "timeout": self._admission_wait_seconds},
+                    {
+                        "name": lock_name,
+                        "timeout": min(self._admission_wait_seconds, remaining),
+                    },
                 )
                 admission.commit()
-                if acquired == 1:
-                    break
+                if acquired == 0:
+                    continue
                 if acquired is None:
                     raise ApprovedWorkflowCompletionIntegrityError(
                         "workflow completion admission lock failed"
                     )
-            admission.commit()
-            try:
-                if not self._has_completion(identity):
-                    try:
-                        ApprovedActionResumeService(
-                            self._engine,
-                            self._business,
-                            before_business_hook=lambda connection: (
-                                self._resume_preflight(connection, identity)
-                            ),
-                        ).resume(terminal_approval)
-                    except BusinessActionPreconditionRejected as error:
-                        raise ApprovedWorkflowCompletionRejected(str(error)) from error
-                    except BusinessActionPreconditionIntegrityError as error:
-                        raise ApprovedWorkflowCompletionIntegrityError(
-                            str(error)
-                        ) from error
-                    except ApprovedActionResumeIntegrityError as error:
-                        raise ApprovedWorkflowCompletionIntegrityError(
-                            "workflow readiness or resume integrity failed"
-                        ) from error
-                return self._complete_agent(terminal_approval)
-            finally:
-                admission.rollback()
-                admission.execute(
-                    text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
-                )
-                admission.commit()
+                try:
+                    if not self._has_completion(identity):
+                        try:
+                            ApprovedActionResumeService(
+                                self._engine,
+                                self._business,
+                                before_business_hook=lambda connection: (
+                                    self._resume_preflight(connection, identity)
+                                ),
+                            ).resume(terminal_approval)
+                        except BusinessActionPreconditionRejected as error:
+                            raise ApprovedWorkflowCompletionRejected(
+                                str(error)
+                            ) from error
+                        except BusinessActionPreconditionIntegrityError as error:
+                            raise ApprovedWorkflowCompletionIntegrityError(
+                                str(error)
+                            ) from error
+                        except ApprovedActionResumeIntegrityError as error:
+                            raise ApprovedWorkflowCompletionIntegrityError(
+                                "workflow readiness or resume integrity failed"
+                            ) from error
+                    return self._complete_agent(terminal_approval)
+                finally:
+                    admission.rollback()
+                    admission.execute(
+                        text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name}
+                    )
+                    admission.commit()
 
     def _has_completion(self, identity: Mapping[str, object]) -> bool:
         execution_transition, execution_request, run_transition, run_request = (

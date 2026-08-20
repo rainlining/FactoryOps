@@ -29,3 +29,6 @@
 - admission 改为 35 秒有界阻塞分片并在超时后继续等待；测试用 0.05 秒分片与 0.3 秒赢家稳定获得 `APPLIED + DUPLICATE_IDENTICAL`，证明跨多个分片不会泄漏 timeout 分类。
 - 修复后 completion + resume 局部为 `21 passed in 62.01s`。
 - 第二轮修复后 completion + resume 局部为 `22 passed in 84.58s`。
+- 第三次复审仍有 1 Important：所有 admission waiter 长期占用业务 pool 且无限循环，可能让持锁赢家拿不到执行连接。
+- 新增 pool-size=2/3 callers 的真实 MySQL RED，以及外部 owner 持锁的 deadline RED；admission 改用独立 `NullPool` 连接、默认 120 秒 deadline，超限为 infrastructure integrity failure。
+- 第三轮修复后 completion + resume 局部为 `24 passed in 135.74s`。

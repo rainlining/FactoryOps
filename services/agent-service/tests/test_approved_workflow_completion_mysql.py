@@ -23,6 +23,7 @@ from factoryops_agent_service.execution_lifecycle.service import (
 )
 from factoryops_agent_service.worker_task_execution import WorkerTaskExecutionService
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.pool import QueuePool
 from test_approved_action_resume_mysql import RecordingBusinessClient, _terminal
 from test_worker_task_completion_mysql import _success
 from testcontainers.community.mysql import MySqlContainer
@@ -337,3 +338,52 @@ def test_cancelled_coordinator_fails_before_business(isolated_mysql_engine: Engi
     with pytest.raises(ApprovedWorkflowCompletionRejected, match="Coordinator"):
         ApprovedWorkflowCompletionService(mysql_engine, client).complete(terminal)
     assert client.calls == 0
+
+
+def test_identical_callers_at_business_pool_capacity_do_not_starve_winner(
+    isolated_mysql_engine: Engine,
+):
+    terminal, client = _ready(isolated_mysql_engine, "b")
+    constrained = create_engine(
+        isolated_mysql_engine.url,
+        poolclass=QueuePool,
+        pool_size=2,
+        max_overflow=0,
+        pool_timeout=1,
+    )
+    try:
+        service = ApprovedWorkflowCompletionService(
+            constrained, client, admission_wait_seconds=0.05
+        )
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [pool.submit(service.complete, terminal) for _ in range(3)]
+            outcomes = [future.result(timeout=10).outcome for future in futures]
+        assert outcomes.count(WorkflowCompletionOutcome.APPLIED) == 1
+        assert outcomes.count(WorkflowCompletionOutcome.DUPLICATE_IDENTICAL) == 2
+    finally:
+        constrained.dispose()
+
+
+def test_external_admission_owner_has_bounded_infrastructure_failure(
+    isolated_mysql_engine: Engine,
+):
+    terminal, client = _ready(isolated_mysql_engine, "c")
+    approval_id = str(terminal["identity"]["approval_id"])
+    lock_name = (
+        "workflow-complete:" + hashlib.sha256(approval_id.encode()).hexdigest()[:45]
+    )
+    with isolated_mysql_engine.connect() as owner:
+        assert owner.scalar(text("SELECT GET_LOCK(:name,0)"), {"name": lock_name}) == 1
+        owner.commit()
+        started = time.monotonic()
+        with pytest.raises(ApprovedWorkflowCompletionIntegrityError, match="deadline"):
+            ApprovedWorkflowCompletionService(
+                isolated_mysql_engine,
+                client,
+                admission_wait_seconds=0.05,
+                admission_deadline_seconds=0.15,
+            ).complete(terminal)
+        assert time.monotonic() - started < 2
+        assert client.calls == 0
+        owner.execute(text("SELECT RELEASE_LOCK(:name)"), {"name": lock_name})
+        owner.commit()
