@@ -1,7 +1,7 @@
 # Change 提案：生成 Coordinator Fusion
 
 - `change_id`: `2026-08-20-generate-coordinator-fusion`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `standard`
 - `depends_on`: `2026-08-20-generate-specialist-recommendation`
 - `feature_branch`: `codex/generate-coordinator-fusion`
