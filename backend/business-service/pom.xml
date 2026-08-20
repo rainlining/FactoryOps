@@ -117,6 +117,13 @@
                     <include>schema.json</include>
                 </includes>
             </resource>
+            <resource>
+                <directory>${project.basedir}/../../contracts/approved_action_receipt/v1.0.0</directory>
+                <targetPath>contracts/approved_action_receipt/v1.0.0</targetPath>
+                <includes>
+                    <include>schema.json</include>
+                </includes>
+            </resource>
         </resources>
         <testResources>
             <testResource>

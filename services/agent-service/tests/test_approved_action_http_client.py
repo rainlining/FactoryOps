@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import ClassVar
 
 import pytest
@@ -11,6 +12,7 @@ from factoryops_agent_service.approved_action_resume import (
     BusinessActionHttpClient,
     BusinessActionUnavailable,
 )
+from jsonschema import Draft202012Validator, FormatChecker
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -32,6 +34,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(409)
             self.end_headers()
             return
+        if type(self).mode == "redirect":
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:1/token-leak")
+            self.end_headers()
+            return
         body = (
             b"not-json"
             if type(self).mode == "malformed"
@@ -51,7 +58,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except BrokenPipeError:
+            pass
 
     def log_message(self, format, *args):
         pass
@@ -74,6 +84,13 @@ def server():
 
 def test_http_client_sends_only_key_token_and_empty_body(server: str):
     receipt = BusinessActionHttpClient(server, "secret").execute("APK-TEST")
+    schema = json.loads(
+        (
+            Path(__file__).parents[3]
+            / "contracts/approved_action_receipt/v1.0.0/schema.json"
+        ).read_text()
+    )
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(receipt)
     assert receipt["status"] == "EXECUTED"
     assert Handler.observed == {
         "path": "/internal/api/v1/approvals/APK-TEST/execute",
@@ -83,7 +100,7 @@ def test_http_client_sends_only_key_token_and_empty_body(server: str):
     }
 
 
-@pytest.mark.parametrize("mode", ["error", "malformed", "timeout"])
+@pytest.mark.parametrize("mode", ["error", "malformed", "timeout", "redirect"])
 def test_http_client_classifies_failures_without_retry(server: str, mode: str):
     Handler.mode = mode
     client = BusinessActionHttpClient(
@@ -98,3 +115,18 @@ def test_http_client_classifies_failures_without_retry(server: str, mode: str):
 def test_http_client_rejects_unsafe_timeout(timeout: float):
     with pytest.raises(ValueError, match="timeout"):
         BusinessActionHttpClient("http://127.0.0.1", "secret", timeout_seconds=timeout)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://factoryops.internal",
+        "http://user@factoryops.internal",
+        "http://factoryops.internal/path",
+        "http://factoryops.internal?query=1",
+        "http://factoryops.internal#fragment",
+    ],
+)
+def test_http_client_requires_a_bare_trusted_http_origin(url: str):
+    with pytest.raises(ValueError, match="origin"):
+        BusinessActionHttpClient(url, "secret")

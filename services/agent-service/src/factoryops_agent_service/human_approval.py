@@ -262,6 +262,7 @@ class HumanApprovalService:
             connection.execute(
                 text(
                     "SELECT * FROM human_approval_history WHERE approval_id=:id ORDER BY revision"
+                    + (" FOR UPDATE" if for_update else "")
                 ),
                 {"id": row["approval_id"]},
             )

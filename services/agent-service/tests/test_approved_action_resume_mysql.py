@@ -234,6 +234,42 @@ def test_business_call_holds_run_fence_until_resume_commit(mysql_engine: Engine)
         assert cancel.result().outcome is OperationOutcome.CONCURRENCY_CONFLICT
 
 
+def test_business_call_fences_approval_history_until_resume_commit(
+    mysql_engine: Engine,
+):
+    terminal = _terminal(mysql_engine, "d")
+    entered = threading.Event()
+    release = threading.Event()
+
+    class PausingClient(RecordingBusinessClient):
+        def execute(self, approval_key: str):
+            entered.set()
+            assert release.wait(5)
+            return super().execute(approval_key)
+
+    def corrupt_history():
+        with mysql_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE human_approval_history SET canonical_sha256='late-corruption' "
+                    "WHERE approval_id=:id AND revision=1"
+                ),
+                {"id": terminal["identity"]["approval_id"]},
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        resume = pool.submit(
+            ApprovedActionResumeService(mysql_engine, PausingClient(terminal)).resume,
+            terminal,
+        )
+        assert entered.wait(5)
+        corruption = pool.submit(corrupt_history)
+        assert not corruption.done()
+        release.set()
+        assert resume.result().outcome is ResumeOutcome.APPLIED
+        corruption.result()
+
+
 def test_rejects_non_approved_or_malformed_receipt(mysql_engine: Engine):
     terminal = _terminal(mysql_engine, "7")
     rejected = copy.deepcopy(terminal)
@@ -243,12 +279,46 @@ def test_rejects_non_approved_or_malformed_receipt(mysql_engine: Engine):
     with pytest.raises(ApprovedActionResumeRejected, match="APPROVED"):
         ApprovedActionResumeService(mysql_engine, client).resume(rejected)
     assert client.calls == 0
+    assert (
+        HumanApprovalService(mysql_engine).get_by_key(
+            str(terminal["identity"]["approval_key"])
+        )["state"]["status"]
+        == "PENDING"
+    )
 
     terminal2 = _terminal(mysql_engine, "8")
     client2 = RecordingBusinessClient(terminal2)
     client2.receipt["executed_at"] = "not-a-time"
     with pytest.raises(ApprovedActionResumeRejected, match="receipt"):
         ApprovedActionResumeService(mysql_engine, client2).resume(terminal2)
+
+
+def test_corrupt_approval_before_business_call_fails_closed(mysql_engine: Engine):
+    terminal = _terminal(mysql_engine, "b")
+    client = RecordingBusinessClient(terminal)
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE human_approval_history SET canonical_sha256='broken' "
+                "WHERE approval_id=:id AND revision=1"
+            ),
+            {"id": terminal["identity"]["approval_id"]},
+        )
+    with pytest.raises(ApprovedActionResumeIntegrityError):
+        ApprovedActionResumeService(mysql_engine, client).resume(terminal)
+    assert client.calls == 0
+
+
+def test_existing_resume_requires_replayed_business_receipt(mysql_engine: Engine):
+    terminal = _terminal(mysql_engine, "c")
+    first = RecordingBusinessClient(terminal)
+    assert (
+        ApprovedActionResumeService(mysql_engine, first).resume(terminal).outcome
+        is ResumeOutcome.APPLIED
+    )
+    lost_receipt = RecordingBusinessClient(terminal)
+    with pytest.raises(ApprovedActionResumeIntegrityError, match="replay"):
+        ApprovedActionResumeService(mysql_engine, lost_receipt).resume(terminal)
 
 
 def test_receipt_time_is_parseable(mysql_engine: Engine):

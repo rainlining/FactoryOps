@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://factoryops.local/contracts/approved-action-receipt/v1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["approval_key", "action", "incident_id", "batch_id", "status", "executed_at", "replayed"],
+  "properties": {
+    "approval_key": {"type": "string", "minLength": 1},
+    "action": {"const": "HOLD_BATCH"},
+    "incident_id": {"type": "string", "minLength": 1},
+    "batch_id": {"type": "string", "minLength": 1},
+    "status": {"const": "EXECUTED"},
+    "executed_at": {"type": "string", "format": "date-time"},
+    "replayed": {"type": "boolean"}
+  }
+}

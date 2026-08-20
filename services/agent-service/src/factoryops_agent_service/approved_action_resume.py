@@ -15,8 +15,13 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import DBAPIError
 
 from factoryops_agent_service.human_approval import (
+    HumanApprovalPersistenceIntegrityError,
     HumanApprovalSaveOutcome,
     HumanApprovalService,
+)
+from factoryops_agent_service.risk_decision import (
+    RiskDecisionPersistenceIntegrityError,
+    RiskDecisionService,
 )
 from factoryops_agent_service.run_lifecycle.service import AgentRunLifecycleService
 
@@ -50,6 +55,11 @@ class BusinessActionPort(Protocol):
     def execute(self, approval_key: str) -> Mapping[str, object]: ...
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class BusinessActionHttpClient:
     def __init__(
         self,
@@ -60,11 +70,23 @@ class BusinessActionHttpClient:
     ) -> None:
         if not base_url.strip() or not service_token.strip():
             raise ValueError("base_url and service_token are required")
+        parsed = urllib.parse.urlsplit(base_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("base_url must be a bare trusted HTTP origin")
         if timeout_seconds <= 0 or timeout_seconds > 30:
             raise ValueError("timeout_seconds must be in (0,30]")
         self._base_url = base_url.rstrip("/")
         self._service_token = service_token
         self._timeout_seconds = timeout_seconds
+        self._opener = urllib.request.build_opener(_NoRedirect)
 
     def execute(self, approval_key: str) -> Mapping[str, object]:
         encoded = urllib.parse.quote(approval_key, safe="")
@@ -78,14 +100,16 @@ class BusinessActionHttpClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(
-                request, timeout=self._timeout_seconds
-            ) as response:
+            with self._opener.open(request, timeout=self._timeout_seconds) as response:
                 if response.status < 200 or response.status >= 300:
                     raise BusinessActionUnavailable(
                         f"Business API returned HTTP {response.status}"
                     )
-                body = response.read()
+                body = response.read(1_048_577)
+                if len(body) > 1_048_576:
+                    raise BusinessActionUnavailable(
+                        "Business API response exceeds 1 MiB"
+                    )
         except urllib.error.HTTPError as error:
             raise BusinessActionUnavailable(
                 f"Business API returned HTTP {error.code}"
@@ -120,7 +144,13 @@ class ApprovedActionResumeService:
     def resume(
         self, terminal_approval: Mapping[str, object]
     ) -> ApprovedActionResumeResult:
-        saved = HumanApprovalService(self._engine).save(terminal_approval)
+        self._require_supported_terminal(terminal_approval)
+        try:
+            saved = HumanApprovalService(self._engine).save(terminal_approval)
+        except HumanApprovalPersistenceIntegrityError as error:
+            raise ApprovedActionResumeIntegrityError(
+                "terminal Approval persistence is inconsistent"
+            ) from error
         if saved.outcome is HumanApprovalSaveOutcome.DUPLICATE_CONFLICTING:
             raise ApprovedActionResumeRejected("terminal Approval conflicts")
         approval = saved.approval
@@ -152,7 +182,11 @@ class ApprovedActionResumeService:
                 str(identity["approval_key"]),
                 str(identity["run_id"]),
             )
-        except (ApprovedActionResumeRejected, BusinessActionUnavailable):
+        except (
+            ApprovedActionResumeRejected,
+            ApprovedActionResumeIntegrityError,
+            BusinessActionUnavailable,
+        ):
             raise
         except Exception as error:
             raise ApprovedActionResumeIntegrityError(
@@ -167,6 +201,25 @@ class ApprovedActionResumeService:
                 "resumed Approval or Run could not be verified"
             )
         return ApprovedActionResumeResult(outcome, approval, receipt, run)
+
+    @staticmethod
+    def _require_supported_terminal(approval: Mapping[str, object]) -> None:
+        state = approval.get("state")
+        request = approval.get("request")
+        if (
+            approval.get("contract_version") != "1.1.0"
+            or not isinstance(state, Mapping)
+            or state.get("revision") != 2
+            or state.get("status") != "APPROVED"
+        ):
+            raise ApprovedActionResumeRejected(
+                "revision 2 APPROVED v1.1 Approval is required"
+            )
+        if (
+            not isinstance(request, Mapping)
+            or request.get("proposed_action") != "HOLD_BATCH"
+        ):
+            raise ApprovedActionResumeRejected("only approved HOLD_BATCH can resume")
 
     def _execute_and_resume(
         self,
@@ -183,6 +236,28 @@ class ApprovedActionResumeService:
         )
         try:
             with self._engine.begin() as connection:
+                identity = approval["identity"]
+                assert isinstance(identity, Mapping)
+                risk_service = RiskDecisionService(self._engine)
+                fusion_row = RiskDecisionService._read_fusion(
+                    connection, str(identity["fusion_key"]), for_update=True
+                )
+                if fusion_row is None:
+                    raise ApprovedActionResumeIntegrityError(
+                        "Approval Fusion provenance is missing"
+                    )
+                risk_service._decode_fusion(connection, fusion_row, for_update=True)
+                risk_row = RiskDecisionService._read_row_by_identity(
+                    connection,
+                    str(identity["decision_key"]),
+                    str(identity["decision_id"]),
+                    for_update=True,
+                )
+                if risk_row is None:
+                    raise ApprovedActionResumeIntegrityError(
+                        "Approval Risk Decision is missing"
+                    )
+                risk_service._decode(connection, risk_row)
                 run = (
                     connection.execute(
                         text("SELECT * FROM agent_runs WHERE run_id=:run FOR UPDATE"),
@@ -193,6 +268,18 @@ class ApprovedActionResumeService:
                 )
                 if run is None:
                     raise ApprovedActionResumeIntegrityError("source Run is missing")
+                approval_row = HumanApprovalService._read_by_identity(
+                    connection, approval_key, approval_id, for_update=True
+                )
+                if approval_row is None:
+                    raise ApprovedActionResumeIntegrityError("Approval is missing")
+                locked_approval = HumanApprovalService(self._engine)._decode(
+                    connection, approval_row, for_update=True
+                )
+                if locked_approval != approval:
+                    raise ApprovedActionResumeIntegrityError(
+                        "Approval changed before business execution"
+                    )
                 wait_rows = (
                     connection.execute(
                         text(
@@ -249,6 +336,10 @@ class ApprovedActionResumeService:
                     self._business.execute(approval_key), approval
                 )
                 if resume_rows:
+                    if receipt["replayed"] is not True:
+                        raise ApprovedActionResumeIntegrityError(
+                            "existing Agent resume requires a replayed business receipt"
+                        )
                     self._validate_resume_replay(
                         resume_rows[0],
                         run,
@@ -309,7 +400,11 @@ class ApprovedActionResumeService:
                     },
                 )
                 return ResumeOutcome.APPLIED, receipt
-        except DBAPIError as error:
+        except (
+            DBAPIError,
+            RiskDecisionPersistenceIntegrityError,
+            HumanApprovalPersistenceIntegrityError,
+        ) as error:
             raise ApprovedActionResumeIntegrityError(
                 "Run resume database transaction failed"
             ) from error

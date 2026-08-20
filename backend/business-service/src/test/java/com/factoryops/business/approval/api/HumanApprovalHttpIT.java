@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.factoryops.business.approval.application.HumanApprovalContractValidator;
 import com.factoryops.business.approval.application.ApprovedBatchHoldExecutionService;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Objects;
@@ -221,10 +223,19 @@ class HumanApprovalHttpIT {
   void approved_hold_executes_resolved_batch_and_replays() throws Exception {
     create(holdPending()).andExpect(status().isCreated());
     decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
-    execute("{\"batch_id\":\"ATTACKER-BATCH\"}")
+    var first = execute("{\"batch_id\":\"ATTACKER-BATCH\"}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.batch_id").value("BATCH-APPROVAL"))
-        .andExpect(jsonPath("$.replayed").value(false));
+        .andExpect(jsonPath("$.replayed").value(false))
+        .andReturn();
+    try (var input = getClass().getResourceAsStream(
+        "/contracts/approved_action_receipt/v1.0.0/schema.json")) {
+      assertThat(input).isNotNull();
+      var schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
+          .getSchema(JsonMapper.builder().build().readTree(input));
+      var response = JsonMapper.builder().build().readTree(first.getResponse().getContentAsString());
+      assertThat(schema.validate(response)).isEmpty();
+    }
     execute("{}").andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
     assertThat(jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
         .isEqualTo("HELD");
