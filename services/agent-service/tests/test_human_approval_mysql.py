@@ -148,6 +148,57 @@ def test_v11_rejects_typed_incident_corruption(mysql_engine: Engine):
         service.get_by_key(str(pending["identity"]["approval_key"]))
 
 
+def test_v11_run_incident_update_waits_for_approval_commit(
+    mysql_engine: Engine, monkeypatch: pytest.MonkeyPatch
+):
+    pending = _facts(mysql_engine, "b", "1.1.0")
+    service = HumanApprovalService(mysql_engine)
+    run_locked = threading.Event()
+    release_approval = threading.Event()
+    update_started = threading.Event()
+    original = HumanApprovalService._read_source_run
+
+    def pause_after_run_lock(instance, connection, run_id, *, for_update=False):
+        source = original(instance, connection, run_id, for_update=for_update)
+        if for_update and not run_locked.is_set():
+            run_locked.set()
+            assert release_approval.wait(5)
+        return source
+
+    monkeypatch.setattr(HumanApprovalService, "_read_source_run", pause_after_run_lock)
+
+    def drift_incident():
+        update_started.set()
+        with mysql_engine.begin() as connection:
+            connection.execute(
+                text("UPDATE agent_runs SET incident_id=:incident WHERE run_id=:run"),
+                {"incident": "QI-" + "F" * 64, "run": pending["identity"]["run_id"]},
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        approval_future = pool.submit(service.save, pending)
+        assert run_locked.wait(5)
+        drift_future = pool.submit(drift_incident)
+        assert update_started.wait(5)
+        assert not drift_future.done()
+        release_approval.set()
+        assert approval_future.result().outcome is HumanApprovalSaveOutcome.APPLIED
+        drift_future.result()
+
+    with pytest.raises(HumanApprovalPersistenceIntegrityError):
+        service.get_by_key(str(pending["identity"]["approval_key"]))
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM human_approval_history WHERE approval_id=:id"
+                ),
+                {"id": pending["identity"]["approval_id"]},
+            )
+            == 1
+        )
+
+
 def _approved(pending):
     terminal = copy.deepcopy(pending)
     terminal["state"] = {

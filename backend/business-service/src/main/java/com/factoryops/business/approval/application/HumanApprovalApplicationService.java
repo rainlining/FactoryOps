@@ -49,6 +49,11 @@ public final class HumanApprovalApplicationService {
     if (!"PENDING".equals(candidate.status()) || candidate.revision() != 1)
       throw problem(422, "approval_must_be_pending", "$.state.status", "Creation accepts only revision 1 PENDING");
     return write.execute(status -> {
+      var incidents = jdbc.queryForList(
+          "SELECT incident_id FROM quality_incidents WHERE incident_id_hash=UNHEX(SHA2(?,256)) AND incident_id=? FOR SHARE",
+          candidate.incidentId(), candidate.incidentId());
+      if (incidents.size() != 1)
+        throw problem(422, "approval_incident_not_found", "$.identity.incident_id", "Business Incident does not exist");
       var inserted = insertCurrent(candidate);
       var stored = findForUpdate(candidate.approvalKey(), candidate.approvalId());
       if (stored == null) throw new IllegalStateException("approval insert was not observable");

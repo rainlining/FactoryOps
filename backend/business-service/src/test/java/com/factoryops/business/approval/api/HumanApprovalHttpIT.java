@@ -51,6 +51,7 @@ class HumanApprovalHttpIT {
   void clean() {
     jdbc.update("DELETE FROM business_approval_history");
     jdbc.update("DELETE FROM business_approvals");
+    seedIncident();
   }
 
   @Test
@@ -83,6 +84,15 @@ class HumanApprovalHttpIT {
             .replace(",\n    \"incident_id\": \"QI-5555555555555555555555555555555555555555555555555555555555555555\"", ""))
         .andExpect(status().isUnprocessableEntity());
     assertThat(count("business_approvals")).isZero();
+  }
+
+  @Test
+  void create_rejects_unknown_incident_without_rows() throws Exception {
+    create(pending().replace("QI-" + "5".repeat(64), "QI-" + "F".repeat(64)))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("approval_incident_not_found"));
+    assertThat(count("business_approvals")).isZero();
+    assertThat(count("business_approval_history")).isZero();
   }
 
   @Test
@@ -229,6 +239,23 @@ class HumanApprovalHttpIT {
 
   private int count(String table) {
     return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
+  }
+
+  private void seedIncident() {
+    var now = Instant.parse("2026-08-20T10:00:00Z");
+    jdbc.update(
+        "INSERT IGNORE INTO batches (batch_id_hash,batch_id,kind,product_code,production_line,status,created_at) VALUES (UNHEX(SHA2('BATCH-APPROVAL',256)),'BATCH-APPROVAL','PRODUCTION','DEMO','LINE-1','OPEN',?)",
+        now);
+    jdbc.update(
+        "INSERT IGNORE INTO inspections (inspection_id_hash,inspection_id,expected_image_uri,expected_image_sha256,status,created_at,completed_at,batch_id_hash,batch_id) VALUES (UNHEX(SHA2('INS-APPROVAL',256)),'INS-APPROVAL','artifact://approval','" + "A".repeat(64) + "','COMPLETED',?,?,UNHEX(SHA2('BATCH-APPROVAL',256)),'BATCH-APPROVAL')",
+        now, now);
+    jdbc.update(
+        "INSERT IGNORE INTO vision_inspection_results (result_id_hash,result_id,inspection_id_hash,inspection_id,origin_kind,anomaly_score_text,decision_threshold_text,canonical_payload,payload_hash,created_at) VALUES (UNHEX(SHA2('RES-APPROVAL',256)),'RES-APPROVAL',UNHEX(SHA2('INS-APPROVAL',256)),'INS-APPROVAL','recorded','1','0.5','{}',UNHEX(SHA2('{}',256)),?)",
+        now);
+    var incident = "QI-" + "5".repeat(64);
+    jdbc.update(
+        "INSERT IGNORE INTO quality_incidents (incident_id_hash,incident_id,incident_schema_version,status,batch_id_hash,batch_id,inspection_id_hash,inspection_id,result_id_hash,result_id,created_at) VALUES (UNHEX(SHA2(?,256)),?,'1.0','OPEN',UNHEX(SHA2('BATCH-APPROVAL',256)),'BATCH-APPROVAL',UNHEX(SHA2('INS-APPROVAL',256)),'INS-APPROVAL',UNHEX(SHA2('RES-APPROVAL',256)),'RES-APPROVAL',?)",
+        incident, incident, now);
   }
 
   private String pending() throws Exception {
