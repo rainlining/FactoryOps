@@ -1,12 +1,12 @@
 # Change 提案：生成 Specialist Recommendation
 
 - `change_id`: `2026-08-20-generate-specialist-recommendation`
-- `status`: `technically-verified`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-evaluate-fusion-risk-decision`
 - `feature_branch`: `codex/generate-specialist-recommendation`
 
-当前 Worker Execution 可以启动，Recommendation Contract 与 persistence 也已具备，但运行时仍由测试直接构造完整 Recommendation。本 Change 新增生成编排：从真实 RUNNING Specialist Execution/Task 建立最小上下文，调用可替换 provider 取得不可信 draft，由应用层确定身份、生成时间和 provenance，再交给既有 persistence 原子保存。
+当前 Worker Execution 可以启动，Recommendation Contract 与 persistence 也已具备，但运行时仍由测试直接构造完整 Recommendation。本 Change 新增生成编排：从真实 RUNNING Specialist Execution/Task 建立最小上下文，调用与 Execution 冻结 provenance 绑定的可替换 provider 取得不可信 draft，由应用层控制身份与生成时间、限制 evidence/artifact 引用，再交给既有 persistence 原子保存并重验 parent/context/provenance fencing。
 
 同时提供内存 recorded provider，供可复现演示与后续端到端 Workflow 使用；真实 LLM/Prompt/Context Assembly 将通过相同 provider 协议在后续 Change 接入。
 
