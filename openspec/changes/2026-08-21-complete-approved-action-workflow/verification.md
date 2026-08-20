@@ -12,8 +12,8 @@
 
 ## 全量验证
 
-- Agent：`252 passed in 552.06s`。
-- Contract：`154 passed in 2.29s`。
+- Agent（第二轮修复后）：`256 passed in 599.00s`。
+- Contract（第二轮修复后）：`154 passed in 1.26s`。
 - Java `mvn verify -q`：退出码 0；XML `21 reports / 85 tests / 0 failures / 0 errors / 0 skipped`。
 - Ruff check/format、`git diff --check` 通过；`git status --short -- dataset` 无输出。
 
@@ -24,5 +24,8 @@
 - resume transaction 的 pre-business hook 在 Java 调用前锁定/验证 Coordinator、Task、completion Execution 和 Run 全历史；实际 completion 事务再次验证。
 - Task/Execution 强制同 task/run/role，并验证 Task/Execution current Contract 与 revision 0→current history。
 - Run 强制验证 revision 0→current 完整合法 chain 与 tail/current。
-- admission 改为 35 秒；10.5 秒慢赢家并发回归要求 `APPLIED + DUPLICATE_IDENTICAL`。
+- 首次复审仍有 2 Important：pre-business hook 未拒绝合法终态的 Coordinator/Run；固定 35 秒仍不能覆盖数据库等待、最长 Java HTTP 与两个事务的总耗时。
+- 新增 Coordinator 已 `CANCELLED` 的 RED，要求 Java client 调用次数为 0；preflight 现强制 Coordinator identity/role/task/status，并按确定性 wait/resume transition 验证 Run 当前业务阶段。
+- admission 改为 35 秒有界阻塞分片并在超时后继续等待；测试用 0.05 秒分片与 0.3 秒赢家稳定获得 `APPLIED + DUPLICATE_IDENTICAL`，证明跨多个分片不会泄漏 timeout 分类。
 - 修复后 completion + resume 局部为 `21 passed in 62.01s`。
+- 第二轮修复后 completion + resume 局部为 `22 passed in 84.58s`。

@@ -65,10 +65,14 @@ class ApprovedWorkflowCompletionService:
         business_client: BusinessActionPort,
         *,
         after_coordinator_hook: Callable[[], None] | None = None,
+        admission_wait_seconds: float = 35,
     ) -> None:
+        if admission_wait_seconds <= 0:
+            raise ValueError("admission_wait_seconds must be positive")
         self._engine = engine
         self._business = business_client
         self._after_coordinator_hook = after_coordinator_hook or (lambda: None)
+        self._admission_wait_seconds = admission_wait_seconds
 
     def complete(
         self, terminal_approval: Mapping[str, object]
@@ -83,13 +87,18 @@ class ApprovedWorkflowCompletionService:
             + hashlib.sha256(str(identity["approval_id"]).encode()).hexdigest()[:45]
         )
         with self._engine.connect() as admission:
-            if (
-                admission.scalar(text("SELECT GET_LOCK(:name,35)"), {"name": lock_name})
-                != 1
-            ):
-                raise ApprovedWorkflowCompletionRejected(
-                    "workflow completion admission lock timed out"
+            while True:
+                acquired = admission.scalar(
+                    text("SELECT GET_LOCK(:name,:timeout)"),
+                    {"name": lock_name, "timeout": self._admission_wait_seconds},
                 )
+                admission.commit()
+                if acquired == 1:
+                    break
+                if acquired is None:
+                    raise ApprovedWorkflowCompletionIntegrityError(
+                        "workflow completion admission lock failed"
+                    )
             admission.commit()
             try:
                 if not self._has_completion(identity):
@@ -429,6 +438,18 @@ class ApprovedWorkflowCompletionService:
                 "Coordinator Execution is missing during preflight"
             )
         AgentExecutionLifecycleService(self._engine)._to_contract(coordinator)
+        if (
+            coordinator["run_id"] != run_id
+            or coordinator["agent_role"] != "coordinator"
+            or coordinator["task_id"] is not None
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Coordinator Execution identity is inconsistent"
+            )
+        if coordinator["status"] != "RUNNING":
+            raise ApprovedWorkflowCompletionRejected(
+                "Coordinator Execution must be RUNNING before business execution"
+            )
         coordinator_history = (
             connection.execute(
                 text(
@@ -453,6 +474,77 @@ class ApprovedWorkflowCompletionService:
         )
         run_history = self._lock_run_history(connection, run_id)
         self._validate_run_history(run, run_history)
+        self._validate_pre_business_run_phase(connection, run, identity)
+
+    @staticmethod
+    def _validate_pre_business_run_phase(
+        connection, run: Mapping[str, object], identity: Mapping[str, object]
+    ) -> None:
+        approval_id = str(identity["approval_id"])
+        approval_key = str(identity["approval_key"])
+        wait_id, wait_request = HumanApprovalService._wait_transition_ids(approval_id)
+        resume_id, resume_request = ApprovedActionResumeService._resume_transition_ids(
+            approval_id
+        )
+        wait = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions WHERE transition_id=:transition "
+                    "AND transition_request_id=:request FOR UPDATE"
+                ),
+                {"transition": wait_id, "request": wait_request},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        resume = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions WHERE transition_id=:transition "
+                    "AND transition_request_id=:request FOR UPDATE"
+                ),
+                {"transition": resume_id, "request": resume_request},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            wait is None
+            or wait["run_id"] != run["run_id"]
+            or wait["to_status"] != "WAITING_FOR_APPROVAL"
+            or wait["reason_code"] != "HUMAN_APPROVAL_REQUIRED"
+            or wait["reason_message"] != approval_key
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Approval wait phase is inconsistent"
+            )
+        if resume is None:
+            if (
+                run["status"] != "WAITING_FOR_APPROVAL"
+                or run["revision"] != wait["to_revision"]
+                or run["status_reason_code"] != wait["reason_code"]
+                or run["status_reason_message"] != approval_key
+            ):
+                raise ApprovedWorkflowCompletionRejected(
+                    "Run is not ready for approved business execution"
+                )
+            return
+        if (
+            resume["run_id"] != run["run_id"]
+            or resume["from_status"] != "WAITING_FOR_APPROVAL"
+            or resume["to_status"] != "RUNNING"
+            or resume["from_revision"] != wait["to_revision"]
+            or resume["to_revision"] != int(wait["to_revision"]) + 1
+            or resume["reason_code"] != "APPROVED_ACTION_EXECUTED"
+            or resume["reason_message"] != approval_key
+            or run["status"] != "RUNNING"
+            or run["revision"] != resume["to_revision"]
+            or run["status_reason_code"] != resume["reason_code"]
+            or run["status_reason_message"] != approval_key
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Approval resume phase is inconsistent"
+            )
 
     def _resume_preflight(self, connection, identity: Mapping[str, object]) -> None:
         try:

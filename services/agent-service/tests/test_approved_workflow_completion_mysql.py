@@ -14,6 +14,13 @@ from factoryops_agent_service.approved_workflow_completion import (
     WorkflowCompletionOutcome,
 )
 from factoryops_agent_service.event_ingress.migration import migrate
+from factoryops_agent_service.execution_lifecycle.model import (
+    ExecutionStatus,
+    TransitionCommand,
+)
+from factoryops_agent_service.execution_lifecycle.service import (
+    AgentExecutionLifecycleService,
+)
 from factoryops_agent_service.worker_task_execution import WorkerTaskExecutionService
 from sqlalchemy import Engine, create_engine, text
 from test_approved_action_resume_mysql import RecordingBusinessClient, _terminal
@@ -23,6 +30,17 @@ from testcontainers.community.mysql import MySqlContainer
 
 @pytest.fixture(scope="module")
 def mysql_engine() -> Engine:
+    with MySqlContainer("mysql:8.4") as mysql:
+        engine = create_engine(
+            mysql.get_connection_url().replace("mysql://", "mysql+pymysql://", 1)
+        )
+        migrate(engine)
+        yield engine
+        engine.dispose()
+
+
+@pytest.fixture()
+def isolated_mysql_engine() -> Engine:
     with MySqlContainer("mysql:8.4") as mysql:
         engine = create_engine(
             mysql.get_connection_url().replace("mysql://", "mysql+pymysql://", 1)
@@ -277,11 +295,13 @@ def test_slow_identical_completion_waits_for_winner(mysql_engine: Engine):
             should_sleep = first
             first = False
         if should_sleep:
-            time.sleep(10.5)
+            time.sleep(0.3)
         return original_execute(approval_key)
 
     client.execute = slow_execute
-    service = ApprovedWorkflowCompletionService(mysql_engine, client)
+    service = ApprovedWorkflowCompletionService(
+        mysql_engine, client, admission_wait_seconds=0.05
+    )
     with ThreadPoolExecutor(max_workers=2) as pool:
         first_call = pool.submit(service.complete, terminal)
         time.sleep(0.2)
@@ -290,3 +310,30 @@ def test_slow_identical_completion_waits_for_winner(mysql_engine: Engine):
             WorkflowCompletionOutcome.APPLIED,
             WorkflowCompletionOutcome.DUPLICATE_IDENTICAL,
         }
+
+
+def test_cancelled_coordinator_fails_before_business(isolated_mysql_engine: Engine):
+    mysql_engine = isolated_mysql_engine
+    terminal, client = _ready(mysql_engine, "a")
+    coordinator_id = str(terminal["identity"]["coordinator_execution_id"])
+    coordinator = AgentExecutionLifecycleService(mysql_engine).get_execution(
+        coordinator_id
+    )
+    assert coordinator is not None
+    AgentExecutionLifecycleService(mysql_engine).transition_execution(
+        TransitionCommand(
+            transition_request_id="ERQ-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1",
+            execution_id=coordinator_id,
+            expected_status=ExecutionStatus.RUNNING,
+            expected_revision=int(coordinator["lifecycle"]["revision"]),
+            to_status=ExecutionStatus.CANCELLED,
+            actor_kind="SYSTEM",
+            actor_id="test-suite",
+            reason_code="TEST_CANCELLED",
+            reason_message="cancelled before approved workflow completion",
+        )
+    )
+
+    with pytest.raises(ApprovedWorkflowCompletionRejected, match="Coordinator"):
+        ApprovedWorkflowCompletionService(mysql_engine, client).complete(terminal)
+    assert client.calls == 0

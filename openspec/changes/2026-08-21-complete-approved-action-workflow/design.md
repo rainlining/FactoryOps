@@ -17,11 +17,11 @@ readiness 必须同时满足：Approval 为 v1.1 revision 2 APPROVED HOLD_BATCH�
 ## 并发与失败
 
 - concurrent identical：Run row fence 串行化，只允许 `APPLIED + DUPLICATE_IDENTICAL`。
-- completion admission lock 最长等待 35 秒，覆盖 Java HTTP 合法 30 秒上限和事务收尾；第二调用在赢家完成后读取确定性 completion facts。
+- completion admission 使用 35 秒的有界阻塞分片；单个分片超时后继续等待，而不是把猜测的总时长当成失败边界。第二调用最终取得同一 Approval admission 后读取确定性 completion facts，因此合法的数据库等待、Java HTTP 与事务收尾组合不会被误报为业务拒绝。
 - concurrent cancel/failure：Run CAS 单赢家，完成不能覆盖已改变状态。
 - Java 已执行但 completion rollback：重试先得到 Java replay，再完成 Agent 双聚合。
 - readiness 未满足：不改变 Coordinator/Run，不伪造 Worker 成功。
 
 ## 测试
 
-真实 MySQL 覆盖成功、重放、并发 identical、Task 未完成、Coordinator/Run/transition corruption、单边写入注入失败整单回滚与 completion/cancel 竞争；再运行 Agent、Contract、Java 全量、Ruff、diff 和 dataset 检查。
+真实 MySQL 覆盖成功、重放、跨多个 admission 等待分片的并发 identical、Task 未完成、Coordinator 非 RUNNING、Coordinator/Run/transition corruption、单边写入注入失败整单回滚与 completion/cancel 竞争；再运行 Agent、Contract、Java 全量、Ruff、diff 和 dataset 检查。
