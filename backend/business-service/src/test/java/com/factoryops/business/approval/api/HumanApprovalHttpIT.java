@@ -1,10 +1,12 @@
 package com.factoryops.business.approval.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.factoryops.business.approval.application.HumanApprovalContractValidator;
+import com.factoryops.business.approval.application.ApprovedBatchHoldExecutionService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Objects;
@@ -46,11 +48,17 @@ class HumanApprovalHttpIT {
   @Autowired JdbcTemplate jdbc;
   @Autowired JsonMapper mapper;
   @Autowired HumanApprovalContractValidator validator;
+  @Autowired ApprovedBatchHoldExecutionService actionExecution;
 
   @BeforeEach
   void clean() {
+    jdbc.update("DELETE FROM approved_action_executions");
     jdbc.update("DELETE FROM business_approval_history");
     jdbc.update("DELETE FROM business_approvals");
+    jdbc.update("DELETE FROM quality_incidents WHERE incident_id=?", "QI-" + "5".repeat(64));
+    jdbc.update("DELETE FROM vision_inspection_results WHERE result_id='RES-APPROVAL'");
+    jdbc.update("DELETE FROM inspections WHERE inspection_id='INS-APPROVAL'");
+    jdbc.update("DELETE FROM batches WHERE batch_id='BATCH-APPROVAL'");
     seedIncident();
   }
 
@@ -97,9 +105,10 @@ class HumanApprovalHttpIT {
 
   @Test
   void reads_legacy_v10_without_incident_binding() throws Exception {
-    var legacy = pending().replace("\"1.1.0\"", "\"1.0.0\"")
-        .replace(",\n    \"incident_id\": \"QI-5555555555555555555555555555555555555555555555555555555555555555\"", "");
-    var value = validator.validate(mapper.readTree(legacy));
+    var legacy = (tools.jackson.databind.node.ObjectNode) mapper.readTree(pending());
+    legacy.put("contract_version", "1.0.0");
+    ((tools.jackson.databind.node.ObjectNode) legacy.path("identity")).remove("incident_id");
+    var value = validator.validate(legacy);
     var now = Instant.parse("2026-08-20T11:00:00Z");
     var text = new String(value.canonical(), StandardCharsets.UTF_8);
     jdbc.update(
@@ -208,6 +217,73 @@ class HumanApprovalHttpIT {
         .isEqualTo(unrelatedBefore);
   }
 
+  @Test
+  void approved_hold_executes_resolved_batch_and_replays() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    execute("{\"batch_id\":\"ATTACKER-BATCH\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.batch_id").value("BATCH-APPROVAL"))
+        .andExpect(jsonPath("$.replayed").value(false));
+    execute("{}").andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
+    assertThat(jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("HELD");
+    assertThat(count("approved_action_executions")).isEqualTo(1);
+  }
+
+  @Test
+  void pending_or_unsupported_approval_has_no_side_effect() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    execute("{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("approval_not_approved"));
+    assertThat(count("approved_action_executions")).isZero();
+    assertThat(jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("OPEN");
+  }
+
+  @Test
+  void approved_non_hold_action_is_rejected_without_side_effect() throws Exception {
+    create(pending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    execute("{}").andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("approved_action_unsupported"));
+    assertThat(count("approved_action_executions")).isZero();
+    assertThat(jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("OPEN");
+  }
+
+  @Test
+  void receipt_failure_rolls_back_batch_hold() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    jdbc.execute("ALTER TABLE approved_action_executions ADD CONSTRAINT chk_injected_receipt_failure CHECK (approval_id <> 'APR-28BB1D59E0933638D81B8BB6F2F6EF91')");
+    try {
+      assertThatThrownBy(() -> actionExecution.execute(key())).isInstanceOf(RuntimeException.class);
+    } finally {
+      jdbc.execute("ALTER TABLE approved_action_executions DROP CHECK chk_injected_receipt_failure");
+    }
+    assertThat(count("approved_action_executions")).isZero();
+    assertThat(jdbc.queryForObject("SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("OPEN");
+  }
+
+  @Test
+  void concurrent_identical_execution_has_one_receipt() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    var start = new CountDownLatch(1);
+    var pool = Executors.newFixedThreadPool(2);
+    try {
+      var first = pool.submit(() -> concurrentExecute(start));
+      var second = pool.submit(() -> concurrentExecute(start));
+      start.countDown();
+      assertThat(java.util.List.of(first.get(), second.get()))
+          .containsExactlyInAnyOrder(false, true);
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(count("approved_action_executions")).isEqualTo(1);
+  }
+
   private org.springframework.test.web.servlet.ResultActions create(String payload) throws Exception {
     return mvc.perform(
         post("/internal/api/v1/approvals")
@@ -237,6 +313,20 @@ class HumanApprovalHttpIT {
     return decide("quality-lead", decision, reason).andReturn().getResponse().getStatus();
   }
 
+  private boolean concurrentExecute(CountDownLatch start) throws Exception {
+    start.await();
+    return mapper.readTree(execute("{}").andReturn().getResponse().getContentAsString())
+        .path("replayed").asBoolean();
+  }
+
+  private org.springframework.test.web.servlet.ResultActions execute(String body) throws Exception {
+    return mvc.perform(
+        post("/internal/api/v1/approvals/" + key() + "/execute")
+            .header("X-FactoryOps-Service-Token", "test-agent-token")
+            .contentType("application/json")
+            .content(body));
+  }
+
   private int count(String table) {
     return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
   }
@@ -263,6 +353,10 @@ class HumanApprovalHttpIT {
       return new String(
           Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8);
     }
+  }
+
+  private String holdPending() throws Exception {
+    return pending().replace("STOP_LINE", "HOLD_BATCH");
   }
 
   private String key() {

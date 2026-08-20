@@ -116,7 +116,7 @@ public final class HumanApprovalApplicationService {
     return marker != null && marker == 1L;
   }
 
-  private Map<String, Object> findForUpdate(String key, String id) {
+  Map<String, Object> findForUpdate(String key, String id) {
     var rows = id == null
         ? jdbc.queryForList("SELECT * FROM business_approvals WHERE approval_key=? FOR UPDATE", key)
         : jdbc.queryForList("SELECT * FROM business_approvals WHERE approval_key=? OR approval_id=? FOR UPDATE", key, id);
@@ -129,7 +129,7 @@ public final class HumanApprovalApplicationService {
       throw problem(409, "approval_identity_conflict", "$.identity", "Approval key/id split conflicts with an existing approval");
   }
 
-  private ValidatedApproval decode(Map<String, Object> row) {
+  ValidatedApproval decode(Map<String, Object> row) {
     try {
       var payload = mapper.readTree((String) row.get("payload"));
       var value = validator.validate(payload);
@@ -160,7 +160,7 @@ public final class HumanApprovalApplicationService {
     catch (Exception error) { throw integrity("approval payload cannot be decoded"); }
   }
 
-  private void validateHistory(ValidatedApproval current) {
+  void validateHistory(ValidatedApproval current) {
     var rows = jdbc.queryForList(
         "SELECT * FROM business_approval_history WHERE approval_id=? ORDER BY revision",
         current.approvalId());
@@ -217,7 +217,7 @@ public final class HumanApprovalApplicationService {
   }
 
   private static String text(ValidatedApproval value) { return new String(value.canonical(), StandardCharsets.UTF_8); }
-  private static Instant databaseInstant(Object value) {
+  static Instant databaseInstant(Object value) {
     if (value == null) return null;
     if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
     if (value instanceof java.time.LocalDateTime local) return local.toInstant(ZoneOffset.UTC);

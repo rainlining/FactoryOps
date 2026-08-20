@@ -1,6 +1,7 @@
 package com.factoryops.business.approval.api;
 
 import com.factoryops.business.approval.application.ApprovalSecurity;
+import com.factoryops.business.approval.application.ApprovedBatchHoldExecutionService;
 import com.factoryops.business.approval.application.HumanApprovalApplicationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,10 +11,24 @@ import tools.jackson.databind.JsonNode;
 public final class HumanApprovalController {
   private final HumanApprovalApplicationService service;
   private final ApprovalSecurity security;
+  private final ApprovedBatchHoldExecutionService execution;
 
-  public HumanApprovalController(HumanApprovalApplicationService service, ApprovalSecurity security) {
+  public HumanApprovalController(HumanApprovalApplicationService service, ApprovalSecurity security,
+      ApprovedBatchHoldExecutionService execution) {
     this.service = service;
     this.security = security;
+    this.execution = execution;
+  }
+
+  @PostMapping("/internal/api/v1/approvals/{approvalKey}/execute")
+  ActionExecutionResponse execute(
+      @PathVariable String approvalKey,
+      @RequestHeader(value = "X-FactoryOps-Service-Token", required = false) String token) {
+    security.requireService(token);
+    var outcome = execution.execute(approvalKey);
+    return new ActionExecutionResponse(
+        outcome.approvalKey(), outcome.action(), outcome.incidentId(), outcome.batchId(),
+        outcome.status(), outcome.executedAt(), outcome.replayed());
   }
 
   @PostMapping("/internal/api/v1/approvals")
