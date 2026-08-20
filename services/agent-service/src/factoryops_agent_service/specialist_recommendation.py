@@ -40,7 +40,12 @@ class SpecialistRecommendationService:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def save(self, recommendation: Mapping[str, object]) -> RecommendationSaveResult:
+    def save(
+        self,
+        recommendation: Mapping[str, object],
+        *,
+        expected_execution_provenance: Mapping[str, str] | None = None,
+    ) -> RecommendationSaveResult:
         canonical = canonicalize_recommendation(recommendation)
         payload = json.loads(canonical)
         identity = payload["identity"]
@@ -70,7 +75,12 @@ class SpecialistRecommendationService:
                         execution = self._lock_execution(
                             connection, str(identity["execution_id"])
                         )
-                        self._validate_parent(identity, task, execution)
+                        self._validate_parent(
+                            identity,
+                            task,
+                            execution,
+                            expected_execution_provenance,
+                        )
                         connection.execute(
                             text(
                                 """INSERT INTO specialist_recommendations
@@ -131,6 +141,7 @@ class SpecialistRecommendationService:
         identity: Mapping[str, object],
         task: Mapping[str, object] | None,
         execution: Mapping[str, object] | None,
+        expected_execution_provenance: Mapping[str, str] | None,
     ) -> None:
         if task is None or execution is None:
             raise RecommendationPersistenceRejected("Task or Execution does not exist")
@@ -147,6 +158,13 @@ class SpecialistRecommendationService:
         ):
             raise RecommendationPersistenceRejected(
                 "Recommendation parent is not current RUNNING Specialist pair"
+            )
+        if expected_execution_provenance is not None and any(
+            execution[field] != value
+            for field, value in expected_execution_provenance.items()
+        ):
+            raise RecommendationPersistenceRejected(
+                "Execution provenance changed during recommendation generation"
             )
 
     def _classify(

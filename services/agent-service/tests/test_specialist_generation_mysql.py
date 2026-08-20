@@ -135,7 +135,7 @@ def test_generate_builds_identity_and_persists_current_execution(mysql_engine: E
 
 
 def test_replay_returns_existing_without_calling_provider(mysql_engine: Engine):
-    task_id, _, execution_id = _running(mysql_engine, "9")
+    task_id, lease, execution_id = _running(mysql_engine, "9")
     service = SpecialistRecommendationGenerationService(mysql_engine)
     command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
     assert service.generate(
@@ -165,6 +165,12 @@ def test_replay_returns_existing_without_calling_provider(mysql_engine: Engine):
             SpecialistRecommendationGenerationCommand(execution_id, "not-a-time"),
             MustNotRun(),
         )
+
+    WorkerTaskExecutionService(mysql_engine).complete(
+        _success(task_id, execution_id, lease.owner_id, lease.lease_token, "9")
+    )
+    terminal_replay = service.generate(command, MustNotRun())
+    assert terminal_replay.outcome is RecommendationSaveOutcome.DUPLICATE_IDENTICAL
 
 
 def test_provider_failure_or_invalid_draft_leaves_no_fact(mysql_engine: Engine):
@@ -359,6 +365,44 @@ def test_snapshot_changing_during_provider_call_is_fenced(mysql_engine: Engine):
             )
         release.set()
         with pytest.raises(RecommendationPersistenceRejected, match="not current"):
+            future.result()
+
+    assert (
+        SpecialistRecommendationService(mysql_engine).get_by_key(
+            compute_recommendation_key(execution_id)
+        )
+        is None
+    )
+
+
+def test_provenance_changing_during_provider_call_is_fenced(mysql_engine: Engine):
+    _, _, execution_id = _running(mysql_engine, "2")
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingProvider(CapturingProvider):
+        def generate(self, context: SpecialistGenerationContext):
+            entered.set()
+            assert release.wait(5)
+            return self.draft
+
+    service = SpecialistRecommendationGenerationService(mysql_engine)
+    command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            service.generate, command, BlockingProvider(_quality_draft("2"))
+        )
+        assert entered.wait(5)
+        with mysql_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE agent_executions SET prompt_version='prompt-v2' "
+                    "WHERE execution_id=:execution"
+                ),
+                {"execution": execution_id},
+            )
+        release.set()
+        with pytest.raises(RecommendationPersistenceRejected, match="provenance"):
             future.result()
 
     assert (

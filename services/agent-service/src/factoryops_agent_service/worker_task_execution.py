@@ -436,7 +436,8 @@ class WorkerTaskExecutionService:
         updated = connection.execute(
             text(
                 """UPDATE agent_executions SET status='FAILED',revision=2,updated_at=:now,ended_at=:now,
-                status_reason_code='WORKER_RETRY',failure_code=:code,failure_message=:message,
+                status_reason_code='WORKER_RETRY',status_reason_message='Worker execution retried',
+                failure_code=:code,failure_message=:message,
                 failure_recoverability='retryable',failed_dependency_ref=:dependency
                 WHERE execution_id=:execution AND status='RUNNING' AND revision=1"""
             ),
@@ -454,7 +455,8 @@ class WorkerTaskExecutionService:
             text(
                 """INSERT INTO agent_execution_transitions(transition_id,transition_request_id,execution_id,from_status,
                 to_status,from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,result_json,failure_json,occurred_at)
-                VALUES (:transition,:request,:execution,'RUNNING','FAILED',1,2,'WORKER',:owner,'WORKER_RETRY',NULL,NULL,:failure,:now)"""
+                VALUES (:transition,:request,:execution,'RUNNING','FAILED',1,2,'WORKER',:owner,
+                'WORKER_RETRY','Worker execution retried',NULL,:failure,:now)"""
             ),
             {
                 "transition": self._transition_id_factory(),
@@ -526,7 +528,7 @@ class WorkerTaskExecutionService:
         updated = connection.execute(
             text(
                 """UPDATE agent_executions SET status=:status,revision=2,updated_at=:now,ended_at=:now,
-                status_reason_code=:reason,status_reason_message=NULL,output_artifact_refs=:artifacts,
+                status_reason_code=:reason,status_reason_message=:reason_message,output_artifact_refs=:artifacts,
                 decision_id=:decision,result_evidence_refs=:evidence,failure_code=:failure_code,
                 failure_message=:failure_message,failure_recoverability=:recoverability,
                 failed_dependency_ref=:dependency WHERE execution_id=:execution AND status='RUNNING' AND revision=1"""
@@ -535,6 +537,9 @@ class WorkerTaskExecutionService:
                 "status": command.final_status,
                 "now": now,
                 "reason": "WORKER_COMPLETED" if result else "WORKER_FAILED",
+                "reason_message": "Worker execution completed"
+                if result
+                else "Worker execution failed",
                 "artifacts": json.dumps(result["output_artifact_refs"])
                 if result
                 else None,
@@ -562,7 +567,8 @@ class WorkerTaskExecutionService:
             text(
                 """INSERT INTO agent_execution_transitions(transition_id,transition_request_id,execution_id,from_status,
                 to_status,from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,result_json,failure_json,occurred_at)
-                VALUES (:transition,:request,:execution,'RUNNING',:status,1,2,'WORKER',:owner,:reason,NULL,:result,:failure,:now)"""
+                VALUES (:transition,:request,:execution,'RUNNING',:status,1,2,'WORKER',:owner,
+                :reason,:reason_message,:result,:failure,:now)"""
             ),
             {
                 "transition": self._transition_id_factory(),
@@ -571,6 +577,9 @@ class WorkerTaskExecutionService:
                 "status": command.final_status,
                 "owner": command.owner_id,
                 "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "reason_message": "Worker execution completed"
+                if command.result
+                else "Worker execution failed",
                 "result": json.dumps(command.result, sort_keys=True)
                 if command.result
                 else None,
@@ -593,7 +602,7 @@ class WorkerTaskExecutionService:
         updated = connection.execute(
             text(
                 """UPDATE agent_tasks SET status=:status,revision=:to_revision,updated_at=:now,ended_at=:now,
-                status_reason_code=:reason,status_reason_message=NULL,completion_execution_id=:completion,
+                status_reason_code=:reason,status_reason_message=:reason_message,completion_execution_id=:completion,
                 failure_execution_id=:failure_execution,failure_code=:failure_code,failure_message=:failure_message,
                 failure_recoverability=:recoverability WHERE task_id=:task AND status='RUNNING' AND revision=:from_revision
                 AND current_execution_id=:execution"""
@@ -604,6 +613,9 @@ class WorkerTaskExecutionService:
                 "to_revision": from_revision + 1,
                 "now": now,
                 "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "reason_message": "Worker task completed"
+                if command.result
+                else "Worker task failed",
                 "completion": command.execution_id if command.result else None,
                 "failure_execution": command.execution_id if failure else None,
                 "failure_code": failure["code"] if failure else None,
@@ -620,7 +632,8 @@ class WorkerTaskExecutionService:
                 """INSERT INTO agent_task_transitions(transition_id,transition_request_id,task_id,from_status,to_status,
                 from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
                 completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
-                VALUES (:transition,:request,:task,'RUNNING',:status,:from_revision,:to_revision,'WORKER',:owner,:reason,NULL,:execution,
+                VALUES (:transition,:request,:task,'RUNNING',:status,:from_revision,:to_revision,'WORKER',:owner,
+                :reason,:reason_message,:execution,
                 :attempt,:completion,:failure_code,:failure_message,:recoverability,:now)"""
             ),
             {
@@ -632,6 +645,9 @@ class WorkerTaskExecutionService:
                 "to_revision": from_revision + 1,
                 "owner": command.owner_id,
                 "reason": "WORKER_COMPLETED" if command.result else "WORKER_FAILED",
+                "reason_message": "Worker task completed"
+                if command.result
+                else "Worker task failed",
                 "execution": command.execution_id,
                 "attempt": task["attempt_count"],
                 "completion": command.execution_id if command.result else None,

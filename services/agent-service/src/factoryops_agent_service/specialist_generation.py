@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -117,18 +117,10 @@ class SpecialistRecommendationGenerationService:
         execution_input = execution["input"]
         task_id = execution_input["task_id"]
         role = str(execution_identity["agent_role"])
-        if (
-            role not in self._SPECIALIST_ROLES
-            or execution["lifecycle"]["status"] != "RUNNING"
-            or not isinstance(task_id, str)
-        ):
+        if role not in self._SPECIALIST_ROLES or not isinstance(task_id, str):
             raise SpecialistGenerationRejected(
-                "Execution is not a RUNNING Specialist execution"
+                "Execution is not a Specialist execution"
             )
-        task = self._tasks.get_task(task_id)
-        if task is None:
-            raise SpecialistGenerationRejected("Task does not exist")
-        self._validate_pair(task, execution)
         provenance = SpecialistProviderProvenance(
             **{
                 field: str(execution["provenance"][field])
@@ -148,6 +140,15 @@ class SpecialistRecommendationGenerationService:
                 else RecommendationSaveOutcome.DUPLICATE_CONFLICTING,
                 existing,
             )
+
+        if execution["lifecycle"]["status"] != "RUNNING":
+            raise SpecialistGenerationRejected(
+                "Execution is not a RUNNING Specialist execution"
+            )
+        task = self._tasks.get_task(task_id)
+        if task is None:
+            raise SpecialistGenerationRejected("Task does not exist")
+        self._validate_pair(task, execution)
 
         task_evidence = task["input"]["evidence_refs"]
         execution_evidence = execution_input["evidence_refs"]
@@ -210,7 +211,10 @@ class SpecialistRecommendationGenerationService:
             "details": copy.deepcopy(draft.details),
             "generated_at": command.generated_at,
         }
-        return self._recommendations.save(payload)
+        return self._recommendations.save(
+            payload,
+            expected_execution_provenance=asdict(provenance),
+        )
 
     @staticmethod
     def _validate_pair(

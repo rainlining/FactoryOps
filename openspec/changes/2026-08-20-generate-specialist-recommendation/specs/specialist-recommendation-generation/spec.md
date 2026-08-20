@@ -10,7 +10,7 @@ provider 只能接收通过完整 Task/Execution Contract 校验且不含 Evalua
 
 ### Requirement: 生成必须可重放且并发幂等
 
-recommendation key/ID 必须由 execution ID 确定派生。生成请求 identity 由 execution ID、合法 generated_at 和匹配 Execution 的 provider provenance 组成；已有可信 Recommendation 且请求 identity 相同时，replay 不得再次调用 provider。首次并发 identical 生成只能保留一个事实，并稳定得到 APPLIED 与 DUPLICATE_IDENTICAL。
+recommendation key/ID 必须由 execution ID 确定派生。生成请求 identity 由 execution ID、合法 generated_at 和匹配 Execution 的 provider provenance 组成；已有可信 Recommendation 且请求 identity 相同时，即使 parent 已正常收口，历史 replay 也不得再次调用 provider并必须返回 identical。首次并发 identical 生成只能保留一个事实，并稳定得到 APPLIED 与 DUPLICATE_IDENTICAL。
 
 ### Requirement: Recorded provider 必须明确且可替换
 
