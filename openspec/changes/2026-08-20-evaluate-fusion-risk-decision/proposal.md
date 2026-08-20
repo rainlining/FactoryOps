@@ -1,7 +1,7 @@
 # Change 提案：评估 Fusion Risk Decision
 
 - `change_id`: `2026-08-20-evaluate-fusion-risk-decision`
-- `status`: `technically-verified`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-persist-risk-decision-fusion-subject`
 - `feature_branch`: `codex/evaluate-fusion-risk-decision`
