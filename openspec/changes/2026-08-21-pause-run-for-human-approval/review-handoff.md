@@ -5,7 +5,7 @@
 - 分支：`codex/pause-run-for-human-approval`
 - worktree：`.worktrees/pause-run-for-human-approval`
 - stacked base：`81f82f2c5612cdfd13be836a1738b6a94e9a67f8`
-- implementation HEAD：`355c1e78c172a550aa7bd80cfd21ffd04cc32b1b`
+- implementation HEAD：`df2fa4edc00c57a4e590d4e1d5658357ec06fa8c`
 - 状态：`technically-verified`，等待独立审查。
 
 ## 调用链
