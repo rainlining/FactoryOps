@@ -1,7 +1,7 @@
 # Change 提案：完成已批准动作的 Agent Workflow
 
 - `change_id`: `2026-08-21-complete-approved-action-workflow`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `standard`
 - `depends_on`: `2026-08-21-resume-approved-action-execution`
 - `feature_branch`: `codex/complete-approved-action-workflow`

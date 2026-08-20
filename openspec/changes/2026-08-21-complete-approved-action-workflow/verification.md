@@ -1,6 +1,6 @@
 # Verification
 
-状态：`applying`。
+状态：`review-handoff-ready`。
 
 ## TDD 与局部证据
 
@@ -32,3 +32,5 @@
 - 第三次复审仍有 1 Important：所有 admission waiter 长期占用业务 pool 且无限循环，可能让持锁赢家拿不到执行连接。
 - 新增 pool-size=2/3 callers 的真实 MySQL RED，以及外部 owner 持锁的 deadline RED；admission 改用独立 `NullPool` 连接、默认 120 秒 deadline，超限为 infrastructure integrity failure。
 - 第三轮修复后 completion + resume 局部为 `24 passed in 135.74s`。
+- 最终复审 HEAD `1c0cdbb`：0 Critical / 0 Important；局部真实 MySQL 复审因只读环境无临时目录未能启动，采用本会话此前 `24 passed` 证据；worktree、dataset、diff check clean。
+- 非阻塞 Minor：service 创建的独立 NullPool admission engine 当前没有显式 dispose 生命周期；NullPool 不保留连接，后续可在服务容器生命周期中统一复用/释放。
