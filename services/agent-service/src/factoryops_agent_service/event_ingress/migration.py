@@ -51,6 +51,62 @@ def _preflight_execution_references(connection: Connection) -> None:
         )
 
 
+def _apply_risk_decision_subject_migration(
+    connection: Connection, statements: list[str]
+) -> None:
+    expected_columns = {
+        "subject_type",
+        "fusion_id",
+        "fusion_key",
+        "coordinator_execution_id",
+        "fusion_round",
+    }
+    existing_columns = set(
+        connection.scalars(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name='risk_decisions' "
+                "AND column_name IN "
+                "('subject_type','fusion_id','fusion_key',"
+                "'coordinator_execution_id','fusion_round')"
+            )
+        )
+    )
+    if not existing_columns:
+        connection.exec_driver_sql(statements[0])
+    elif existing_columns != expected_columns:
+        raise RuntimeError(
+            "migration 013 found a partial column set; audit risk_decisions before retry"
+        )
+
+    connection.exec_driver_sql(statements[1])
+
+    expected_constraints = {
+        "fk_risk_decision_fusion",
+        "fk_risk_decision_coordinator_execution",
+        "uk_risk_decision_fusion",
+        "chk_risk_decision_subject",
+    }
+    existing_constraints = set(
+        connection.scalars(
+            text(
+                "SELECT constraint_name FROM information_schema.table_constraints "
+                "WHERE table_schema=DATABASE() AND table_name='risk_decisions' "
+                "AND constraint_name IN "
+                "('fk_risk_decision_fusion',"
+                "'fk_risk_decision_coordinator_execution',"
+                "'uk_risk_decision_fusion','chk_risk_decision_subject')"
+            )
+        )
+    )
+    if not existing_constraints:
+        connection.exec_driver_sql(statements[2])
+    elif existing_constraints != expected_constraints:
+        raise RuntimeError(
+            "migration 013 found a partial constraint set; audit risk_decisions before retry"
+        )
+
+
 def migrate(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
@@ -78,8 +134,13 @@ def migrate(engine: Engine) -> None:
                 .joinpath(f"{version}.sql")
                 .read_text(encoding="utf-8")
             )
-            for statement in migration_sql.split(";"):
-                if statement.strip():
+            statements = [
+                statement for statement in migration_sql.split(";") if statement.strip()
+            ]
+            if version == "013_extend_risk_decision_subject":
+                _apply_risk_decision_subject_migration(connection, statements)
+            else:
+                for statement in statements:
                     connection.exec_driver_sql(statement)
             connection.execute(
                 text("INSERT INTO agent_schema_history(version) VALUES (:version)"),

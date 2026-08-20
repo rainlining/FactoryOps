@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from factoryops_agent_service.coordinator_fusion import CoordinatorFusionService
+from factoryops_agent_service.event_ingress import migration as migration_module
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.risk_decision import (
     RiskDecisionPersistenceIntegrityError,
@@ -94,6 +95,82 @@ def _fusion_decision(fusion: dict[str, object], marker: str) -> dict[str, object
         round=source["round"],
     )
     return payload
+
+
+def test_migration_013_recovers_after_columns_were_already_committed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with MySqlContainer("mysql:8.4") as mysql:
+        engine = create_engine(
+            mysql.get_connection_url().replace("mysql://", "mysql+pymysql://", 1)
+        )
+        try:
+            monkeypatch.setattr(
+                migration_module,
+                "MIGRATION_VERSIONS",
+                migration_module.MIGRATION_VERSIONS[:12],
+            )
+            migrate(engine)
+            migration_sql = (
+                Path(migration_module.__file__)
+                .parent.joinpath("migrations/013_extend_risk_decision_subject.sql")
+                .read_text(encoding="utf-8")
+            )
+            first_statement = migration_sql.split(";")[0]
+            with engine.begin() as connection:
+                connection.exec_driver_sql(first_statement)
+
+            monkeypatch.setattr(
+                migration_module,
+                "MIGRATION_VERSIONS",
+                (
+                    *migration_module.MIGRATION_VERSIONS,
+                    "013_extend_risk_decision_subject",
+                ),
+            )
+            migrate(engine)
+
+            with engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT COUNT(*) FROM agent_schema_history "
+                            "WHERE version='013_extend_risk_decision_subject'"
+                        )
+                    )
+                    == 1
+                )
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT IS_NULLABLE FROM information_schema.columns "
+                            "WHERE table_schema=DATABASE() AND table_name='risk_decisions' "
+                            "AND column_name='subject_type'"
+                        )
+                    )
+                    == "NO"
+                )
+
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "DELETE FROM agent_schema_history "
+                        "WHERE version='013_extend_risk_decision_subject'"
+                    )
+                )
+            migrate(engine)
+            with engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT COUNT(*) FROM agent_schema_history "
+                            "WHERE version='013_extend_risk_decision_subject'"
+                        )
+                    )
+                    == 1
+                )
+        finally:
+            engine.dispose()
 
 
 def test_save_fusion_subject_persists_and_replays(mysql_engine: Engine):
