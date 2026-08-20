@@ -5,7 +5,8 @@
 - 分支：`codex/persist-risk-decision-fusion-subject`
 - Worktree：`C:\Users\小霖\Desktop\work\project2\FactoryOps\.worktrees\persist-risk-decision-fusion-subject`
 - stacked base：`5fe9f6d80b99546a978c5fb4d6850800a4cbbb33`
-- HEAD：待最终提交
+- 实现与复审 HEAD：`3dcc3f0f19a9307f4bb7baad8774a52594144097`
+- 最终 handoff metadata commit：本文件所在的 branch HEAD
 
 新增 migration 013，将 `risk_decisions` 扩展为 Recommendation/Fusion 互斥 subject；`RiskDecisionService.save` 按 subject 锁定来源并复用 Fusion persistence 的完整性解码，原子写入 typed columns。读取重新验证 Decision 与完整 Fusion provenance；历史 replay 不要求 Coordinator Execution 仍 RUNNING。
 

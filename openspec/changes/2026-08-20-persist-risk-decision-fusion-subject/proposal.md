@@ -1,7 +1,7 @@
 # Change 提案：持久化 Risk Decision Fusion Subject
 
 - `change_id`: `2026-08-20-persist-risk-decision-fusion-subject`
-- `status`: `technically-verified`
+- `status`: `review-handoff-ready`
 - `learning_level`: `delegated`
 - `depends_on`: `2026-08-19-extend-risk-decision-fusion-subject`
 - `feature_branch`: `codex/persist-risk-decision-fusion-subject`
