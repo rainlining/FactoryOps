@@ -25,7 +25,7 @@ import org.testcontainers.mysql.MySQLContainer;
     properties = {
       "factoryops.clock.fixed=2026-08-20T11:30:00Z",
       "factoryops.approval.service-token=test-agent-token",
-      "factoryops.approval.authorized-actors=quality-lead,production-lead"
+      "factoryops.approval.authorized-actors=quality-lead:test-quality-token,production-lead:test-production-token"
     })
 @AutoConfigureMockMvc
 @Testcontainers
@@ -92,6 +92,13 @@ class HumanApprovalHttpIT {
     create(pending()).andExpect(status().isCreated());
     decide("intruder", "APPROVED", "MANUAL_REVIEW_PASSED")
         .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/v1/approvals/" + key() + "/decision")
+                .header("X-FactoryOps-Actor-Id", "quality-lead")
+                .header("X-FactoryOps-Actor-Token", "wrong-token")
+                .contentType("application/json")
+                .content("{\"decision\":\"APPROVED\",\"reason_code\":\"PASS\"}"))
+        .andExpect(status().isForbidden());
     assertThat(jdbc.queryForObject("SELECT status FROM business_approvals", String.class))
         .isEqualTo("PENDING");
     assertThat(count("business_approval_history")).isEqualTo(1);
@@ -111,6 +118,16 @@ class HumanApprovalHttpIT {
   void query_fails_closed_on_history_corruption() throws Exception {
     create(pending()).andExpect(status().isCreated());
     jdbc.update("UPDATE business_approval_history SET canonical_sha256=UNHEX(REPEAT('00',32))");
+    mvc.perform(get("/api/v1/approvals/" + key()))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.code").value("approval_integrity_error"));
+  }
+
+  @Test
+  void query_fails_closed_on_terminal_audit_projection_corruption() throws Exception {
+    create(pending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    jdbc.update("UPDATE business_approvals SET actor_id='different-actor'");
     mvc.perform(get("/api/v1/approvals/" + key()))
         .andExpect(status().isInternalServerError())
         .andExpect(jsonPath("$.code").value("approval_integrity_error"));
@@ -148,8 +165,9 @@ class HumanApprovalHttpIT {
   private org.springframework.test.web.servlet.ResultActions decide(
       String actor, String decision, String reason) throws Exception {
     return mvc.perform(
-        post("/api/v1/approvals/" + key() + "/decision")
+            post("/api/v1/approvals/" + key() + "/decision")
             .header("X-FactoryOps-Actor-Id", actor)
+            .header("X-FactoryOps-Actor-Token", actor.equals("quality-lead") ? "test-quality-token" : "test-production-token")
             .contentType("application/json")
             .content(
                 "{\"decision\":\""

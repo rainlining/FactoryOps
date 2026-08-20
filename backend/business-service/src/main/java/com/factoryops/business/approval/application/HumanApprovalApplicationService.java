@@ -139,7 +139,13 @@ public final class HumanApprovalApplicationService {
           || !value.coordinatorExecutionId().equals(row.get("coordinator_execution_id"))
           || value.round() != ((Number) row.get("fusion_round")).intValue()
           || !value.proposedAction().equals(row.get("proposed_action"))
-          || !value.riskLevel().equals(row.get("risk_level")))
+          || !value.riskLevel().equals(row.get("risk_level"))
+          || !value.requestedAt().equals(databaseInstant(row.get("requested_at")))
+          || !value.expiresAt().equals(databaseInstant(row.get("expires_at")))
+          || !java.util.Objects.equals(value.actorId(), row.get("actor_id"))
+          || !java.util.Objects.equals(value.decidedAt(), databaseInstant(row.get("decided_at")))
+          || !java.util.Objects.equals(value.reasonCode(), row.get("outcome_reason_code"))
+          || !java.util.Objects.equals(value.commentRef(), row.get("comment_ref")))
         throw integrity("approval persisted representation is corrupt");
       return value;
     } catch (ApprovalProblem error) { throw error; }
@@ -203,6 +209,12 @@ public final class HumanApprovalApplicationService {
   }
 
   private static String text(ValidatedApproval value) { return new String(value.canonical(), StandardCharsets.UTF_8); }
+  private static Instant databaseInstant(Object value) {
+    if (value == null) return null;
+    if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
+    if (value instanceof java.time.LocalDateTime local) return local.toInstant(ZoneOffset.UTC);
+    throw integrity("approval timestamp projection has an unexpected type");
+  }
   private static ApprovalProblem problem(int status, String code, String path, String message) { return new ApprovalProblem(status, code, path, message); }
   private static ApprovalProblem integrity(String message) { return problem(500, "approval_integrity_error", "$", message); }
 }

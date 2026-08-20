@@ -4,7 +4,7 @@ Business Service 通过受 service token 保护的 internal endpoint 接收完�
 
 创建事务按 approval key 对 current row 串行化；相同 canonical PENDING 为 replay，不同 payload 或 key/ID split 为 conflict。决定事务 `SELECT ... FOR UPDATE` 锁 current，只允许 PENDING → APPROVED/REJECTED；相同 actor/outcome/reason/comment 的终态重放返回 replay，任何其他终态命令冲突。current 与 revision history 同事务更新。
 
-Controller 只接受 `X-FactoryOps-Actor-Id`。`ApprovalAuthorizer` 从服务端配置 allowlist 解析 actor；客户端不能声明自身角色。v1 只区分“已授权审批者/未授权”，不发明动作级岗位策略。默认 allowlist 为空，生产样式配置缺失时 fail closed；本地 demo 可显式配置 actor。
+Controller 接受 actor ID 与 actor secret token。`ApprovalSecurity` 从服务端配置的 `actor → secret` allowlist 做常量时间凭据校验；客户端不能仅声明 ID 或角色来提升权限。v1 只区分“已认证审批者/未认证”，不发明动作级岗位策略。默认 allowlist 为空，配置缺失时 fail closed；本地 demo 可显式配置 actor credential。
 
 本 Change 不发布完成事件，因为现有通用 outbox 表仍带 Quality Incident 专用外键。移除该约束或新增多 aggregate outbox 属于后续 Workflow/Event Change，不能在审批 API 中静默弱化一致性。
 

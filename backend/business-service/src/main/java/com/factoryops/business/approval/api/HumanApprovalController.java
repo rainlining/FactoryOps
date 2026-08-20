@@ -36,8 +36,9 @@ public final class HumanApprovalController {
   ApprovalResponse decide(
       @PathVariable String approvalKey,
       @RequestHeader(value = "X-FactoryOps-Actor-Id", required = false) String actorId,
+      @RequestHeader(value = "X-FactoryOps-Actor-Token", required = false) String actorToken,
       @RequestBody ApprovalDecisionRequest request) {
-    var actor = security.requireActor(actorId);
+    var actor = security.requireActor(actorId, actorToken);
     var outcome = service.decide(
         approvalKey, actor, request.decision(), request.reason_code(), request.comment_ref());
     return new ApprovalResponse(outcome.approval(), outcome.replayed());
