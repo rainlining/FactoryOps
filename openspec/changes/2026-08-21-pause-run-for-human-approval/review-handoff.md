@@ -18,7 +18,7 @@
 
 - 首次 Approval 只接受 RUNNING Run，且 Approval 与 wait transition 同成同败。
 - transition ID/request ID 均从 Approval ID 派生，reason message 绑定 Approval key。
-- 读取和重放都验证 Run 状态、revision 与完整 transition typed fact。
+- 读取和重放都验证确定性 wait fact、从 wait 到 current 的连续合法 transition chain，以及 current status/reason/updated_at；合法恢复不会使历史 Approval 失效。
 - terminal Approval 不恢复 Run，不调用 Java，不产生业务副作用。
 
 验证与限制见 `verification.md`；Owner 小修改与故障实验见 `learning.md`。

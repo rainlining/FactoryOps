@@ -19,6 +19,8 @@ from factoryops_agent_service.risk_decision import (
     RiskDecisionPersistenceIntegrityError,
     RiskDecisionService,
 )
+from factoryops_agent_service.run_lifecycle.model import RunStatus
+from factoryops_agent_service.run_lifecycle.rules import LEGAL_TRANSITIONS
 from factoryops_agent_service.run_lifecycle.service import (
     AgentRunLifecycleService,
 )
@@ -444,7 +446,7 @@ class HumanApprovalService:
             approval_id
         )
         suffix = " FOR UPDATE" if for_update else ""
-        rows = (
+        identity_rows = (
             connection.execute(
                 text(
                     "SELECT * FROM agent_run_transitions "
@@ -456,26 +458,83 @@ class HumanApprovalService:
             .mappings()
             .all()
         )
-        expected_revision = int(lifecycle["revision"])
+        if len(identity_rows) != 1:
+            raise HumanApprovalPersistenceIntegrityError(
+                "Approval wait transition is inconsistent"
+            )
+        wait = identity_rows[0]
+        current_revision = int(lifecycle["revision"])
+        run_id = str(identity["run_id"])
+        chain = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions "
+                    "WHERE run_id=:run AND to_revision>=:wait_revision "
+                    "AND to_revision<=:current_revision ORDER BY to_revision" + suffix
+                ),
+                {
+                    "run": run_id,
+                    "wait_revision": wait["to_revision"],
+                    "current_revision": current_revision,
+                },
+            )
+            .mappings()
+            .all()
+        )
         if (
-            lifecycle["status"] != "WAITING_FOR_APPROVAL"
-            or len(rows) != 1
-            or rows[0]["transition_id"] != transition_id
-            or rows[0]["transition_request_id"] != request_id
-            or rows[0]["run_id"] != identity["run_id"]
-            or rows[0]["from_status"] != "RUNNING"
-            or rows[0]["to_status"] != "WAITING_FOR_APPROVAL"
-            or rows[0]["from_revision"] != expected_revision - 1
-            or rows[0]["to_revision"] != expected_revision
-            or rows[0]["actor_kind"] != "COORDINATOR"
-            or rows[0]["actor_id"] != "human-approval-service"
-            or rows[0]["reason_code"] != "HUMAN_APPROVAL_REQUIRED"
-            or rows[0]["reason_message"] != approval_key
-            or rows[0]["checkpoint_id"] is not None
+            wait["transition_id"] != transition_id
+            or wait["transition_request_id"] != request_id
+            or wait["run_id"] != run_id
+            or wait["from_status"] != "RUNNING"
+            or wait["to_status"] != "WAITING_FOR_APPROVAL"
+            or wait["to_revision"] != wait["from_revision"] + 1
+            or wait["actor_kind"] != "COORDINATOR"
+            or wait["actor_id"] != "human-approval-service"
+            or wait["reason_code"] != "HUMAN_APPROVAL_REQUIRED"
+            or wait["reason_message"] != approval_key
+            or wait["checkpoint_id"] is not None
+            or current_revision < wait["to_revision"]
+            or len(chain) != current_revision - wait["to_revision"] + 1
+            or not HumanApprovalService._valid_run_chain(chain)
         ):
             raise HumanApprovalPersistenceIntegrityError(
                 "Approval wait transition is inconsistent"
             )
+        current = chain[-1]
+        status_reason = lifecycle["status_reason"]
+        if (
+            current["to_status"] != lifecycle["status"]
+            or not isinstance(status_reason, Mapping)
+            or current["reason_code"] != status_reason["code"]
+            or (current["reason_message"] or current["reason_code"])
+            != status_reason["message"]
+            or HumanApprovalService._utc(current["occurred_at"])
+            != HumanApprovalService._timestamp(lifecycle["updated_at"])
+        ):
+            raise HumanApprovalPersistenceIntegrityError(
+                "Approval wait transition is inconsistent with Run current"
+            )
+
+    @staticmethod
+    def _valid_run_chain(chain: list[Mapping[str, object]]) -> bool:
+        previous_status = "RUNNING"
+        previous_revision = int(chain[0]["from_revision"])
+        for transition in chain:
+            try:
+                from_status = RunStatus(str(transition["from_status"]))
+                to_status = RunStatus(str(transition["to_status"]))
+            except ValueError:
+                return False
+            if (
+                transition["from_status"] != previous_status
+                or transition["from_revision"] != previous_revision
+                or transition["to_revision"] != previous_revision + 1
+                or to_status not in LEGAL_TRANSITIONS[from_status]
+            ):
+                return False
+            previous_status = str(transition["to_status"])
+            previous_revision = int(transition["to_revision"])
+        return True
 
     @staticmethod
     def _wait_transition_ids(approval_id: str) -> tuple[str, str]:

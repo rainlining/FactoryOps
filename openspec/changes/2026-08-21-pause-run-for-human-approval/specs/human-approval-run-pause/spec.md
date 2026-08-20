@@ -13,7 +13,7 @@
 
 ### Requirement: wait transition 必须以 Approval 确定性幂等
 
-transition request ID 必须由 Approval ID 确定性派生。相同 canonical Approval 重放只能返回 identical，并要求 Run 与 transition history 完整一致；不同 payload 或不同 transition fact 不得覆盖已有状态。
+transition request ID 必须由 Approval ID 确定性派生。相同 canonical Approval 重放只能返回 identical，并要求 wait transition 及其到 Run current 的后续 transition 构成连续合法历史，current summary 必须与最新 transition 一致；Run 合法恢复后不得因此破坏历史 Approval 可读性。不同 payload 或不同 transition fact 不得覆盖已有状态。
 
 #### Scenario: 并发相同 Approval
 
