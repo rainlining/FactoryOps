@@ -1,7 +1,7 @@
 # Change 提案：运行 Human Approval API
 
 - `change_id`: `2026-08-20-operate-human-approval`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-persist-human-approval`
 - `feature_branch`: `codex/operate-human-approval`
