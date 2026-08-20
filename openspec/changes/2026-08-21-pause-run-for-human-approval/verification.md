@@ -1,6 +1,6 @@
 # Verification
 
-状态：`technically-verified`，等待独立子 Agent 审查。
+状态：`review-handoff-ready`。
 
 ## TDD 与局部验证
 
@@ -26,3 +26,5 @@
 首审：0 Critical、2 Important、1 Minor。Important 为校验错误要求 Run 永久停在 WAITING，以及未把 Run current reason/time 与 transition history 交叉校验；Minor 为并发测试缺精确行数。修复后局部真实 MySQL `18 passed in 22.28s`：新增 WAITING→RUNNING 合法恢复后 Approval 仍可读、Run reason corruption fail closed、从 wait 到 current 的连续合法 transition chain 与 current reason/updated_at 校验，并补 current/history/transition 行数及 revision 断言。等待复审。
 
 修复后全量：Agent `221 passed in 482.01s`；Contract `154 passed in 1.60s`；Java `mvn verify -q` 退出码 0，XML `21 reports / 85 tests / 0 failures / 0 errors / 0 skipped`；Ruff check/format、diff check、dataset check 均通过。
+
+复审实际运行局部真实 MySQL `18 passed in 31.99s`，最终结论 0 Critical、0 Important。

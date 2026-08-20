@@ -6,7 +6,8 @@
 - worktree：`.worktrees/pause-run-for-human-approval`
 - stacked base：`81f82f2c5612cdfd13be836a1738b6a94e9a67f8`
 - implementation HEAD：`df2fa4edc00c57a4e590d4e1d5658357ec06fa8c`
-- 状态：`technically-verified`，等待独立审查。
+- review HEAD：`ea15169306a18a0ebc0ebbc544abe52f796433ed`
+- 状态：`review-handoff-ready`；独立复审 0 Critical、0 Important。
 
 ## 调用链
 
