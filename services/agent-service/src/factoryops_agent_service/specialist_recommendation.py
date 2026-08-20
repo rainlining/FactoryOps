@@ -7,12 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import IntegrityError
+
 from contracts.specialist_recommendation.validator import (
     canonicalize_recommendation,
     validate_recommendation,
 )
-from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError
 
 
 class RecommendationPersistenceRejected(ValueError):
@@ -142,6 +143,7 @@ class SpecialistRecommendationService:
             or execution["task_id"] != identity["task_id"]
             or execution["run_id"] != identity["run_id"]
             or execution["agent_role"] != identity["agent_role"]
+            or task["context_snapshot_id"] != execution["context_snapshot_id"]
         ):
             raise RecommendationPersistenceRejected(
                 "Recommendation parent is not current RUNNING Specialist pair"

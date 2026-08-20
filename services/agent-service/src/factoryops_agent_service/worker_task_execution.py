@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import ClassVar
 
-from contracts.agent_execution.validator import compute_execution_key
 from sqlalchemy import Connection, Engine, text
+
+from contracts.agent_execution.validator import compute_execution_key
 
 
 class WorkerExecutionRejected(ValueError):
@@ -478,7 +479,7 @@ class WorkerTaskExecutionService:
         updated = connection.execute(
             text(
                 """UPDATE agent_tasks SET revision=:revision,updated_at=:now,status_reason_code='WORKER_RETRY',
-                status_reason_message=NULL,current_execution_id=:execution,attempt_count=:attempt
+                status_reason_message='Worker execution retried',current_execution_id=:execution,attempt_count=:attempt
                 WHERE task_id=:task AND status='RUNNING' AND revision=:from_revision"""
             ),
             {
@@ -498,7 +499,7 @@ class WorkerTaskExecutionService:
                 from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
                 completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
                 VALUES (:transition,:request,:task,'RUNNING','RUNNING',:from_revision,:to_revision,'WORKER',:owner,
-                'WORKER_RETRY',NULL,:execution,:attempt,NULL,NULL,NULL,NULL,:now)"""
+                'WORKER_RETRY','Worker execution retried',:execution,:attempt,NULL,NULL,NULL,NULL,:now)"""
             ),
             {
                 "transition": self._transition_id_factory(),
@@ -652,7 +653,7 @@ class WorkerTaskExecutionService:
                 status_reason_message,output_artifact_refs,decision_id,result_evidence_refs,failure_code,failure_message,
                 failure_recoverability,failed_dependency_ref) VALUES (:execution_id,:execution_key,'1.0.0',:run_id,:agent_role,
                 :attempt,:task_id,:runtime_version,:prompt_version,:model_policy_version,:tool_policy_version,:context_policy_version,
-                :code_revision,:context_snapshot_id,:input_evidence_refs,'RUNNING',1,:now,:now,:now,NULL,'WORKER_STARTED',NULL,
+                :code_revision,:context_snapshot_id,:input_evidence_refs,'RUNNING',1,:now,:now,:now,NULL,'WORKER_STARTED','Worker execution started',
                 NULL,NULL,NULL,NULL,NULL,NULL,NULL)"""
             ),
             execution,
@@ -685,7 +686,7 @@ class WorkerTaskExecutionService:
                 """INSERT INTO agent_execution_transitions(transition_id,transition_request_id,execution_id,from_status,
                 to_status,from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,result_json,failure_json,occurred_at)
                 VALUES (:transition_id,:request,:execution,'PENDING','RUNNING',0,1,'WORKER',:owner,
-                'WORKER_STARTED',NULL,NULL,NULL,:now)"""
+                'WORKER_STARTED','Worker execution started',NULL,NULL,:now)"""
             ),
             {
                 **base,
@@ -706,7 +707,7 @@ class WorkerTaskExecutionService:
         result = connection.execute(
             text(
                 """UPDATE agent_tasks SET status='RUNNING',revision=1,updated_at=:now,started_at=:now,
-                status_reason_code='WORKER_STARTED',status_reason_message=NULL,current_execution_id=:execution,
+                status_reason_code='WORKER_STARTED',status_reason_message='Worker execution started',current_execution_id=:execution,
                 attempt_count=:attempt WHERE task_id=:task AND status='PENDING' AND revision=0"""
             ),
             {
@@ -723,7 +724,7 @@ class WorkerTaskExecutionService:
                 """INSERT INTO agent_task_transitions(transition_id,transition_request_id,task_id,from_status,to_status,
                 from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,execution_id,attempt_count,
                 completion_execution_id,failure_code,failure_message,failure_recoverability,occurred_at)
-                VALUES (:transition,:request,:task,'PENDING','RUNNING',0,1,'WORKER',:owner,'WORKER_STARTED',NULL,
+                VALUES (:transition,:request,:task,'PENDING','RUNNING',0,1,'WORKER',:owner,'WORKER_STARTED','Worker execution started',
                 :execution,:attempt,NULL,NULL,NULL,NULL,:now)"""
             ),
             {

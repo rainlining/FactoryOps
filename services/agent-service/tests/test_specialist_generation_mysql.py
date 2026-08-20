@@ -10,6 +10,7 @@ from factoryops_agent_service.specialist_generation import (
     SpecialistGenerationContext,
     SpecialistGenerationFailed,
     SpecialistGenerationRejected,
+    SpecialistProviderProvenance,
     SpecialistRecommendationDraft,
     SpecialistRecommendationGenerationCommand,
     SpecialistRecommendationGenerationService,
@@ -30,6 +31,14 @@ from contracts.specialist_recommendation.validator import (
 )
 
 GENERATED_AT = "2026-08-20T09:00:00Z"
+PROVENANCE = SpecialistProviderProvenance(
+    runtime_version="runtime-v1",
+    prompt_version="prompt-v1",
+    model_policy_version="model-v1",
+    tool_policy_version="tool-v1",
+    context_policy_version="context-v1",
+    code_revision="a" * 40,
+)
 
 
 @pytest.fixture(scope="module")
@@ -52,15 +61,16 @@ def _context(role: str = "quality") -> SpecialistGenerationContext:
         task_type="QUALITY_ANALYSIS",
         context_snapshot_id="CTX-" + "1" * 32,
         evidence_refs=("context:one",),
+        provenance=PROVENANCE,
     )
 
 
-def _quality_draft() -> SpecialistRecommendationDraft:
+def _quality_draft(marker: str = "8") -> SpecialistRecommendationDraft:
     return SpecialistRecommendationDraft(
         action="HOLD_BATCH",
         severity="HIGH",
         confidence=0.91,
-        evidence_refs=("inspection:731",),
+        evidence_refs=("inspection:" + marker,),
         reason_codes=("CONSECUTIVE_DEFECTS",),
         output_artifact_refs=(),
         details={"consecutive_defect_suspected": True},
@@ -69,7 +79,7 @@ def _quality_draft() -> SpecialistRecommendationDraft:
 
 def test_recorded_provider_returns_isolated_role_draft():
     draft = _quality_draft()
-    provider = RecordedSpecialistProvider({"quality": draft})
+    provider = RecordedSpecialistProvider({"quality": draft}, PROVENANCE)
 
     first = provider.generate(_context())
     first.details["consecutive_defect_suspected"] = False
@@ -79,13 +89,15 @@ def test_recorded_provider_returns_isolated_role_draft():
 
 
 def test_recorded_provider_rejects_unconfigured_role():
-    provider = RecordedSpecialistProvider({"quality": _quality_draft()})
+    provider = RecordedSpecialistProvider({"quality": _quality_draft()}, PROVENANCE)
 
     with pytest.raises(SpecialistGenerationRejected, match="not configured"):
         provider.generate(_context("production"))
 
 
 class CapturingProvider:
+    provenance = PROVENANCE
+
     def __init__(self, draft: SpecialistRecommendationDraft) -> None:
         self.draft = draft
         self.contexts: list[SpecialistGenerationContext] = []
@@ -99,7 +111,7 @@ class CapturingProvider:
 
 def test_generate_builds_identity_and_persists_current_execution(mysql_engine: Engine):
     task_id, _, execution_id = _running(mysql_engine, "8")
-    provider = CapturingProvider(_quality_draft())
+    provider = CapturingProvider(_quality_draft("8"))
     command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
     service = SpecialistRecommendationGenerationService(mysql_engine)
 
@@ -126,11 +138,13 @@ def test_replay_returns_existing_without_calling_provider(mysql_engine: Engine):
     task_id, _, execution_id = _running(mysql_engine, "9")
     service = SpecialistRecommendationGenerationService(mysql_engine)
     command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
-    assert service.generate(command, CapturingProvider(_quality_draft())).outcome is (
-        RecommendationSaveOutcome.APPLIED
-    )
+    assert service.generate(
+        command, CapturingProvider(_quality_draft("9"))
+    ).outcome is (RecommendationSaveOutcome.APPLIED)
 
     class MustNotRun:
+        provenance = CapturingProvider.provenance
+
         def generate(self, context: SpecialistGenerationContext):
             raise AssertionError("provider was called during replay")
 
@@ -139,11 +153,26 @@ def test_replay_returns_existing_without_calling_provider(mysql_engine: Engine):
     assert replay.outcome is RecommendationSaveOutcome.DUPLICATE_IDENTICAL
     assert replay.recommendation["identity"]["task_id"] == task_id
 
+    class WrongReplayProvider(MustNotRun):
+        provenance = SpecialistProviderProvenance(
+            **{**PROVENANCE.__dict__, "model_policy_version": "model-v2"}
+        )
+
+    with pytest.raises(SpecialistGenerationRejected, match="provenance"):
+        service.generate(command, WrongReplayProvider())
+    with pytest.raises(SpecialistGenerationRejected, match="generated_at"):
+        service.generate(
+            SpecialistRecommendationGenerationCommand(execution_id, "not-a-time"),
+            MustNotRun(),
+        )
+
 
 def test_provider_failure_or_invalid_draft_leaves_no_fact(mysql_engine: Engine):
     _, _, failed_execution = _running(mysql_engine, "a")
 
     class FailingProvider:
+        provenance = PROVENANCE
+
         def generate(self, context: SpecialistGenerationContext):
             raise TimeoutError("model timeout")
 
@@ -161,7 +190,7 @@ def test_provider_failure_or_invalid_draft_leaves_no_fact(mysql_engine: Engine):
     )
 
     _, _, invalid_execution = _running(mysql_engine, "b")
-    invalid = _quality_draft()
+    invalid = _quality_draft("b")
     invalid = SpecialistRecommendationDraft(**{**invalid.__dict__, "evidence_refs": ()})
     with pytest.raises(SpecialistRecommendationValidationError):
         service.generate(
@@ -175,13 +204,20 @@ def test_concurrent_identical_generation_keeps_one_fact(mysql_engine: Engine):
     service = SpecialistRecommendationGenerationService(mysql_engine)
     command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
 
+    barrier = threading.Barrier(2)
+
+    class RacingProvider(CapturingProvider):
+        def generate(self, context: SpecialistGenerationContext):
+            self.contexts.append(context)
+            barrier.wait(timeout=5)
+            return self.draft
+
+    providers = [RacingProvider(_quality_draft("c")) for _ in range(2)]
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = tuple(
             pool.map(
-                lambda _: service.generate(
-                    command, CapturingProvider(_quality_draft())
-                ),
-                range(2),
+                lambda provider: service.generate(command, provider),
+                providers,
             )
         )
 
@@ -189,6 +225,7 @@ def test_concurrent_identical_generation_keeps_one_fact(mysql_engine: Engine):
         RecommendationSaveOutcome.APPLIED,
         RecommendationSaveOutcome.DUPLICATE_IDENTICAL,
     }
+    assert [len(provider.contexts) for provider in providers] == [1, 1]
     with mysql_engine.connect() as connection:
         assert (
             connection.scalar(
@@ -212,7 +249,7 @@ def test_context_snapshot_mismatch_is_rejected_before_provider(mysql_engine: Eng
             ),
             {"context_id": "CTX-" + "F" * 32, "execution_id": execution_id},
         )
-    provider = CapturingProvider(_quality_draft())
+    provider = CapturingProvider(_quality_draft("e"))
 
     with pytest.raises(SpecialistGenerationRejected, match="current RUNNING"):
         SpecialistRecommendationGenerationService(mysql_engine).generate(
@@ -231,10 +268,12 @@ def test_parent_becoming_terminal_during_provider_call_is_fenced(
     release = threading.Event()
 
     class BlockingProvider:
+        provenance = CapturingProvider.provenance
+
         def generate(self, context: SpecialistGenerationContext):
             entered.set()
             assert release.wait(5)
-            return _quality_draft()
+            return _quality_draft("d")
 
     service = SpecialistRecommendationGenerationService(mysql_engine)
     command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
@@ -250,6 +289,74 @@ def test_parent_becoming_terminal_during_provider_call_is_fenced(
                 "d",
             )
         )
+        release.set()
+        with pytest.raises(RecommendationPersistenceRejected, match="not current"):
+            future.result()
+
+    assert (
+        SpecialistRecommendationService(mysql_engine).get_by_key(
+            compute_recommendation_key(execution_id)
+        )
+        is None
+    )
+
+
+def test_provider_provenance_and_references_are_fenced(mysql_engine: Engine):
+    _, _, execution_id = _running(mysql_engine, "f")
+    service = SpecialistRecommendationGenerationService(mysql_engine)
+    command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
+    wrong = SpecialistProviderProvenance(
+        **{**CapturingProvider.provenance.__dict__, "prompt_version": "prompt-v2"}
+    )
+
+    class WrongProvider(CapturingProvider):
+        provenance = wrong
+
+    with pytest.raises(SpecialistGenerationRejected, match="provenance"):
+        service.generate(command, WrongProvider(_quality_draft("f")))
+
+    unauthorized_evidence = SpecialistRecommendationDraft(
+        **{**_quality_draft("f").__dict__, "evidence_refs": ("ground_truth:hidden",)}
+    )
+    with pytest.raises(SpecialistGenerationRejected, match="authorized evidence"):
+        service.generate(command, CapturingProvider(unauthorized_evidence))
+
+    unauthorized_artifact = SpecialistRecommendationDraft(
+        **{
+            **_quality_draft("f").__dict__,
+            "output_artifact_refs": ("artifact:untrusted",),
+        }
+    )
+    with pytest.raises(SpecialistGenerationRejected, match="artifact"):
+        service.generate(command, CapturingProvider(unauthorized_artifact))
+
+
+def test_snapshot_changing_during_provider_call_is_fenced(mysql_engine: Engine):
+    _, _, execution_id = _running(mysql_engine, "1")
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingProvider(CapturingProvider):
+        def generate(self, context: SpecialistGenerationContext):
+            entered.set()
+            assert release.wait(5)
+            return self.draft
+
+    service = SpecialistRecommendationGenerationService(mysql_engine)
+    command = SpecialistRecommendationGenerationCommand(execution_id, GENERATED_AT)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            service.generate, command, BlockingProvider(_quality_draft("1"))
+        )
+        assert entered.wait(5)
+        with mysql_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE agent_executions SET context_snapshot_id=:snapshot "
+                    "WHERE execution_id=:execution"
+                ),
+                {"snapshot": "CTX-" + "F" * 32, "execution": execution_id},
+            )
         release.set()
         with pytest.raises(RecommendationPersistenceRejected, match="not current"):
             future.result()
