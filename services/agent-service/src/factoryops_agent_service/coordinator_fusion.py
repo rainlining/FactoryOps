@@ -41,7 +41,12 @@ class CoordinatorFusionService:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def save(self, fusion: Mapping[str, object]) -> FusionSaveResult:
+    def save(
+        self,
+        fusion: Mapping[str, object],
+        *,
+        expected_execution_provenance: Mapping[str, str] | None = None,
+    ) -> FusionSaveResult:
         canonical = canonicalize_coordinator_fusion(fusion)
         payload = json.loads(canonical)
         identity = payload["identity"]
@@ -76,6 +81,13 @@ class CoordinatorFusionService:
                         ):
                             raise FusionPersistenceRejected(
                                 "Coordinator Execution is not current RUNNING owner"
+                            )
+                        if expected_execution_provenance is not None and any(
+                            execution[field] != value
+                            for field, value in expected_execution_provenance.items()
+                        ):
+                            raise FusionPersistenceRejected(
+                                "Coordinator Execution provenance changed during Fusion generation"
                             )
                         sources = self._read_sources(connection, payload, True)
                         validate_coordinator_fusion(payload, sources)
