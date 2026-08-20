@@ -5,4 +5,4 @@
 - [x] T3 实现 Contract validator、domain、migration、repository/service/API。
 - [x] T4 补并发终态、过期、未授权和 rollback 负向验证。
 - [x] T5 运行全量验证并完成独立审查闭环。
-- [ ] T6 提交并按 stacked 顺序推送。
+- [x] T6 提交并按 stacked 顺序推送。

@@ -5,7 +5,7 @@
 - 分支/worktree：`codex/operate-human-approval` / `.worktrees/operate-human-approval`
 - stacked base：`4f8b38d1aa3e2208b2c5ef7d0ac23dc459d06417`
 - 实现 commits：`cb7b501`、`7022018`
-- 已验证内容 HEAD：`7022018773838523a60596f2bb2e8eb5e71227ab`
+- 已验证并首次推送内容 HEAD：`0626114e191679ae15312056462c698c0ec42284`；仅含本字段与 T6 状态的收尾 commit 以远端分支 HEAD 为准
 
 ## 范围与边界
 
