@@ -112,7 +112,7 @@ def _validate_risk_decision_payload(
         _raise(
             "decision_key_mismatch",
             "$.identity.decision_key",
-            "decision_key does not match recommendation_key",
+            "decision key does not match subject key",
         )
     assert isinstance(gate, Mapping)
     for field in ("allowed_actions", "policy_refs", "reason_codes"):
