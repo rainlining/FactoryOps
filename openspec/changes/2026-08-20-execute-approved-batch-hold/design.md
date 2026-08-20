@@ -17,7 +17,7 @@
 
 - 已存在且完整一致的 receipt 返回 replay，不重复 hold；ID/Key 分裂或多行命中均按完整性错误 fail closed。
 - PENDING/REJECTED、非 HOLD_BATCH、未知/漂移 incident 均 fail closed，零副作用。
-- Batch 已被相同 evidence hold 可重放；不同 hold、released/legacy batch 由既有 Batch domain 拒绝，receipt 不落库。
+- Batch 已被相同 approval-derived manual command hold 可重放；不同 hold、released/legacy batch 由既有 Batch domain 拒绝，receipt 不落库。
 - 不捕获并伪装数据库 deadlock；锁序与并发测试负责证明正常竞争不泄漏异常。
 
 ## 测试

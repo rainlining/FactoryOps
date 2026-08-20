@@ -1,7 +1,7 @@
 # Change 提案：执行已批准的批次冻结
 
 - `change_id`: `2026-08-20-execute-approved-batch-hold`
-- `status`: `technically-verified`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-bind-approval-action-target`
 - `feature_branch`: `codex/execute-approved-batch-hold`

@@ -1,6 +1,6 @@
 # Verification
 
-状态：独立审查修复验证中。
+状态：`review-handoff-ready`。
 
 ## 实际验证
 
@@ -23,7 +23,7 @@
 
 ## 独立审查
 
-首审：0 Critical、2 Important。Important 分别为 receipt 仅按 ID 查询导致 identity split 由唯一键异常决胜，以及 OpenSpec 的 `QUALITY_ANOMALY`/测试覆盖声明与实现不一致。修复采用 ID-or-Key 锁定与完整 identity 比对，明确人工批准执行使用 `MANUAL_QUALITY_HOLD`，并补三条真实 MySQL 回归。等待复审。
+首审：0 Critical、2 Important。Important 分别为 receipt 仅按 ID 查询导致 identity split 由唯一键异常决胜，以及 OpenSpec 的 `QUALITY_ANOMALY`/测试覆盖声明与实现不一致。修复采用 ID-or-Key 锁定与完整 identity 比对，明确人工批准执行使用 `MANUAL_QUALITY_HOLD`，并补三条真实 MySQL 回归。复审实际运行 HumanApprovalHttpIT 20 tests，结论 0 Critical、0 Important。
 
 ## 限制
 
