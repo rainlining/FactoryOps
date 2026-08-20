@@ -10,8 +10,11 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import DBAPIError
 
 from factoryops_agent_service.approved_action_resume import (
+    ApprovedActionResumeIntegrityError,
     ApprovedActionResumeService,
     BusinessActionPort,
+    BusinessActionPreconditionIntegrityError,
+    BusinessActionPreconditionRejected,
 )
 from factoryops_agent_service.execution_lifecycle.model import ExecutionStatus
 from factoryops_agent_service.execution_lifecycle.rules import LEGAL as EXECUTION_LEGAL
@@ -26,7 +29,12 @@ from factoryops_agent_service.risk_decision import (
     RiskDecisionPersistenceIntegrityError,
     RiskDecisionService,
 )
+from factoryops_agent_service.run_lifecycle.model import RunStatus
+from factoryops_agent_service.run_lifecycle.rules import LEGAL_TRANSITIONS
 from factoryops_agent_service.run_lifecycle.service import AgentRunLifecycleService
+from factoryops_agent_service.task_lifecycle.model import TaskStatus
+from factoryops_agent_service.task_lifecycle.rules import LEGAL as TASK_LEGAL
+from factoryops_agent_service.task_lifecycle.service import AgentTaskLifecycleService
 
 
 class ApprovedWorkflowCompletionRejected(ValueError):
@@ -76,7 +84,7 @@ class ApprovedWorkflowCompletionService:
         )
         with self._engine.connect() as admission:
             if (
-                admission.scalar(text("SELECT GET_LOCK(:name,10)"), {"name": lock_name})
+                admission.scalar(text("SELECT GET_LOCK(:name,35)"), {"name": lock_name})
                 != 1
             ):
                 raise ApprovedWorkflowCompletionRejected(
@@ -85,9 +93,24 @@ class ApprovedWorkflowCompletionService:
             admission.commit()
             try:
                 if not self._has_completion(identity):
-                    ApprovedActionResumeService(self._engine, self._business).resume(
-                        terminal_approval
-                    )
+                    try:
+                        ApprovedActionResumeService(
+                            self._engine,
+                            self._business,
+                            before_business_hook=lambda connection: (
+                                self._resume_preflight(connection, identity)
+                            ),
+                        ).resume(terminal_approval)
+                    except BusinessActionPreconditionRejected as error:
+                        raise ApprovedWorkflowCompletionRejected(str(error)) from error
+                    except BusinessActionPreconditionIntegrityError as error:
+                        raise ApprovedWorkflowCompletionIntegrityError(
+                            str(error)
+                        ) from error
+                    except ApprovedActionResumeIntegrityError as error:
+                        raise ApprovedWorkflowCompletionIntegrityError(
+                            "workflow readiness or resume integrity failed"
+                        ) from error
                 return self._complete_agent(terminal_approval)
             finally:
                 admission.rollback()
@@ -173,6 +196,8 @@ class ApprovedWorkflowCompletionService:
                 )
                 if run is None:
                     raise ApprovedWorkflowCompletionIntegrityError("Run is missing")
+                run_history = self._lock_run_history(connection, run_id)
+                self._validate_run_history(run, run_history)
                 approval_row = HumanApprovalService._read_by_identity(
                     connection, approval_key, approval_id, for_update=True
                 )
@@ -215,20 +240,8 @@ class ApprovedWorkflowCompletionService:
                     .all()
                 )
                 self._validate_coordinator_history(coordinator, coordinator_history)
-                tasks = (
-                    connection.execute(
-                        text(
-                            "SELECT t.task_id,t.status,t.current_execution_id,"
-                            "t.completion_execution_id,e.status AS execution_status "
-                            "FROM agent_tasks t LEFT JOIN agent_executions e "
-                            "ON e.execution_id=t.completion_execution_id "
-                            "WHERE t.run_id=:run ORDER BY t.task_id FOR UPDATE"
-                        ),
-                        {"run": run_id},
-                    )
-                    .mappings()
-                    .all()
-                )
+                tasks = self._lock_tasks(connection, run_id)
+                self._validate_tasks(connection, tasks, run_id)
                 execution_count = int(
                     connection.scalar(
                         text("SELECT COUNT(*) FROM agent_executions WHERE run_id=:run"),
@@ -397,6 +410,250 @@ class ApprovedWorkflowCompletionService:
             outcome, approval, coordinator_contract, run_contract
         )
 
+    def _preflight(self, connection, identity: Mapping[str, object]) -> None:
+        run_id = str(identity["run_id"])
+        coordinator_id = str(identity["coordinator_execution_id"])
+        coordinator = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_executions "
+                    "WHERE execution_id=:execution FOR UPDATE"
+                ),
+                {"execution": coordinator_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if coordinator is None:
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Coordinator Execution is missing during preflight"
+            )
+        AgentExecutionLifecycleService(self._engine)._to_contract(coordinator)
+        coordinator_history = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_execution_transitions "
+                    "WHERE execution_id=:execution ORDER BY to_revision FOR UPDATE"
+                ),
+                {"execution": coordinator_id},
+            )
+            .mappings()
+            .all()
+        )
+        self._validate_coordinator_history(coordinator, coordinator_history)
+        tasks = self._lock_tasks(connection, run_id)
+        self._validate_tasks(connection, tasks, run_id)
+        run = (
+            connection.execute(
+                text("SELECT * FROM agent_runs WHERE run_id=:run FOR UPDATE"),
+                {"run": run_id},
+            )
+            .mappings()
+            .one()
+        )
+        run_history = self._lock_run_history(connection, run_id)
+        self._validate_run_history(run, run_history)
+
+    def _resume_preflight(self, connection, identity: Mapping[str, object]) -> None:
+        try:
+            self._preflight(connection, identity)
+        except ApprovedWorkflowCompletionRejected as error:
+            raise BusinessActionPreconditionRejected(str(error)) from error
+        except ApprovedWorkflowCompletionIntegrityError as error:
+            raise BusinessActionPreconditionIntegrityError(str(error)) from error
+
+    @staticmethod
+    def _lock_tasks(connection, run_id: str):
+        return (
+            connection.execute(
+                text(
+                    "SELECT t.*,e.status AS execution_status,e.task_id AS execution_task_id,"
+                    "e.run_id AS execution_run_id,e.agent_role AS execution_agent_role "
+                    "FROM agent_tasks t LEFT JOIN agent_executions e "
+                    "ON e.execution_id=t.completion_execution_id "
+                    "WHERE t.run_id=:run ORDER BY t.task_id FOR UPDATE"
+                ),
+                {"run": run_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    @staticmethod
+    def _validate_task_readiness(tasks, run_id: str) -> None:
+        if len(tasks) < 2 or any(task["status"] != "SUCCEEDED" for task in tasks):
+            raise ApprovedWorkflowCompletionRejected(
+                "all Specialist Tasks must be SUCCEEDED"
+            )
+        if any(
+            task["current_execution_id"] != task["completion_execution_id"]
+            or task["execution_status"] != "SUCCEEDED"
+            or task["execution_task_id"] != task["task_id"]
+            or task["execution_run_id"] != run_id
+            or task["execution_agent_role"] != task["target_agent_role"]
+            for task in tasks
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Task or completion Execution readiness is inconsistent"
+            )
+
+    def _validate_tasks(self, connection, tasks, run_id: str) -> None:
+        self._validate_task_readiness(tasks, run_id)
+        task_service = AgentTaskLifecycleService(self._engine)
+        execution_service = AgentExecutionLifecycleService(self._engine)
+        for task in tasks:
+            dependencies = (
+                connection.execute(
+                    text(
+                        "SELECT dependency_task_id FROM agent_task_dependencies "
+                        "WHERE task_id=:task ORDER BY ordinal"
+                    ),
+                    {"task": task["task_id"]},
+                )
+                .scalars()
+                .all()
+            )
+            task_service._to_contract(
+                {**task, "dependency_task_ids": tuple(dependencies)}
+            )
+            history = (
+                connection.execute(
+                    text(
+                        "SELECT * FROM agent_task_transitions WHERE task_id=:task "
+                        "ORDER BY to_revision FOR UPDATE"
+                    ),
+                    {"task": task["task_id"]},
+                )
+                .mappings()
+                .all()
+            )
+            self._validate_task_history(task, history)
+            execution = (
+                connection.execute(
+                    text(
+                        "SELECT * FROM agent_executions "
+                        "WHERE execution_id=:execution FOR UPDATE"
+                    ),
+                    {"execution": task["completion_execution_id"]},
+                )
+                .mappings()
+                .one()
+            )
+            execution_service._to_contract(execution)
+            execution_history = (
+                connection.execute(
+                    text(
+                        "SELECT * FROM agent_execution_transitions "
+                        "WHERE execution_id=:execution ORDER BY to_revision FOR UPDATE"
+                    ),
+                    {"execution": task["completion_execution_id"]},
+                )
+                .mappings()
+                .all()
+            )
+            self._validate_coordinator_history(execution, execution_history)
+
+    @staticmethod
+    def _validate_task_history(task: Mapping[str, object], history) -> None:
+        if len(history) != int(task["revision"]) + 1:
+            raise ApprovedWorkflowCompletionIntegrityError("Task history is incomplete")
+        previous_status: str | None = None
+        for expected_revision, transition in enumerate(history):
+            if (
+                transition["to_revision"] != expected_revision
+                or transition["task_id"] != task["task_id"]
+                or transition["from_revision"]
+                != (None if expected_revision == 0 else expected_revision - 1)
+                or transition["from_status"] != previous_status
+            ):
+                raise ApprovedWorkflowCompletionIntegrityError(
+                    "Task history is inconsistent"
+                )
+            if previous_status is not None:
+                try:
+                    if (
+                        TaskStatus(str(transition["to_status"]))
+                        not in TASK_LEGAL[TaskStatus(previous_status)]
+                    ):
+                        raise ApprovedWorkflowCompletionIntegrityError(
+                            "Task history transition is illegal"
+                        )
+                except ValueError as error:
+                    raise ApprovedWorkflowCompletionIntegrityError(
+                        "Task history status is invalid"
+                    ) from error
+            previous_status = str(transition["to_status"])
+        tail = history[-1]
+        if (
+            tail["to_status"] != task["status"]
+            or tail["to_revision"] != task["revision"]
+            or tail["reason_code"] != task["status_reason_code"]
+            or tail["reason_message"] != task["status_reason_message"]
+            or tail["execution_id"] != task["current_execution_id"]
+            or tail["attempt_count"] != task["attempt_count"]
+            or tail["completion_execution_id"] != task["completion_execution_id"]
+            or tail["occurred_at"] != task["updated_at"]
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Task current snapshot differs from history"
+            )
+
+    @staticmethod
+    def _lock_run_history(connection, run_id: str):
+        return (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions WHERE run_id=:run "
+                    "ORDER BY to_revision FOR UPDATE"
+                ),
+                {"run": run_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    @staticmethod
+    def _validate_run_history(run: Mapping[str, object], history) -> None:
+        if len(history) != int(run["revision"]) + 1:
+            raise ApprovedWorkflowCompletionIntegrityError("Run history is incomplete")
+        previous_status: str | None = None
+        for expected_revision, transition in enumerate(history):
+            if (
+                transition["to_revision"] != expected_revision
+                or transition["run_id"] != run["run_id"]
+                or transition["from_revision"]
+                != (None if expected_revision == 0 else expected_revision - 1)
+                or transition["from_status"] != previous_status
+            ):
+                raise ApprovedWorkflowCompletionIntegrityError(
+                    "Run history is inconsistent"
+                )
+            if previous_status is not None:
+                try:
+                    if (
+                        RunStatus(str(transition["to_status"]))
+                        not in LEGAL_TRANSITIONS[RunStatus(previous_status)]
+                    ):
+                        raise ApprovedWorkflowCompletionIntegrityError(
+                            "Run history transition is illegal"
+                        )
+                except ValueError as error:
+                    raise ApprovedWorkflowCompletionIntegrityError(
+                        "Run history status is invalid"
+                    ) from error
+            previous_status = str(transition["to_status"])
+        tail = history[-1]
+        if (
+            tail["to_status"] != run["status"]
+            or tail["to_revision"] != run["revision"]
+            or tail["reason_code"] != run["status_reason_code"]
+            or tail["reason_message"] != run["status_reason_message"]
+            or tail["occurred_at"] != run["updated_at"]
+        ):
+            raise ApprovedWorkflowCompletionIntegrityError(
+                "Run current snapshot differs from history"
+            )
+
     @staticmethod
     def _validate_readiness(
         run: Mapping[str, object],
@@ -521,6 +778,9 @@ class ApprovedWorkflowCompletionService:
                 task["status"] != "SUCCEEDED"
                 or task["current_execution_id"] != task["completion_execution_id"]
                 or task["execution_status"] != "SUCCEEDED"
+                or task["execution_task_id"] != task["task_id"]
+                or task["execution_run_id"] != run_id
+                or task["execution_agent_role"] != task["target_agent_role"]
                 for task in tasks
             )
             or coordinator["ended_at"] != execution["occurred_at"]

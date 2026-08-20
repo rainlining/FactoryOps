@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
@@ -140,13 +141,14 @@ def test_incomplete_specialists_leave_workflow_running(mysql_engine: Engine):
     client = RecordingBusinessClient(terminal)
     with pytest.raises(ApprovedWorkflowCompletionRejected, match="Task"):
         ApprovedWorkflowCompletionService(mysql_engine, client).complete(terminal)
+    assert client.calls == 0
     with mysql_engine.connect() as connection:
         assert (
             connection.scalar(
                 text("SELECT status FROM agent_runs WHERE run_id=:run"),
                 {"run": terminal["identity"]["run_id"]},
             )
-            == "RUNNING"
+            == "WAITING_FOR_APPROVAL"
         )
         assert (
             connection.scalar(
@@ -224,3 +226,67 @@ def test_split_completion_transition_fails_closed(mysql_engine: Engine):
         )
     with pytest.raises(ApprovedWorkflowCompletionIntegrityError):
         service.complete(terminal)
+
+
+def test_cross_task_execution_binding_fails_before_business(mysql_engine: Engine):
+    terminal, client = _ready(mysql_engine, "7")
+    run_id = terminal["identity"]["run_id"]
+    with mysql_engine.begin() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT task_id,completion_execution_id FROM agent_tasks "
+                "WHERE run_id=:run ORDER BY task_id LIMIT 2"
+            ),
+            {"run": run_id},
+        ).all()
+        connection.execute(
+            text(
+                "UPDATE agent_tasks SET current_execution_id=:foreign,"
+                "completion_execution_id=:foreign WHERE task_id=:task"
+            ),
+            {"foreign": rows[1][1], "task": rows[0][0]},
+        )
+    with pytest.raises(ApprovedWorkflowCompletionIntegrityError, match="Task"):
+        ApprovedWorkflowCompletionService(mysql_engine, client).complete(terminal)
+    assert client.calls == 0
+
+
+def test_missing_early_run_history_fails_before_business(mysql_engine: Engine):
+    terminal, client = _ready(mysql_engine, "8")
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "DELETE FROM agent_run_transitions WHERE run_id=:run AND to_revision=0"
+            ),
+            {"run": terminal["identity"]["run_id"]},
+        )
+    with pytest.raises(ApprovedWorkflowCompletionIntegrityError, match="Run history"):
+        ApprovedWorkflowCompletionService(mysql_engine, client).complete(terminal)
+    assert client.calls == 0
+
+
+def test_slow_identical_completion_waits_for_winner(mysql_engine: Engine):
+    terminal, client = _ready(mysql_engine, "9")
+    original_execute = client.execute
+    first = True
+    guard = threading.Lock()
+
+    def slow_execute(approval_key: str):
+        nonlocal first
+        with guard:
+            should_sleep = first
+            first = False
+        if should_sleep:
+            time.sleep(10.5)
+        return original_execute(approval_key)
+
+    client.execute = slow_execute
+    service = ApprovedWorkflowCompletionService(mysql_engine, client)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_call = pool.submit(service.complete, terminal)
+        time.sleep(0.2)
+        second_call = pool.submit(service.complete, terminal)
+        assert {first_call.result().outcome, second_call.result().outcome} == {
+            WorkflowCompletionOutcome.APPLIED,
+            WorkflowCompletionOutcome.DUPLICATE_IDENTICAL,
+        }

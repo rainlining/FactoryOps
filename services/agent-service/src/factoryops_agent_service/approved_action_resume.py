@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Protocol
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError
 
 from factoryops_agent_service.human_approval import (
@@ -35,6 +35,14 @@ class ApprovedActionResumeIntegrityError(RuntimeError):
 
 
 class BusinessActionUnavailable(RuntimeError):
+    pass
+
+
+class BusinessActionPreconditionRejected(ValueError):
+    pass
+
+
+class BusinessActionPreconditionIntegrityError(RuntimeError):
     pass
 
 
@@ -135,10 +143,12 @@ class ApprovedActionResumeService:
         engine: Engine,
         business_client: BusinessActionPort,
         *,
+        before_business_hook: Callable[[Connection], None] | None = None,
         after_business_hook: Callable[[], None] | None = None,
     ) -> None:
         self._engine = engine
         self._business = business_client
+        self._before_business_hook = before_business_hook or (lambda connection: None)
         self._after_business_hook = after_business_hook or (lambda: None)
 
     def resume(
@@ -185,6 +195,8 @@ class ApprovedActionResumeService:
         except (
             ApprovedActionResumeRejected,
             ApprovedActionResumeIntegrityError,
+            BusinessActionPreconditionRejected,
+            BusinessActionPreconditionIntegrityError,
             BusinessActionUnavailable,
         ):
             raise
@@ -332,6 +344,7 @@ class ApprovedActionResumeService:
                     raise ApprovedActionResumeIntegrityError(
                         "Approval resume transition identity is split"
                     )
+                self._before_business_hook(connection)
                 receipt = self._validate_receipt(
                     self._business.execute(approval_key), approval
                 )
