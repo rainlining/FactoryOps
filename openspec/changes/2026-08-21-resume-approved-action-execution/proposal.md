@@ -1,7 +1,7 @@
 # Change 提案：批准后执行业务动作并恢复 Run
 
 - `change_id`: `2026-08-21-resume-approved-action-execution`
-- `status`: `technically-verified`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-21-pause-run-for-human-approval`
 - `feature_branch`: `codex/resume-approved-action-execution`

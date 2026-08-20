@@ -1,6 +1,6 @@
 # Verification
 
-状态：`technically-verified`，等待独立审查。
+状态：`review-handoff-ready`。独立首审 5 Important 已全部修复；复审为 0 Critical / 0 Important。
 
 ## TDD 与局部验证
 
@@ -13,11 +13,12 @@
 
 ## 全量验证
 
-- Agent：`237 passed in 524.94s`。
-- Contract：`154 passed in 2.40s`。
-- Java `mvn verify -q`：退出码 0；XML `21 reports / 85 tests / 0 failures / 0 errors / 0 skipped`。
+- Agent：`246 passed in 538.69s`。
+- Contract：`154 passed in 1.64s`。
+- Java `mvn verify -q`：退出码 0；XML `22 reports / 105 tests / 0 failures / 0 errors / 0 skipped`。
 - 本 Change Python 文件 Ruff check/format 通过。
 - `git diff --check` 通过；`git status --short -- dataset` 无输出。
+- 同一独立子 Agent 复审实跑局部 `25 passed in 34.11s`、Contract `154 passed in 1.03s`，确认 0 Critical / 0 Important。
 
 ## 限制
 
