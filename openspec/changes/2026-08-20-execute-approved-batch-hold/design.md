@@ -7,15 +7,15 @@
 1. 以 hash+原值 `FOR SHARE` 锁定 Quality Incident；
 2. `FOR UPDATE` 锁定 Approval，重做 schema/hash/typed/history 完整性校验；
 3. 要求 v1.1、revision 2、`APPROVED`、`HOLD_BATCH` 且 incident 未漂移；
-4. 读取或创建以 `approval_id` 为唯一键的 action receipt；
-5. 从 Incident 取得 batch/inspection/result，调用既有 Batch domain 的 `QUALITY_ANOMALY` hold；
+4. 同时按 `approval_id OR approval_key` 锁定 action receipt，要求最多一行且两个 identity 字段都与 Approval 一致；
+5. 从 Incident 取得 Batch，调用既有 Batch domain 的 `MANUAL_QUALITY_HOLD`，detail 固定为 `approval:<approval_key>`；
 6. 同事务写入 EXECUTED receipt 后提交。
 
 锁序固定为 `Incident → Approval → receipt → Batch`，与 Approval create 的 `Incident → Approval` 前缀一致。Approval row 把同一审批的首次执行串行化；数据库事务保证 Batch 与 receipt 同成同败。
 
 ## 幂等与失败
 
-- 已存在且完整一致的 receipt 返回 replay，不重复 hold。
+- 已存在且完整一致的 receipt 返回 replay，不重复 hold；ID/Key 分裂或多行命中均按完整性错误 fail closed。
 - PENDING/REJECTED、非 HOLD_BATCH、未知/漂移 incident 均 fail closed，零副作用。
 - Batch 已被相同 evidence hold 可重放；不同 hold、released/legacy batch 由既有 Batch domain 拒绝，receipt 不落库。
 - 不捕获并伪装数据库 deadlock；锁序与并发测试负责证明正常竞争不泄漏异常。

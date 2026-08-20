@@ -13,7 +13,7 @@
 
 ### Requirement: HOLD_BATCH 原子且幂等
 
-首次执行必须在一个事务内把目标 Batch 从 OPEN 变为 HELD 并写一条 approval-keyed EXECUTED receipt；相同 Approval 重放不得重复副作用。
+首次执行必须在一个事务内把目标 Batch 从 OPEN 变为 HELD 并写一条 approval-keyed EXECUTED receipt；相同 Approval 重放不得重复副作用。receipt 必须同时绑定 Approval ID 与 Key；任一 identity 分裂、多行命中或 typed 状态漂移必须作为完整性错误拒绝，不得依靠数据库唯一键异常分类。
 
 #### Scenario: 并发相同执行
 

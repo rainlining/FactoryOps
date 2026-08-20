@@ -59,7 +59,10 @@ public final class ApprovedBatchHoldExecutionService {
       throw problem(422, "approved_action_unsupported", "$.request.proposed_action", "Only HOLD_BATCH execution is supported");
     var batchId = (String) incidents.get(0).get("batch_id");
     var receipts = jdbc.queryForList(
-        "SELECT * FROM approved_action_executions WHERE approval_id=? FOR UPDATE", approval.approvalId());
+        "SELECT * FROM approved_action_executions WHERE approval_id=? OR approval_key=? FOR UPDATE",
+        approval.approvalId(), approval.approvalKey());
+    if (receipts.size() > 1)
+      throw problem(500, "action_execution_integrity_error", "$", "Action receipt identity is split");
     if (!receipts.isEmpty()) {
       validateExecutedBatch(batchId, approvalKey);
       return replay(receipts.get(0), approval, batchId);
@@ -85,7 +88,8 @@ public final class ApprovedBatchHoldExecutionService {
 
   private static ActionExecutionOutcome replay(
       Map<String, Object> row, ValidatedApproval approval, String batchId) {
-    if (!approval.approvalKey().equals(row.get("approval_key"))
+    if (!approval.approvalId().equals(row.get("approval_id"))
+        || !approval.approvalKey().equals(row.get("approval_key"))
         || !approval.proposedAction().equals(row.get("action"))
         || !approval.incidentId().equals(row.get("incident_id"))
         || !batchId.equals(row.get("batch_id"))

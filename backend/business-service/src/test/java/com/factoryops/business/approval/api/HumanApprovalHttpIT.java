@@ -284,6 +284,59 @@ class HumanApprovalHttpIT {
     assertThat(count("approved_action_executions")).isEqualTo(1);
   }
 
+  @Test
+  void receipt_identity_split_fails_closed_without_a_second_receipt() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    execute("{}").andExpect(status().isOk());
+    jdbc.execute("SET FOREIGN_KEY_CHECKS=0");
+    try {
+      jdbc.update(
+          "UPDATE approved_action_executions SET approval_id='APR-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'");
+    } finally {
+      jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
+    }
+
+    execute("{}")
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.code").value("action_execution_integrity_error"));
+    assertThat(count("approved_action_executions")).isEqualTo(1);
+  }
+
+  @Test
+  void approval_projection_corruption_blocks_execution_without_side_effect() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    jdbc.update("UPDATE business_approvals SET actor_id='different-actor'");
+
+    execute("{}")
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.code").value("approval_integrity_error"));
+    assertThat(count("approved_action_executions")).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("OPEN");
+  }
+
+  @Test
+  void conflicting_existing_batch_hold_rejects_without_receipt() throws Exception {
+    create(holdPending()).andExpect(status().isCreated());
+    decide("quality-lead", "APPROVED", "MANUAL_REVIEW_PASSED").andExpect(status().isOk());
+    jdbc.update(
+        "UPDATE batches SET status='HELD',hold_reason_code='PROCESS_ANOMALY',hold_reason_detail='existing-command',held_at=? WHERE batch_id='BATCH-APPROVAL'",
+        Instant.parse("2026-08-20T11:00:00Z"));
+
+    execute("{}")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("batch_command_conflict"));
+    assertThat(count("approved_action_executions")).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT hold_reason_code FROM batches WHERE batch_id='BATCH-APPROVAL'", String.class))
+        .isEqualTo("PROCESS_ANOMALY");
+  }
+
   private org.springframework.test.web.servlet.ResultActions create(String payload) throws Exception {
     return mvc.perform(
         post("/internal/api/v1/approvals")
