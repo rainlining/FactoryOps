@@ -184,6 +184,7 @@ class CoordinatorFusionGenerationService:
             raise FusionGenerationFailed(f"fusion provider failed: {error}") from error
         if not isinstance(draft, CoordinatorFusionDraft):
             raise FusionGenerationRejected("fusion provider returned unsupported draft")
+        self._validate_draft(draft)
         authorized_evidence = {
             reference for source in contexts for reference in source.evidence_refs
         }
@@ -246,7 +247,50 @@ class CoordinatorFusionGenerationService:
                 )
             roles.add(role)
             sources.append(copy.deepcopy(dict(source)))
-        return sources
+        return sorted(
+            sources,
+            key=lambda source: (
+                str(source["identity"]["agent_role"]),
+                str(source["identity"]["recommendation_key"]),
+            ),
+        )
+
+    @staticmethod
+    def _validate_draft(draft: CoordinatorFusionDraft) -> None:
+        string_sequences = (
+            draft.conflict_codes,
+            draft.evidence_refs,
+            draft.reason_codes,
+        )
+        if (
+            not isinstance(draft.proposed_action, str)
+            or not isinstance(draft.candidates, tuple)
+            or not isinstance(draft.has_conflict, bool)
+            or any(
+                not isinstance(values, tuple)
+                or any(not isinstance(value, str) for value in values)
+                for values in string_sequences
+            )
+        ):
+            raise FusionGenerationRejected("fusion provider returned unsupported draft")
+        for candidate in draft.candidates:
+            if (
+                not isinstance(candidate, FusionCandidateDraft)
+                or not isinstance(candidate.action, str)
+                or not isinstance(candidate.rank, int)
+                or isinstance(candidate.rank, bool)
+                or not isinstance(candidate.score, (int, float))
+                or isinstance(candidate.score, bool)
+                or not isinstance(candidate.supporting_roles, list)
+                or not isinstance(candidate.opposing_roles, list)
+                or any(
+                    not isinstance(role, str)
+                    for role in candidate.supporting_roles + candidate.opposing_roles
+                )
+            ):
+                raise FusionGenerationRejected(
+                    "fusion provider returned unsupported draft"
+                )
 
     @staticmethod
     def _source_context(source: dict[str, object]) -> FusionRecommendationContext:

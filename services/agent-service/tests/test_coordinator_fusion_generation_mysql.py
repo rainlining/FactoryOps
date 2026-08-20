@@ -142,6 +142,51 @@ def test_generate_builds_identity_inputs_and_persists(mysql_engine: Engine):
     assert len(provider.contexts) == 1
 
 
+def test_generate_canonicalizes_source_order_before_provider(mysql_engine: Engine):
+    _, coordinator_id, sources = _parents(mysql_engine, "8")
+    reversed_sources = list(reversed(sources))
+    provider = CapturingProvider(_draft(sources))
+
+    result = CoordinatorFusionGenerationService(mysql_engine).generate(
+        _command(coordinator_id, reversed_sources), provider
+    )
+
+    assert result.outcome is FusionSaveOutcome.APPLIED
+    assert [source.agent_role for source in provider.contexts[0].recommendations] == [
+        "production",
+        "quality",
+        "sla",
+    ]
+
+
+def test_malformed_provider_draft_is_stably_rejected(mysql_engine: Engine):
+    malformed_drafts = (
+        CoordinatorFusionDraft(
+            proposed_action="PASS",
+            candidates=({"action": "PASS"},),  # type: ignore[arg-type]
+            has_conflict=False,
+            conflict_codes=(),
+            evidence_refs=(),
+            reason_codes=(),
+        ),
+        CoordinatorFusionDraft(
+            proposed_action="PASS",
+            candidates=(),
+            has_conflict=False,
+            conflict_codes=(),
+            evidence_refs=(["inspection:1"],),  # type: ignore[arg-type]
+            reason_codes=(),
+        ),
+    )
+    _, coordinator_id, sources = _parents(mysql_engine, "9")
+
+    for malformed in malformed_drafts:
+        with pytest.raises(FusionGenerationRejected, match="unsupported draft"):
+            CoordinatorFusionGenerationService(mysql_engine).generate(
+                _command(coordinator_id, sources), CapturingProvider(malformed)
+            )
+
+
 def test_replay_shortcut_and_conflicting_request(mysql_engine: Engine):
     _, coordinator_id, sources = _parents(mysql_engine, "2")
     service = CoordinatorFusionGenerationService(mysql_engine)
