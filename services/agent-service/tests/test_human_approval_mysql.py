@@ -375,9 +375,12 @@ def test_migration_015_recovers_after_ddl_without_history(mysql_engine: Engine):
         )
     migrate(mysql_engine)
     with mysql_engine.connect() as connection:
-        assert connection.scalar(
-            text(
-                "SELECT COUNT(*) FROM agent_schema_history "
-                "WHERE version='015_bind_human_approval_incident'"
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM agent_schema_history "
+                    "WHERE version='015_bind_human_approval_incident'"
+                )
             )
-        ) == 1
+            == 1
+        )
