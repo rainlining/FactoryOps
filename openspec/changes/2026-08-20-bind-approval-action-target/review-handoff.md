@@ -5,8 +5,9 @@
 - 分支：`codex/bind-approval-action-target`
 - worktree：`.worktrees/bind-approval-action-target`
 - stacked base：`4319d2b93df025139a5fd846acf6133cd6cf1bc6`
-- pre-review HEAD：`9b55f8190e152aab8995cd34a8caee9d734ae0f1`
-- 状态：技术验证完成，独立子 Agent 审查中。
+- pre-review HEAD：`6485af1`
+- 首审修复 commit：`095ece8`
+- 状态：两项 Important 已修复并完成全量回归，等待同一子 Agent 复审。
 
 ## 已实现范围
 
@@ -26,6 +27,7 @@
 
 - 错 Run/incident、缺 source Run、typed incident 漂移：fail closed，不产生新历史。
 - v1.0 新建：422 `approval_incident_binding_required`；既有 v1.0 仍可读取。
+- v1.1 指向不存在的 Business Incident：422 `approval_incident_not_found`，零写入。
 - migration 015 若 ALTER 已提交但 schema history 未写：验证列形状后补 history；异常列形状拒绝静默继续。
 
 验证详情见 `verification.md`。非目标为动作执行、Risk/Fusion 改版、自由 Batch/Line 参数及 `dataset/` 修改。

@@ -6,10 +6,10 @@
 
 - `python -m pytest -q contracts`：`154 passed in 4.69s`。
 - `python -m pytest -q contracts/human_approval/tests`：`19 passed`（Contract GREEN 阶段）。
-- `python -m pytest -q services/agent-service/tests/test_human_approval_mysql.py`：`14 passed in 17.83s`。
-- `python -m pytest -q services/agent-service/tests`：`217 passed in 604.92s`。
-- `mvn -q -Dtest=HumanApprovalHttpIT test`：`11 tests`，0 failure/error。
-- `mvn verify -q`：退出码 0；Surefire XML 共 `22 reports / 87 tests / 0 failures / 0 errors / 0 skipped`。
+- `python -m pytest -q services/agent-service/tests/test_human_approval_mysql.py`：修复后 `15 passed in 30.03s`。
+- `python -m pytest -q services/agent-service/tests`：修复后 `218 passed in 472.78s`。
+- `mvn -q -Dtest=HumanApprovalHttpIT test`：修复后 `13 tests`，0 failure/error。
+- `mvn verify -q`：修复后退出码 0；Surefire XML 共 `22 reports / 89 tests / 0 failures / 0 errors / 0 skipped`。
 - 变更范围 Ruff check、Ruff format check、v1.1 JSON schema parse 与 `git diff --check` 通过。
 - `git status --short -- dataset` 无输出。
 
@@ -18,6 +18,11 @@
 - Contract v1.1 缺失/替换 incident、Run 错绑与 relation 测试。
 - Agent 真实 MySQL 验证 v1.1 current/history、typed incident 漂移拒绝、migration 015 DDL 后中断恢复。
 - Java 真实 MySQL 验证只允许 v1.1 新建、legacy v1.0 可读、incident projection 漂移 fail-closed。
+
+## 独立首审修复
+
+- Important：Java 曾只校验 incident 格式。现于 create 事务内以 hash+原值锁定并验证 `quality_incidents` 真实事实；未知 incident 返回 422 且 current/history 均为 0。
+- Important：Run row lock 缺真实并发证据。新增 barrier 测试证明 Approval 锁定 Run 后，incident 更新必须等待 Approval commit；更新完成后历史 Approval 读取因 provenance 漂移 fail-closed。
 
 ## 限制
 
