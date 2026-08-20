@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import IntegrityError
+
 from contracts.risk_decision.validator import (
     canonicalize_risk_decision,
     validate_risk_decision,
@@ -14,8 +17,10 @@ from contracts.risk_decision.validator import (
 from contracts.specialist_recommendation.validator import (
     canonicalize_recommendation,
 )
-from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError
+from factoryops_agent_service.coordinator_fusion import (
+    CoordinatorFusionService,
+    FusionPersistenceIntegrityError,
+)
 
 
 class RiskDecisionPersistenceRejected(ValueError):
@@ -74,17 +79,37 @@ class RiskDecisionService:
                 connection.commit()
                 try:
                     with connection.begin():
-                        source = self._lock_recommendation(
-                            connection, str(identity["recommendation_key"])
+                        subject_type = str(
+                            identity.get("subject_type", "RECOMMENDATION")
                         )
-                        if source is None:
-                            raise RiskDecisionPersistenceRejected(
-                                "Recommendation does not exist"
+                        if subject_type == "FUSION":
+                            source = self._read_fusion(
+                                connection, str(identity["fusion_key"]), for_update=True
                             )
-                        source_payload = self._decode_recommendation(source)
+                            if source is None:
+                                raise RiskDecisionPersistenceRejected(
+                                    "Fusion does not exist"
+                                )
+                            source_payload = self._decode_fusion(connection, source)
+                        else:
+                            source = self._lock_recommendation(
+                                connection, str(identity["recommendation_key"])
+                            )
+                            if source is None:
+                                raise RiskDecisionPersistenceRejected(
+                                    "Recommendation does not exist"
+                                )
+                            source_payload = self._decode_recommendation(source)
                         source_identity = source_payload["identity"]
                         assert isinstance(source_identity, Mapping)
-                        validate_risk_decision(payload, source_identity)
+                        if subject_type == "FUSION":
+                            validate_risk_decision(
+                                payload, fusion_identity=source_identity
+                            )
+                        else:
+                            validate_risk_decision(
+                                payload, recommendation_identity=source_identity
+                            )
                         existing = self._read_row_by_identity(
                             connection, key, decision_id, for_update=True
                         )
@@ -93,20 +118,29 @@ class RiskDecisionService:
                         connection.execute(
                             text(
                                 """INSERT INTO risk_decisions
-                                (decision_id,decision_key,recommendation_id,recommendation_key,
-                                run_id,task_id,proposed_action,decision,risk_level,
+                                (decision_id,decision_key,subject_type,recommendation_id,recommendation_key,
+                                fusion_id,fusion_key,run_id,task_id,coordinator_execution_id,fusion_round,proposed_action,decision,risk_level,
                                 approval_required,canonical_sha256,payload_json,generated_at,created_at)
-                                VALUES (:id,:key,:recommendation_id,:recommendation_key,
-                                :run,:task,:action,:decision,:risk,:approval,:hash,:payload,
+                                VALUES (:id,:key,:subject_type,:recommendation_id,:recommendation_key,
+                                :fusion_id,:fusion_key,:run,:task,:coordinator_execution_id,:fusion_round,:action,:decision,:risk,:approval,:hash,:payload,
                                 :generated,CURRENT_TIMESTAMP(6))"""
                             ),
                             {
                                 "id": decision_id,
                                 "key": key,
-                                "recommendation_id": identity["recommendation_id"],
-                                "recommendation_key": identity["recommendation_key"],
+                                "subject_type": subject_type,
+                                "recommendation_id": identity.get("recommendation_id"),
+                                "recommendation_key": identity.get(
+                                    "recommendation_key"
+                                ),
+                                "fusion_id": identity.get("fusion_id"),
+                                "fusion_key": identity.get("fusion_key"),
                                 "run": identity["run_id"],
-                                "task": identity["task_id"],
+                                "task": identity.get("task_id"),
+                                "coordinator_execution_id": identity.get(
+                                    "coordinator_execution_id"
+                                ),
+                                "fusion_round": identity.get("round"),
                                 "action": gate["proposed_action"],
                                 "decision": gate["decision"],
                                 "risk": gate["risk_level"],
@@ -171,17 +205,29 @@ class RiskDecisionService:
             payload = json.loads(payload_text)
             if canonicalize_risk_decision(payload) != payload_text.encode():
                 raise ValueError("Risk Decision payload is not canonical")
-            source = self._read_recommendation(
-                connection, str(row["recommendation_key"])
-            )
-            if source is None:
-                raise RiskDecisionPersistenceIntegrityError(
-                    "Risk Decision source Recommendation is missing"
+            subject_type = str(row["subject_type"])
+            if subject_type == "FUSION":
+                source = self._read_fusion(connection, str(row["fusion_key"]))
+                if source is None:
+                    raise RiskDecisionPersistenceIntegrityError(
+                        "Risk Decision source Fusion is missing"
+                    )
+                source_payload = self._decode_fusion(connection, source)
+            else:
+                source = self._read_recommendation(
+                    connection, str(row["recommendation_key"])
                 )
-            source_payload = self._decode_recommendation(source)
+                if source is None:
+                    raise RiskDecisionPersistenceIntegrityError(
+                        "Risk Decision source Recommendation is missing"
+                    )
+                source_payload = self._decode_recommendation(source)
             source_identity = source_payload["identity"]
             assert isinstance(source_identity, Mapping)
-            validate_risk_decision(payload, source_identity)
+            if subject_type == "FUSION":
+                validate_risk_decision(payload, fusion_identity=source_identity)
+            else:
+                validate_risk_decision(payload, recommendation_identity=source_identity)
         except (json.JSONDecodeError, ValueError) as error:
             raise RiskDecisionPersistenceIntegrityError(
                 "Risk Decision payload violates Contract or binding"
@@ -191,11 +237,21 @@ class RiskDecisionService:
         typed = {
             "decision_id": row["decision_id"],
             "decision_key": row["decision_key"],
-            "recommendation_id": row["recommendation_id"],
-            "recommendation_key": row["recommendation_key"],
             "run_id": row["run_id"],
-            "task_id": row["task_id"],
         }
+        if row["subject_type"] == "FUSION":
+            typed.update(
+                fusion_id=row["fusion_id"],
+                fusion_key=row["fusion_key"],
+                coordinator_execution_id=row["coordinator_execution_id"],
+                round=row["fusion_round"],
+            )
+        else:
+            typed.update(
+                recommendation_id=row["recommendation_id"],
+                recommendation_key=row["recommendation_key"],
+                task_id=row["task_id"],
+            )
         if any(identity[field] != value for field, value in typed.items()) or (
             gate["proposed_action"] != row["proposed_action"]
             or gate["decision"] != row["decision"]
@@ -208,6 +264,16 @@ class RiskDecisionService:
                 "Risk Decision typed columns are inconsistent"
             )
         return payload
+
+    def _decode_fusion(
+        self, connection: Connection, row: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        try:
+            return CoordinatorFusionService(self._engine)._decode(connection, row)
+        except FusionPersistenceIntegrityError as error:
+            raise RiskDecisionPersistenceIntegrityError(
+                "Fusion payload or provenance is inconsistent"
+            ) from error
 
     @staticmethod
     def _decode_recommendation(row: Mapping[str, object]) -> Mapping[str, object]:
@@ -294,6 +360,22 @@ class RiskDecisionService:
                     "WHERE recommendation_key=:key" + suffix
                 ),
                 {"key": recommendation_key},
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    @staticmethod
+    def _read_fusion(
+        connection: Connection, fusion_key: str, *, for_update: bool = False
+    ) -> Mapping[str, object] | None:
+        suffix = " FOR UPDATE" if for_update else ""
+        return (
+            connection.execute(
+                text(
+                    "SELECT * FROM coordinator_fusions WHERE fusion_key=:key" + suffix
+                ),
+                {"key": fusion_key},
             )
             .mappings()
             .one_or_none()

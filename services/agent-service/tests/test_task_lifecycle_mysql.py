@@ -165,7 +165,7 @@ def test_migration_creates_task_tables(mysql_engine: Engine) -> None:
                 )
             ).all()
         )
-    assert versions[-1] == "012_create_coordinator_fusions"
+    assert versions[-1] == "013_extend_risk_decision_subject"
     assert "worker_task_execution_start_requests" in tables
     assert "worker_task_execution_completion_requests" in tables
     assert {

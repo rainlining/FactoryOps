@@ -17,6 +17,7 @@ MIGRATION_VERSIONS = (
     "010_create_specialist_recommendations",
     "011_create_risk_decisions",
     "012_create_coordinator_fusions",
+    "013_extend_risk_decision_subject",
 )
 
 

@@ -6,12 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from contracts.risk_decision.validator import compute_decision_key
-from sqlalchemy import Engine, create_engine, text
-from test_specialist_recommendation_mysql import _recommendation
-from test_worker_task_completion_mysql import _running, _success
-from testcontainers.community.mysql import MySqlContainer
-
+from factoryops_agent_service.coordinator_fusion import CoordinatorFusionService
 from factoryops_agent_service.event_ingress.migration import migrate
 from factoryops_agent_service.risk_decision import (
     RiskDecisionPersistenceIntegrityError,
@@ -23,6 +18,13 @@ from factoryops_agent_service.specialist_recommendation import (
     SpecialistRecommendationService,
 )
 from factoryops_agent_service.worker_task_execution import WorkerTaskExecutionService
+from sqlalchemy import Engine, create_engine, text
+from test_coordinator_fusion_mysql import _fusion, _parents
+from test_specialist_recommendation_mysql import _recommendation
+from test_worker_task_completion_mysql import _running, _success
+from testcontainers.community.mysql import MySqlContainer
+
+from contracts.risk_decision.validator import compute_decision_key
 
 FIXTURE = (
     Path(__file__).resolve().parents[3]
@@ -66,6 +68,99 @@ def _decision(recommendation: dict[str, object], marker: str) -> dict[str, objec
         task_id=source["task_id"],
     )
     return payload
+
+
+def _fusion_decision(fusion: dict[str, object], marker: str) -> dict[str, object]:
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "contracts"
+            / "risk_decision"
+            / "fixtures"
+            / "valid"
+            / "fusion-stop-line-approval.json"
+        ).read_text(encoding="utf-8")
+    )
+    source = fusion["identity"]
+    identity = payload["identity"]
+    assert isinstance(source, dict) and isinstance(identity, dict)
+    identity.update(
+        decision_id="RSK-" + marker.upper() * 32,
+        decision_key=compute_decision_key(str(source["fusion_key"])),
+        fusion_id=source["fusion_id"],
+        fusion_key=source["fusion_key"],
+        run_id=source["run_id"],
+        coordinator_execution_id=source["coordinator_execution_id"],
+        round=source["round"],
+    )
+    return payload
+
+
+def test_save_fusion_subject_persists_and_replays(mysql_engine: Engine):
+    run_id, coordinator_id, sources = _parents(mysql_engine, "f")
+    fusion = _fusion(run_id, coordinator_id, sources, "f")
+    CoordinatorFusionService(mysql_engine).save(fusion)
+    payload = _fusion_decision(fusion, "f")
+    service = RiskDecisionService(mysql_engine)
+
+    assert service.save(payload).outcome is RiskDecisionSaveOutcome.APPLIED
+    assert service.save(payload).outcome is RiskDecisionSaveOutcome.DUPLICATE_IDENTICAL
+    assert service.get_by_key(str(payload["identity"]["decision_key"])) == payload
+    with mysql_engine.connect() as connection:
+        row = (
+            connection.execute(
+                text(
+                    "SELECT subject_type,fusion_id,recommendation_id FROM risk_decisions WHERE decision_key=:key"
+                ),
+                {"key": payload["identity"]["decision_key"]},
+            )
+            .mappings()
+            .one()
+        )
+    assert row == {
+        "subject_type": "FUSION",
+        "fusion_id": fusion["identity"]["fusion_id"],
+        "recommendation_id": None,
+    }
+
+
+def test_concurrent_conflicting_fusion_decisions_keep_one_fact(mysql_engine: Engine):
+    run_id, coordinator_id, sources = _parents(mysql_engine, "e")
+    fusion = _fusion(run_id, coordinator_id, sources, "e")
+    CoordinatorFusionService(mysql_engine).save(fusion)
+    first = _fusion_decision(fusion, "e")
+    second = copy.deepcopy(first)
+    second["gate"]["confidence"] = 0.5
+    service = RiskDecisionService(mysql_engine)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(service.save, (first, second)))
+
+    assert {result.outcome for result in results} == {
+        RiskDecisionSaveOutcome.APPLIED,
+        RiskDecisionSaveOutcome.DUPLICATE_CONFLICTING,
+    }
+
+
+def test_missing_or_corrupt_fusion_source_is_rejected(mysql_engine: Engine):
+    run_id, coordinator_id, sources = _parents(mysql_engine, "d")
+    fusion = _fusion(run_id, coordinator_id, sources, "d")
+    payload = _fusion_decision(fusion, "d")
+    with pytest.raises(RiskDecisionPersistenceRejected, match="Fusion"):
+        RiskDecisionService(mysql_engine).save(payload)
+
+    CoordinatorFusionService(mysql_engine).save(fusion)
+    service = RiskDecisionService(mysql_engine)
+    service.save(payload)
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE coordinator_fusions SET canonical_sha256=:hash WHERE fusion_id=:id"
+            ),
+            {"hash": "0" * 64, "id": fusion["identity"]["fusion_id"]},
+        )
+    with pytest.raises(RiskDecisionPersistenceIntegrityError, match="Fusion"):
+        service.get_by_key(str(payload["identity"]["decision_key"]))
 
 
 def test_save_persists_fact_without_advancing_parent_state(mysql_engine: Engine):
