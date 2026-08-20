@@ -3,7 +3,7 @@
 状态：`review-handoff-ready`。
 
 - stacked base：`5fe9f6d80b99546a978c5fb4d6850800a4cbbb33`
-- 实现与复审 HEAD：`3dcc3f0f19a9307f4bb7baad8774a52594144097`
+- 实现与复审 HEAD：`3dcc3f0c386573742876078ad60879889df9fd66`
 - TDD RED：v1.1 Fusion save 因 `recommendation_key` KeyError 失败，证明旧 persistence 不支持 Fusion。
 - Risk Decision 真实 MySQL：13 passed in 32.84s。
 - migration/Execution/Run/Task/Fusion 回归：46 passed in 190.45s。
