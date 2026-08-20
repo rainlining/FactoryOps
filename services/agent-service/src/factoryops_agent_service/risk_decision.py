@@ -196,7 +196,11 @@ class RiskDecisionService:
         )
 
     def _decode(
-        self, connection: Connection, row: Mapping[str, object]
+        self,
+        connection: Connection,
+        row: Mapping[str, object],
+        *,
+        for_update: bool = False,
     ) -> Mapping[str, object]:
         payload_text = str(row["payload_json"])
         if hashlib.sha256(payload_text.encode()).hexdigest() != row["canonical_sha256"]:
@@ -214,7 +218,9 @@ class RiskDecisionService:
                     raise RiskDecisionPersistenceIntegrityError(
                         "Risk Decision source Fusion is missing"
                     )
-                source_payload = self._decode_fusion(connection, source)
+                source_payload = self._decode_fusion(
+                    connection, source, for_update=for_update
+                )
             else:
                 source = self._read_recommendation(
                     connection, str(row["recommendation_key"])
