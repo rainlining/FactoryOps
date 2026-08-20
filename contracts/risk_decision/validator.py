@@ -41,7 +41,17 @@ def validate_risk_decision(
     assert isinstance(identity, Mapping)
     subject_type = identity.get("subject_type", "RECOMMENDATION")
     source = fusion_identity if subject_type == "FUSION" else recommendation_identity
-    if source is None or (subject_type == "FUSION") != (fusion_identity is not None):
+    if (
+        source is None
+        or (
+            subject_type == "FUSION"
+            and (fusion_identity is None or recommendation_identity is not None)
+        )
+        or (
+            subject_type != "FUSION"
+            and (recommendation_identity is None or fusion_identity is not None)
+        )
+    ):
         _raise(
             "subject_binding_missing",
             "$.identity.subject_type",
@@ -110,7 +120,7 @@ def _validate_risk_decision_payload(
 
 
 def canonicalize_risk_decision(payload: Mapping[str, object]) -> bytes:
-    _validate_risk_decision_payload(payload)
+    _validate_risk_decision_payload(payload, ("1.0.0", "1.1.0"))
     return json.dumps(
         _normalize_numbers(payload),
         sort_keys=True,

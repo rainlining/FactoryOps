@@ -97,6 +97,20 @@ def test_accepts_fusion_subject_and_rejects_cross_subject_binding() -> None:
         )
     assert caught.value.issues[0].code == "subject_binding_missing"
 
+    mixed = fusion_fixture()
+    mixed["identity"]["task_id"] = "TSK-" + "F" * 32
+    with pytest.raises(RiskDecisionValidationError):
+        validate_risk_decision(mixed, fusion_identity=fusion_identity())
+
+
+def test_fusion_canonical_and_relation_support_v11() -> None:
+    first = fusion_fixture()
+    assert canonicalize_risk_decision(first)
+    assert (
+        classify_risk_decision_relation(first, copy.deepcopy(first))
+        == "duplicate-identical"
+    )
+
 
 def test_low_risk_action_cannot_claim_high_risk() -> None:
     payload = fixture()
