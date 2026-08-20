@@ -1,7 +1,7 @@
 # Change 提案：定义 Human Approval Contract
 
 - `change_id`: `2026-08-20-define-human-approval-contract`
-- `status`: `applying`
+- `status`: `review-handoff-ready`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-evaluate-fusion-risk-decision`
 - `feature_branch`: `codex/define-human-approval-contract`
