@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +17,10 @@ from factoryops_agent_service.human_approval import (
     HumanApprovalPersistenceIntegrityError,
     HumanApprovalSaveOutcome,
     HumanApprovalService,
+)
+from factoryops_agent_service.risk_decision import (
+    RiskDecisionSaveOutcome,
+    RiskDecisionService,
 )
 from sqlalchemy import Engine, create_engine, text
 from test_coordinator_fusion_mysql import _fusion, _parents
@@ -236,3 +241,74 @@ def test_canonical_but_rebound_history_is_rejected(mysql_engine: Engine):
         )
     with pytest.raises(HumanApprovalPersistenceIntegrityError, match="history"):
         service.get_by_key(str(pending["identity"]["approval_key"]))
+
+
+def test_risk_replay_and_approval_share_provenance_first_lock_order(
+    mysql_engine: Engine, monkeypatch: pytest.MonkeyPatch
+):
+    pending = _facts(mysql_engine, "7")
+    risk_service = RiskDecisionService(mysql_engine)
+    risk = risk_service.get_by_key(str(pending["identity"]["decision_key"]))
+    assert risk is not None
+    locked = threading.Event()
+    approval_reached_risk = threading.Event()
+    release = threading.Event()
+    original = RiskDecisionService._decode_fusion
+    original_read = RiskDecisionService._read_row_by_identity
+
+    def pause_first_locked_decode(service, connection, row, *, for_update=False):
+        result = original(service, connection, row, for_update=for_update)
+        if for_update and not locked.is_set():
+            locked.set()
+            assert release.wait(5)
+        return result
+
+    monkeypatch.setattr(
+        RiskDecisionService, "_decode_fusion", pause_first_locked_decode
+    )
+
+    def observe_risk_lock(connection, key, decision_id, *, for_update=False):
+        result = original_read(connection, key, decision_id, for_update=for_update)
+        if threading.current_thread().name == "approval-save" and for_update:
+            approval_reached_risk.set()
+        return result
+
+    monkeypatch.setattr(
+        RiskDecisionService, "_read_row_by_identity", staticmethod(observe_risk_lock)
+    )
+
+    def save_approval():
+        threading.current_thread().name = "approval-save"
+        return HumanApprovalService(mysql_engine).save(pending)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        risk_future = pool.submit(risk_service.save, risk)
+        assert locked.wait(5)
+        approval_future = pool.submit(save_approval)
+        assert not approval_reached_risk.wait(0.5)
+        release.set()
+        assert (
+            risk_future.result().outcome is RiskDecisionSaveOutcome.DUPLICATE_IDENTICAL
+        )
+        assert approval_future.result().outcome is HumanApprovalSaveOutcome.APPLIED
+
+
+def test_migration_recovers_current_only_partial_state(mysql_engine: Engine):
+    with mysql_engine.begin() as connection:
+        connection.exec_driver_sql("DROP TABLE human_approval_history")
+        connection.execute(
+            text(
+                "DELETE FROM agent_schema_history WHERE version='014_create_human_approvals'"
+            )
+        )
+    migrate(mysql_engine)
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() "
+                    "AND table_name IN ('human_approvals','human_approval_history')"
+                )
+            )
+            == 2
+        )

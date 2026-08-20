@@ -79,9 +79,7 @@ def _apply_risk_decision_subject_migration(
         raise RuntimeError(
             "migration 013 found a partial column set; audit risk_decisions before retry"
         )
-
     connection.exec_driver_sql(statements[1])
-
     expected_constraints = {
         "fk_risk_decision_fusion",
         "fk_risk_decision_coordinator_execution",
@@ -106,6 +104,121 @@ def _apply_risk_decision_subject_migration(
         raise RuntimeError(
             "migration 013 found a partial constraint set; audit risk_decisions before retry"
         )
+
+
+def _validate_table_shape(
+    connection: Connection,
+    table: str,
+    expected_columns: set[str],
+    expected_constraints: set[str],
+) -> None:
+    columns = set(
+        connection.scalars(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name=:table"
+            ),
+            {"table": table},
+        )
+    )
+    constraints = set(
+        connection.scalars(
+            text(
+                "SELECT constraint_name FROM information_schema.table_constraints "
+                "WHERE table_schema=DATABASE() AND table_name=:table"
+            ),
+            {"table": table},
+        )
+    )
+    if columns != expected_columns or constraints != expected_constraints:
+        raise RuntimeError(
+            f"migration 014 found unexpected {table} structure; audit before retry"
+        )
+
+
+def _apply_human_approval_migration(
+    connection: Connection, statements: list[str]
+) -> None:
+    tables = set(
+        connection.scalars(
+            text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema=DATABASE() AND table_name IN "
+                "('human_approvals','human_approval_history')"
+            )
+        )
+    )
+    current_columns = {
+        "approval_id",
+        "approval_key",
+        "decision_id",
+        "decision_key",
+        "fusion_id",
+        "fusion_key",
+        "run_id",
+        "coordinator_execution_id",
+        "fusion_round",
+        "revision",
+        "status",
+        "canonical_sha256",
+        "payload_json",
+        "requested_at",
+        "expires_at",
+        "updated_at",
+        "created_at",
+    }
+    history_columns = {
+        "approval_id",
+        "revision",
+        "status",
+        "canonical_sha256",
+        "payload_json",
+        "recorded_at",
+    }
+    current_constraints = {
+        "PRIMARY",
+        "approval_key",
+        "decision_id",
+        "decision_key",
+        "fk_human_approval_decision",
+        "fk_human_approval_fusion",
+        "fk_human_approval_run",
+        "fk_human_approval_coordinator",
+        "chk_human_approval_status",
+        "chk_human_approval_revision",
+        "chk_human_approval_payload",
+    }
+    history_constraints = {
+        "PRIMARY",
+        "fk_human_approval_history_current",
+        "chk_human_approval_history_status",
+        "chk_human_approval_history_payload",
+    }
+    if "human_approval_history" in tables and "human_approvals" not in tables:
+        raise RuntimeError(
+            "migration 014 found history without current table; audit before retry"
+        )
+    if "human_approvals" not in tables:
+        connection.exec_driver_sql(statements[0])
+    else:
+        _validate_table_shape(
+            connection, "human_approvals", current_columns, current_constraints
+        )
+    if "human_approval_history" not in tables:
+        connection.exec_driver_sql(statements[1])
+    else:
+        _validate_table_shape(
+            connection,
+            "human_approval_history",
+            history_columns,
+            history_constraints,
+        )
+    _validate_table_shape(
+        connection, "human_approvals", current_columns, current_constraints
+    )
+    _validate_table_shape(
+        connection, "human_approval_history", history_columns, history_constraints
+    )
 
 
 def migrate(engine: Engine) -> None:
@@ -140,6 +253,8 @@ def migrate(engine: Engine) -> None:
             ]
             if version == "013_extend_risk_decision_subject":
                 _apply_risk_decision_subject_migration(connection, statements)
+            elif version == "014_create_human_approvals":
+                _apply_human_approval_migration(connection, statements)
             else:
                 for statement in statements:
                     connection.exec_driver_sql(statement)

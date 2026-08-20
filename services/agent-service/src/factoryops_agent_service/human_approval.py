@@ -70,6 +70,24 @@ class HumanApprovalService:
                 connection.commit()
                 try:
                     with connection.begin():
+                        risk_service = RiskDecisionService(self._engine)
+                        fusion_row = RiskDecisionService._read_fusion(
+                            connection,
+                            str(identity["fusion_key"]),
+                            for_update=True,
+                        )
+                        if fusion_row is None:
+                            raise HumanApprovalPersistenceRejected(
+                                "Risk Decision Fusion does not exist"
+                            )
+                        try:
+                            risk_service._decode_fusion(
+                                connection, fusion_row, for_update=True
+                            )
+                        except RiskDecisionPersistenceIntegrityError as error:
+                            raise HumanApprovalPersistenceIntegrityError(
+                                "Risk Decision Fusion provenance is inconsistent"
+                            ) from error
                         source_row = RiskDecisionService._read_row_by_identity(
                             connection,
                             str(identity["decision_key"]),
@@ -81,9 +99,7 @@ class HumanApprovalService:
                                 "Risk Decision does not exist"
                             )
                         try:
-                            source = RiskDecisionService(self._engine)._decode(
-                                connection, source_row, for_update=True
-                            )
+                            source = risk_service._decode(connection, source_row)
                         except RiskDecisionPersistenceIntegrityError as error:
                             raise HumanApprovalPersistenceIntegrityError(
                                 "Risk Decision provenance is inconsistent"
