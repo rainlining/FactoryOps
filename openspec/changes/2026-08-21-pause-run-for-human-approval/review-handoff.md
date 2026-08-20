@@ -5,6 +5,22 @@
 - 分支：`codex/pause-run-for-human-approval`
 - worktree：`.worktrees/pause-run-for-human-approval`
 - stacked base：`81f82f2c5612cdfd13be836a1738b6a94e9a67f8`
-- 状态：implementing
+- implementation HEAD：`355c1e78c172a550aa7bd80cfd21ffd04cc32b1b`
+- 状态：`technically-verified`，等待独立审查。
 
-禁止其他会话并发修改本 worktree。最终调用链、HEAD 和验证结果待实现后补充。
+## 调用链
+
+`HumanApprovalService.save` → Fusion/Risk provenance locks → Run `FOR UPDATE` + Contract decode → Approval identity lock → Approval current/history insert → `_pause_run_for_approval` CAS → deterministic Run transition insert → 单事务 commit。
+
+读取/重放：`get_by_key/save existing` → `_decode` → Approval hash/schema/typed/history → Run Contract → `_validate_wait_transition`。
+
+## 核心不变量
+
+- 首次 Approval 只接受 RUNNING Run，且 Approval 与 wait transition 同成同败。
+- transition ID/request ID 均从 Approval ID 派生，reason message 绑定 Approval key。
+- 读取和重放都验证 Run 状态、revision 与完整 transition typed fact。
+- terminal Approval 不恢复 Run，不调用 Java，不产生业务副作用。
+
+验证与限制见 `verification.md`；Owner 小修改与故障实验见 `learning.md`。
+
+禁止其他会话并发修改本 worktree。

@@ -1,7 +1,7 @@
 # Change 提案：为人工审批暂停 Agent Run
 
 - `change_id`: `2026-08-21-pause-run-for-human-approval`
-- `status`: `applying`
+- `status`: `technically-verified`
 - `learning_level`: `deep`
 - `depends_on`: `2026-08-20-execute-approved-batch-hold`
 - `feature_branch`: `codex/pause-run-for-human-approval`
