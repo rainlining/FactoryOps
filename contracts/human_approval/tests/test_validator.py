@@ -121,10 +121,16 @@ def test_v11_requires_matching_source_run(bound_pending, source, source_run):
 
 def test_v11_relation_preserves_incident_identity(bound_pending):
     identical = copy.deepcopy(bound_pending)
-    assert classify_human_approval_relation(bound_pending, identical) == "duplicate-identical"
+    assert (
+        classify_human_approval_relation(bound_pending, identical)
+        == "duplicate-identical"
+    )
     changed = copy.deepcopy(bound_pending)
     changed["identity"]["incident_id"] = "QI-" + "F" * 64
-    assert classify_human_approval_relation(bound_pending, changed) == "duplicate-conflicting"
+    assert (
+        classify_human_approval_relation(bound_pending, changed)
+        == "duplicate-conflicting"
+    )
 
 
 def test_pending_binds_source_and_key(pending, source):

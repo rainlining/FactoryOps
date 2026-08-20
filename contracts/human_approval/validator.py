@@ -9,11 +9,11 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from contracts.agent_run.validator import AgentRunValidationError, canonicalize_run
 from contracts.risk_decision.validator import (
     RiskDecisionValidationError,
     canonicalize_risk_decision,
 )
-from contracts.agent_run.validator import AgentRunValidationError, canonicalize_run
 
 ROOT = Path(__file__).resolve().parent
 
@@ -111,9 +111,17 @@ def validate_human_approval(
         run_provenance = source_run["provenance"]
         assert isinstance(run_identity, Mapping) and isinstance(run_provenance, Mapping)
         if run_identity.get("run_id") != identity.get("run_id"):
-            _raise("source_run_mismatch", "$.identity.run_id", "approval run does not match source Run")
+            _raise(
+                "source_run_mismatch",
+                "$.identity.run_id",
+                "approval run does not match source Run",
+            )
         if run_provenance.get("incident_id") != identity.get("incident_id"):
-            _raise("source_incident_mismatch", "$.identity.incident_id", "approval incident does not match source Run")
+            _raise(
+                "source_incident_mismatch",
+                "$.identity.incident_id",
+                "approval incident does not match source Run",
+            )
 
 
 def canonicalize_human_approval(payload: Mapping[str, object]) -> bytes:
