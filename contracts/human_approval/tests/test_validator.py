@@ -56,6 +56,77 @@ def source(pending: dict[str, object]) -> dict[str, object]:
     }
 
 
+@pytest.fixture
+def bound_pending(pending: dict[str, object]) -> dict[str, object]:
+    value = copy.deepcopy(pending)
+    value["contract_version"] = "1.1.0"
+    value["identity"]["incident_id"] = "QI-" + "A" * 64
+    return value
+
+
+@pytest.fixture
+def source_run(bound_pending: dict[str, object]) -> dict[str, object]:
+    return {
+        "contract_version": "1.0.0",
+        "identity": {
+            "run_id": bound_pending["identity"]["run_id"],
+            "run_kind": "original",
+            "original_run_id": bound_pending["identity"]["run_id"],
+            "trigger_event_id": "EVT-" + "B" * 64,
+        },
+        "provenance": {
+            "incident_id": bound_pending["identity"]["incident_id"],
+            "runtime_version": "agent-runtime:0.1.0",
+            "workflow_version": "quality-incident-workflow:1.0.0",
+            "prompt_set_version": "quality-incident-prompts:1.0.0",
+            "model_policy_version": "default-model-policy:1.0.0",
+            "tool_policy_version": "quality-tool-policy:1.0.0",
+            "context_policy_version": "incident-context-policy:1.0.0",
+            "code_revision": "a" * 40,
+            "created_at": "2026-08-20T10:00:00Z",
+        },
+        "lifecycle": {
+            "status": "PENDING",
+            "revision": 0,
+            "updated_at": "2026-08-20T10:00:00Z",
+            "status_reason": None,
+        },
+        "execution_refs": {
+            "coordinator_execution_id": None,
+            "latest_checkpoint_id": None,
+        },
+        "progress": {
+            "agent_execution_count": 0,
+            "task_count": 0,
+            "completed_task_count": 0,
+        },
+    }
+
+
+def test_v11_binds_incident_to_source_run(bound_pending, source, source_run):
+    validate_human_approval(bound_pending, source, source_run)
+    changed = copy.deepcopy(bound_pending)
+    changed["identity"]["incident_id"] = "QI-" + "F" * 64
+    with pytest.raises(HumanApprovalValidationError, match="incident"):
+        validate_human_approval(changed, source, source_run)
+
+
+def test_v11_requires_matching_source_run(bound_pending, source, source_run):
+    with pytest.raises(HumanApprovalValidationError, match="source Run"):
+        validate_human_approval(bound_pending, source)
+    source_run["identity"]["run_id"] = "RUN-" + "F" * 32
+    with pytest.raises(HumanApprovalValidationError, match="run"):
+        validate_human_approval(bound_pending, source, source_run)
+
+
+def test_v11_relation_preserves_incident_identity(bound_pending):
+    identical = copy.deepcopy(bound_pending)
+    assert classify_human_approval_relation(bound_pending, identical) == "duplicate-identical"
+    changed = copy.deepcopy(bound_pending)
+    changed["identity"]["incident_id"] = "QI-" + "F" * 64
+    assert classify_human_approval_relation(bound_pending, changed) == "duplicate-conflicting"
+
+
 def test_pending_binds_source_and_key(pending, source):
     validate_human_approval(pending, source)
     assert pending["identity"]["approval_key"] == compute_approval_key(

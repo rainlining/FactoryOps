@@ -13,6 +13,7 @@ from contracts.risk_decision.validator import (
     RiskDecisionValidationError,
     canonicalize_risk_decision,
 )
+from contracts.agent_run.validator import AgentRunValidationError, canonicalize_run
 
 ROOT = Path(__file__).resolve().parent
 
@@ -41,7 +42,9 @@ def compute_approval_id(decision_key: str) -> str:
 
 
 def validate_human_approval(
-    payload: Mapping[str, object], risk_decision: Mapping[str, object]
+    payload: Mapping[str, object],
+    risk_decision: Mapping[str, object],
+    source_run: Mapping[str, object] | None = None,
 ) -> None:
     _validate_payload(payload)
     try:
@@ -97,6 +100,20 @@ def validate_human_approval(
                 f"$.request.{field}",
                 "approval request does not match source",
             )
+    if payload["contract_version"] == "1.1.0":
+        if source_run is None:
+            _raise("source_run_required", "$run", "v1.1 approval requires source Run")
+        try:
+            canonicalize_run(source_run)
+        except AgentRunValidationError as error:
+            _raise("source_run_invalid", "$run", f"source Run is invalid: {error}")
+        run_identity = source_run["identity"]
+        run_provenance = source_run["provenance"]
+        assert isinstance(run_identity, Mapping) and isinstance(run_provenance, Mapping)
+        if run_identity.get("run_id") != identity.get("run_id"):
+            _raise("source_run_mismatch", "$.identity.run_id", "approval run does not match source Run")
+        if run_provenance.get("incident_id") != identity.get("incident_id"):
+            _raise("source_incident_mismatch", "$.identity.incident_id", "approval incident does not match source Run")
 
 
 def canonicalize_human_approval(payload: Mapping[str, object]) -> bytes:
@@ -128,13 +145,15 @@ def classify_human_approval_relation(
 
 def _validate_payload(payload: Mapping[str, object]) -> None:
     version = payload.get("contract_version")
-    if version != "1.0.0":
+    if version not in {"1.0.0", "1.1.0"}:
         _raise(
             "unsupported_contract_version",
             "$.contract_version",
             "unsupported contract version",
         )
-    schema = json.loads((ROOT / "v1.0.0/schema.json").read_text(encoding="utf-8"))
+    schema = json.loads(
+        (ROOT / f"v{version}" / "schema.json").read_text(encoding="utf-8")
+    )
     errors = sorted(
         Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
             payload
