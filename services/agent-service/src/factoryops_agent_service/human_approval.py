@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from contracts.human_approval.validator import (
     canonicalize_human_approval,
@@ -126,6 +126,9 @@ class HumanApprovalService:
                                 )
                             self._insert_current(connection, payload, canonical)
                             self._insert_history(connection, payload, canonical)
+                            self._pause_run_for_approval(
+                                connection, source_run, key, approval_id
+                            )
                             return HumanApprovalSaveResult(
                                 HumanApprovalSaveOutcome.APPLIED, payload
                             )
@@ -160,9 +163,9 @@ class HumanApprovalService:
                         return HumanApprovalSaveResult(
                             HumanApprovalSaveOutcome.APPLIED, payload
                         )
-                except IntegrityError as error:
+                except DBAPIError as error:
                     raise HumanApprovalPersistenceIntegrityError(
-                        "Approval persistence uniqueness failed"
+                        "Approval and Run wait transaction failed"
                     ) from error
             finally:
                 connection.rollback()
@@ -304,6 +307,13 @@ class HumanApprovalService:
             raise HumanApprovalPersistenceIntegrityError(
                 "Approval current snapshot does not match history"
             )
+        self._validate_wait_transition(
+            connection,
+            source_run,
+            str(identity["approval_key"]),
+            str(identity["approval_id"]),
+            for_update=for_update,
+        )
         return payload
 
     @staticmethod
@@ -354,6 +364,127 @@ class HumanApprovalService:
         if row is None:
             return None
         return AgentRunLifecycleService(self._engine).to_contract(row)
+
+    @staticmethod
+    def _pause_run_for_approval(
+        connection: Connection,
+        source_run: Mapping[str, object] | None,
+        approval_key: str,
+        approval_id: str,
+    ) -> None:
+        if source_run is None:
+            raise HumanApprovalPersistenceRejected("source Run does not exist")
+        lifecycle = source_run["lifecycle"]
+        identity = source_run["identity"]
+        assert isinstance(lifecycle, Mapping) and isinstance(identity, Mapping)
+        if lifecycle["status"] != "RUNNING":
+            raise HumanApprovalPersistenceRejected(
+                "source Run must be RUNNING before Approval wait"
+            )
+        run_id = str(identity["run_id"])
+        from_revision = int(lifecycle["revision"])
+        occurred_at = connection.scalar(text("SELECT CURRENT_TIMESTAMP(6)"))
+        updated = connection.execute(
+            text(
+                "UPDATE agent_runs SET status='WAITING_FOR_APPROVAL',revision=:revision,"
+                "updated_at=:occurred,status_reason_code='HUMAN_APPROVAL_REQUIRED',"
+                "status_reason_message=:approval_key "
+                "WHERE run_id=:run AND status='RUNNING' AND revision=:expected"
+            ),
+            {
+                "revision": from_revision + 1,
+                "occurred": occurred_at,
+                "approval_key": approval_key,
+                "run": run_id,
+                "expected": from_revision,
+            },
+        )
+        if updated.rowcount != 1:
+            raise HumanApprovalPersistenceIntegrityError(
+                "source Run wait compare-and-set failed"
+            )
+        transition_id, request_id = HumanApprovalService._wait_transition_ids(
+            approval_id
+        )
+        connection.execute(
+            text(
+                "INSERT INTO agent_run_transitions "
+                "(transition_id,transition_request_id,run_id,from_status,to_status,"
+                "from_revision,to_revision,actor_kind,actor_id,reason_code,reason_message,"
+                "checkpoint_id,occurred_at) VALUES "
+                "(:transition,:request,:run,'RUNNING','WAITING_FOR_APPROVAL',:from_revision,"
+                ":to_revision,'COORDINATOR','human-approval-service',"
+                "'HUMAN_APPROVAL_REQUIRED',:approval_key,NULL,:occurred)"
+            ),
+            {
+                "transition": transition_id,
+                "request": request_id,
+                "run": run_id,
+                "from_revision": from_revision,
+                "to_revision": from_revision + 1,
+                "approval_key": approval_key,
+                "occurred": occurred_at,
+            },
+        )
+
+    @staticmethod
+    def _validate_wait_transition(
+        connection: Connection,
+        source_run: Mapping[str, object] | None,
+        approval_key: str,
+        approval_id: str,
+        *,
+        for_update: bool = True,
+    ) -> None:
+        if source_run is None:
+            raise HumanApprovalPersistenceIntegrityError("source Run is missing")
+        identity, lifecycle = source_run["identity"], source_run["lifecycle"]
+        assert isinstance(identity, Mapping) and isinstance(lifecycle, Mapping)
+        transition_id, request_id = HumanApprovalService._wait_transition_ids(
+            approval_id
+        )
+        suffix = " FOR UPDATE" if for_update else ""
+        rows = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions "
+                    "WHERE transition_id=:transition OR transition_request_id=:request"
+                    + suffix
+                ),
+                {"transition": transition_id, "request": request_id},
+            )
+            .mappings()
+            .all()
+        )
+        expected_revision = int(lifecycle["revision"])
+        if (
+            lifecycle["status"] != "WAITING_FOR_APPROVAL"
+            or len(rows) != 1
+            or rows[0]["transition_id"] != transition_id
+            or rows[0]["transition_request_id"] != request_id
+            or rows[0]["run_id"] != identity["run_id"]
+            or rows[0]["from_status"] != "RUNNING"
+            or rows[0]["to_status"] != "WAITING_FOR_APPROVAL"
+            or rows[0]["from_revision"] != expected_revision - 1
+            or rows[0]["to_revision"] != expected_revision
+            or rows[0]["actor_kind"] != "COORDINATOR"
+            or rows[0]["actor_id"] != "human-approval-service"
+            or rows[0]["reason_code"] != "HUMAN_APPROVAL_REQUIRED"
+            or rows[0]["reason_message"] != approval_key
+            or rows[0]["checkpoint_id"] is not None
+        ):
+            raise HumanApprovalPersistenceIntegrityError(
+                "Approval wait transition is inconsistent"
+            )
+
+    @staticmethod
+    def _wait_transition_ids(approval_id: str) -> tuple[str, str]:
+        digest = (
+            hashlib.sha256(("approval-wait-v1\n" + approval_id).encode())
+            .hexdigest()
+            .upper()[:32]
+        )
+        return "TRN-" + digest, "TRQ-" + digest
 
     @staticmethod
     def _insert_current(

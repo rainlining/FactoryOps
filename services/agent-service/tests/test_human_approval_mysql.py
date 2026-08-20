@@ -15,6 +15,7 @@ from factoryops_agent_service.fusion_risk_evaluation import (
 )
 from factoryops_agent_service.human_approval import (
     HumanApprovalPersistenceIntegrityError,
+    HumanApprovalPersistenceRejected,
     HumanApprovalSaveOutcome,
     HumanApprovalService,
 )
@@ -118,8 +119,106 @@ def test_v11_persists_incident_binding(mysql_engine: Engine):
         )
 
 
+def test_pending_approval_atomically_pauses_source_run(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "c", "1.1.0")
+    service = HumanApprovalService(mysql_engine)
+    result = service.save(pending)
+    assert result.outcome is HumanApprovalSaveOutcome.APPLIED
+    request_id = (
+        "TRQ-"
+        + hashlib.sha256(
+            ("approval-wait-v1\n" + str(pending["identity"]["approval_id"])).encode()
+        )
+        .hexdigest()
+        .upper()[:32]
+    )
+    with mysql_engine.connect() as connection:
+        run = (
+            connection.execute(
+                text("SELECT status,revision FROM agent_runs WHERE run_id=:run"),
+                {"run": pending["identity"]["run_id"]},
+            )
+            .mappings()
+            .one()
+        )
+        transition = (
+            connection.execute(
+                text(
+                    "SELECT * FROM agent_run_transitions WHERE transition_request_id=:request"
+                ),
+                {"request": request_id},
+            )
+            .mappings()
+            .one()
+        )
+        assert (run["status"], run["revision"]) == ("WAITING_FOR_APPROVAL", 2)
+        assert transition["from_status"] == "RUNNING"
+        assert transition["to_status"] == "WAITING_FOR_APPROVAL"
+        assert transition["reason_code"] == "HUMAN_APPROVAL_REQUIRED"
+        assert transition["reason_message"] == pending["identity"]["approval_key"]
+
+
+def test_pending_approval_replay_requires_intact_wait_transition(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "f", "1.1.0")
+    service = HumanApprovalService(mysql_engine)
+    assert service.save(pending).outcome is HumanApprovalSaveOutcome.APPLIED
+    assert service.save(pending).outcome is HumanApprovalSaveOutcome.DUPLICATE_IDENTICAL
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE agent_run_transitions SET reason_message='corrupt' "
+                "WHERE run_id=:run AND reason_code='HUMAN_APPROVAL_REQUIRED'"
+            ),
+            {"run": pending["identity"]["run_id"]},
+        )
+    with pytest.raises(HumanApprovalPersistenceIntegrityError, match="wait transition"):
+        service.get_by_key(str(pending["identity"]["approval_key"]))
+
+
+def test_wait_transition_failure_rolls_back_approval_and_run(mysql_engine: Engine):
+    pending = _facts(mysql_engine, "0", "1.1.0")
+    transition_id = (
+        "TRN-"
+        + hashlib.sha256(
+            ("approval-wait-v1\n" + str(pending["identity"]["approval_id"])).encode()
+        )
+        .hexdigest()
+        .upper()[:32]
+    )
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE agent_run_transitions ADD CONSTRAINT "
+                f"chk_injected_wait_failure CHECK (transition_id<>'{transition_id}')"
+            )
+        )
+    try:
+        with pytest.raises(HumanApprovalPersistenceIntegrityError):
+            HumanApprovalService(mysql_engine).save(pending)
+    finally:
+        with mysql_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE agent_run_transitions DROP CHECK chk_injected_wait_failure"
+                )
+            )
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT COUNT(*) FROM human_approvals WHERE approval_id=:id"),
+                {"id": pending["identity"]["approval_id"]},
+            )
+            == 0
+        )
+        assert connection.execute(
+            text("SELECT status,revision FROM agent_runs WHERE run_id=:run"),
+            {"run": pending["identity"]["run_id"]},
+        ).one() == ("RUNNING", 1)
+
+
 def test_v11_rejects_wrong_run_incident_without_rows(mysql_engine: Engine):
     pending = _facts(mysql_engine, "9", "1.1.0")
+    valid = copy.deepcopy(pending)
     pending["identity"]["incident_id"] = "QI-" + "F" * 64
     with pytest.raises(ValueError, match="incident"):
         HumanApprovalService(mysql_engine).save(pending)
@@ -131,6 +230,17 @@ def test_v11_rejects_wrong_run_incident_without_rows(mysql_engine: Engine):
             )
             == 0
         )
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE agent_runs SET status='SUSPENDED',"
+                "latest_checkpoint_id='CHK-99999999999999999999999999999999' "
+                "WHERE run_id=:run"
+            ),
+            {"run": valid["identity"]["run_id"]},
+        )
+    with pytest.raises(HumanApprovalPersistenceRejected, match="RUNNING"):
+        HumanApprovalService(mysql_engine).save(valid)
 
 
 def test_v11_rejects_typed_incident_corruption(mysql_engine: Engine):
