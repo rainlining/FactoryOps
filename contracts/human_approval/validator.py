@@ -185,6 +185,7 @@ def _validate_payload(payload: Mapping[str, object]) -> None:
     outcome = state.get("outcome")
     if isinstance(outcome, Mapping):
         status, actor = state["status"], outcome["actor_type"]
+        decided = _timestamp(str(outcome["decided_at"]))
         if status in {"APPROVED", "REJECTED"} and actor != "HUMAN":
             _raise(
                 "actor_type_mismatch",
@@ -197,18 +198,31 @@ def _validate_payload(payload: Mapping[str, object]) -> None:
                 "$.state.outcome.actor_type",
                 "expired outcome requires SYSTEM actor",
             )
-        if _timestamp(str(outcome["decided_at"])) < requested:
+        if decided < requested:
             _raise(
                 "invalid_time_order",
                 "$.state.outcome.decided_at",
                 "decided_at cannot precede requested_at",
             )
+        if status in {"APPROVED", "REJECTED"} and decided >= expires:
+            _raise(
+                "approval_window_expired",
+                "$.request.expires_at",
+                "human decision must be recorded before expires_at",
+            )
+        if status == "EXPIRED" and decided < expires:
+            _raise(
+                "approval_window_active",
+                "$.request.expires_at",
+                "expired outcome cannot be recorded before expires_at",
+            )
 
 
 def _is_next(first: Mapping[str, object], second: Mapping[str, object]) -> bool:
-    for field in ("identity", "request"):
-        if first[field] != second[field]:
-            return False
+    if first["identity"] != second["identity"]:
+        return False
+    if _normalized_request(first["request"]) != _normalized_request(second["request"]):
+        return False
     first_state, second_state = first["state"], second["state"]
     assert isinstance(first_state, Mapping) and isinstance(second_state, Mapping)
     return (
@@ -217,6 +231,14 @@ def _is_next(first: Mapping[str, object], second: Mapping[str, object]) -> bool:
         and second_state["revision"] == 2
         and second_state["status"] in {"APPROVED", "REJECTED", "EXPIRED"}
     )
+
+
+def _normalized_request(value: object) -> dict[str, object]:
+    assert isinstance(value, Mapping)
+    normalized = dict(value)
+    normalized["policy_refs"] = sorted(normalized["policy_refs"])
+    normalized["reason_codes"] = sorted(normalized["reason_codes"])
+    return normalized
 
 
 def _timestamp(value: str) -> datetime:

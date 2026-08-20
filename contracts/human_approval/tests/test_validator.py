@@ -127,6 +127,56 @@ def test_actor_and_terminal_transition_rules(pending, source):
     assert classify_human_approval_relation(valid, later) == "duplicate-conflicting"
 
 
+@pytest.mark.parametrize(
+    ("status", "actor", "decided_at", "valid"),
+    [
+        ("APPROVED", "HUMAN", "2026-08-20T11:59:59Z", True),
+        ("APPROVED", "HUMAN", "2026-08-20T12:00:00Z", False),
+        ("REJECTED", "HUMAN", "2026-08-20T12:00:01Z", False),
+        ("EXPIRED", "SYSTEM", "2026-08-20T11:59:59Z", False),
+        ("EXPIRED", "SYSTEM", "2026-08-20T12:00:00Z", True),
+        ("EXPIRED", "SYSTEM", "2026-08-20T12:00:01Z", True),
+    ],
+)
+def test_outcome_respects_expiry_boundary(
+    pending, source, status, actor, decided_at, valid
+):
+    terminal = copy.deepcopy(pending)
+    terminal["state"] = {
+        "revision": 2,
+        "status": status,
+        "outcome": {
+            "actor_type": actor,
+            "actor_id": "user:owner" if actor == "HUMAN" else "system:expiry",
+            "decided_at": decided_at,
+            "reason_code": "OWNER_DECIDED" if actor == "HUMAN" else "APPROVAL_EXPIRED",
+        },
+    }
+    if valid:
+        validate_human_approval(terminal, source)
+    else:
+        with pytest.raises(HumanApprovalValidationError, match="expires_at"):
+            validate_human_approval(terminal, source)
+
+
+def test_next_revision_ignores_set_array_order(pending, source):
+    terminal = copy.deepcopy(pending)
+    terminal["request"]["policy_refs"].reverse()
+    terminal["request"]["reason_codes"].reverse()
+    terminal["state"] = {
+        "revision": 2,
+        "status": "APPROVED",
+        "outcome": {
+            "actor_type": "HUMAN",
+            "actor_id": "user:owner",
+            "decided_at": "2026-08-20T11:59:59Z",
+            "reason_code": "OWNER_APPROVED",
+        },
+    }
+    validate_human_approval(terminal, source)
+    assert classify_human_approval_relation(pending, terminal) == "next-revision"
+
+
 def test_canonical_and_relation_ignore_set_order_and_integer_float(pending):
     other = copy.deepcopy(pending)
     other["request"]["policy_refs"].reverse()
