@@ -5,6 +5,20 @@
 - 分支：`codex/resume-approved-action-execution`
 - worktree：`.worktrees/resume-approved-action-execution`
 - stacked base：`766ccc6c053011f3bc3be80e99a7e39eca17f298`
-- 状态：implementing
+- implementation HEAD：`3a470589800338f9b7754a69c30c462358633afe`
+- 状态：`technically-verified`，等待独立审查。
+
+## 调用链
+
+`ApprovedActionResumeService.resume` → `HumanApprovalService.save(terminal)` → Agent transaction Run `FOR UPDATE` → deterministic wait/resume transition locks → `BusinessActionHttpClient.execute` → strict receipt validation → Run CAS + resume transition insert → commit → Approval wait-to-current chain re-read。
+
+## 核心不变量
+
+- 只有 APPROVED v1.1 HOLD_BATCH 与完全匹配 EXECUTED receipt 可恢复。
+- 外调 Java 时持有 Run row fence；HTTP timeout 有界，不做单次无条件 retry。
+- Java receipt 与 Agent resume transition 分别提供跨库 saga 的两个幂等锚点。
+- Java 已执行/Agent rollback 后，相同调用通过 Java replay 恢复，只写一条 resume transition。
+
+验证与限制见 `verification.md`；学习任务见 `learning.md`。
 
 禁止其他会话并发修改本 worktree。
