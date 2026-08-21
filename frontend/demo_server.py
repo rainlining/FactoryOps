@@ -111,7 +111,7 @@ def call_agent(role, instruction, context, image_data=None):
     except Exception as error:
         status = getattr(error, "code", "unknown")
         reason = getattr(error, "reason", str(error))
-        raise RuntimeError(f"{role} Agent 认证或请求失败（HTTP {status}）。请检查 API Key、接口地址和认证头配置。原因：{reason}") from error
+        raise RuntimeError(f"{role} Agent 认证或请求失败（HTTP {status}，模型={model}，接口={endpoint}）。请检查 API Key、模型权限、接口地址和认证头配置。原因：{reason}") from error
     return payload["choices"][0]["message"]["content"]
 
 
