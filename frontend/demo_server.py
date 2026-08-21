@@ -85,13 +85,16 @@ class DemoHandler(SimpleHTTPRequestHandler):
         self.send_error(405, "Read-only demo server")
 
 
-def call_agent(role, instruction, context):
+def call_agent(role, instruction, context, image_data=None):
     key = os.getenv(f"FACTORYOPS_{role.upper()}_API_KEY") or os.getenv("FACTORYOPS_API_KEY")
     endpoint = os.getenv(f"FACTORYOPS_{role.upper()}_API_URL", "https://api.openai.com/v1/chat/completions")
     model = os.getenv(f"FACTORYOPS_{role.upper()}_MODEL", os.getenv("FACTORYOPS_MODEL", "gpt-4o-mini"))
     if not key:
         raise RuntimeError(f"未配置 {role} Agent API Key。请设置 FACTORYOPS_{role.upper()}_API_KEY。")
-    body = {"model": model, "temperature": 0, "messages": [{"role": "system", "content": f"你是 FactoryOps 的 {role} Agent。只返回中文、结构化、可审计的判断。"}, {"role": "user", "content": f"{instruction}\n\n上下文：{json.dumps(context, ensure_ascii=False)}"}]}
+    user_content = [{"type": "text", "text": f"{instruction}\n\n上下文：{json.dumps(context, ensure_ascii=False)}"}]
+    if image_data:
+        user_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}})
+    body = {"model": model, "temperature": 0, "messages": [{"role": "system", "content": f"你是 FactoryOps 的 {role} Agent。只返回中文、结构化、可审计的判断。"}, {"role": "user", "content": user_content if image_data else user_content[0]["text"]}]}
     request = Request(endpoint, data=json.dumps(body).encode(), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
     with urlopen(request, timeout=45) as response:
         payload = json.loads(response.read())
@@ -103,7 +106,7 @@ def run_pipeline():
     if not image.exists():
         raise RuntimeError("检测图片不存在。")
     encoded = base64.b64encode(image.read_bytes()).decode()
-    vision = call_agent("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"image_base64": encoded[:12000]})
+    vision = call_agent("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"batch": "BATCH-2026-0817-A"}, encoded)
     context = {"vision_result": vision, "batch": "BATCH-2026-0817-A"}
     specialists = {role: call_agent(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context) for role in ("quality", "production", "sla")}
     fusion = call_agent("coordinator", "汇总三个专家结果，形成一个明确的业务建议。", {**context, "specialists": specialists})
