@@ -157,11 +157,12 @@ def call_agent(role, instruction, context, image_data=None):
 def run_pipeline(selected_images=None):
     results = []
     for selected in (selected_images or ["000_regular.png"]):
-        name = Path(selected).name
+        uploaded = isinstance(selected, dict)
+        name = Path(selected.get("name", "uploaded.png") if uploaded else selected).name
         image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / name
-        if not image.exists():
+        if not uploaded and not image.exists():
             raise RuntimeError(f"检测图片不存在：{name}")
-        encoded = base64.b64encode(image.read_bytes()).decode()
+        encoded = selected["data"] if uploaded else base64.b64encode(image.read_bytes()).decode()
         vision = call_agent("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"batch": "BATCH-2026-0817-A", "image": name}, encoded)
         context = {"vision_result": vision, "batch": "BATCH-2026-0817-A", "image": name}
         specialists = {role: call_agent(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context) for role in ("quality", "production", "sla")}
