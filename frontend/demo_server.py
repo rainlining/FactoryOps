@@ -43,6 +43,11 @@ class DemoHandler(SimpleHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):  # noqa: N802
+        if self.path == "/api/images":
+            folder = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private"
+            images = [{"image_id": p.name, "filename": p.name, "product_id": f"P-{p.stem.upper()}", "batch_id": "BATCH-2026-0817-A", "url": f"/api/product-image/{p.name}"} for p in sorted(folder.glob("*.png"))]
+            self._json(200, {"images": images})
+            return
         if self.path == "/api/snapshot":
             payload = (ROOT / "demo_snapshot.json").read_bytes()
             self.send_response(200)
@@ -77,8 +82,18 @@ class DemoHandler(SimpleHTTPRequestHandler):
         if self.path != "/api/run":
             self.send_error(405, "Only /api/run accepts POST")
             return
+        if self.path.startswith("/api/product-image/"):
+            name = Path(self.path.rsplit("/", 1)[-1]).name
+            image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / name
+            if not image.exists() or image.suffix.lower() != ".png":
+                self.send_error(404, "Image not found")
+                return
+            payload = image.read_bytes()
+            self.send_response(200); self.send_header("Content-Type", "image/png"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
         try:
-            result = run_pipeline()
+            length = int(self.headers.get("Content-Length", "0"))
+            request = json.loads(self.rfile.read(length) or b"{}")
+            result = run_pipeline(request.get("images"))
         except RuntimeError as error:
             self._json(400, {"error": str(error)})
             return
@@ -119,8 +134,9 @@ def call_agent(role, instruction, context, image_data=None):
     return payload["choices"][0]["message"]["content"]
 
 
-def run_pipeline():
-    image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / "000_regular.png"
+def run_pipeline(selected_images=None):
+    name = Path((selected_images or ["000_regular.png"])[0]).name
+    image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / name
     if not image.exists():
         raise RuntimeError("检测图片不存在。")
     encoded = base64.b64encode(image.read_bytes()).decode()
@@ -129,7 +145,7 @@ def run_pipeline():
     specialists = {role: call_agent(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context) for role in ("quality", "production", "sla")}
     fusion = call_agent("coordinator", "汇总三个专家结果，形成一个明确的业务建议。", {**context, "specialists": specialists})
     risk = call_agent("risk", "检查该建议是否需要人工审批，并说明风险规则依据。", {**context, "specialists": specialists, "fusion": fusion})
-    return {"mode": "live", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]}
+    return {"mode": "live", "image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": "BATCH-2026-0817-A", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]}
 
     def do_DELETE(self):  # noqa: N802
         self.send_error(405, "Read-only demo server")
