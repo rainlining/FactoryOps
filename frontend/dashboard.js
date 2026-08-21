@@ -1,32 +1,234 @@
-const demoSnapshot={run:{run_id:"RUN-2026-0817-0007",status:"SUCCEEDED",incident_id:"QI-2026-0817-0042",revision:5,completed_task_count:3,task_count:3},coordinator:{status:"SUCCEEDED",revision:2,agent_role:"coordinator",execution_id:"EXE-COORD-0007"},tasks:[{task_id:"TASK-Q-0007",target_agent_role:"quality",status:"SUCCEEDED",attempt_count:1},{task_id:"TASK-P-0007",target_agent_role:"production",status:"SUCCEEDED",attempt_count:1},{task_id:"TASK-S-0007",target_agent_role:"sla",status:"SUCCEEDED",attempt_count:1}],fusion:{proposed_action:"HOLD_BATCH",has_conflict:false,fusion_round:1},risk:{decision:"REQUIRE_APPROVAL",risk_level:"HIGH",approval_required:true,proposed_action:"HOLD_BATCH"},approval:{status:"APPROVED",revision:2,approval_key:"APR-2026-0817-0007"}};
-const $=id=>document.getElementById(id);const esc=value=>String(value??"暂无").replaceAll("**","").replaceAll("### ","").replaceAll("## ","").replaceAll("# ","").replaceAll("`","");
-function statusClass(status){return String(status??"unknown").toLowerCase()}
-function showNotice(message){$("notice").textContent=message;$("notice").hidden=false;setTimeout(()=>$("notice").hidden=true,4500)}
-function validSnapshot(data){return data&&typeof data==="object"&&!Array.isArray(data)&&data.run&&typeof data.run==="object"&&Array.isArray(data.tasks)&&data.tasks.every(task=>task&&typeof task==="object")}
-function render(snapshot){if(!validSnapshot(snapshot))throw new Error("Snapshot must include a run object and task array.");const run=snapshot.run,tasks=snapshot.tasks;$("runId").textContent=esc(run.run_id);$("incidentLine").textContent=`Quality incident · ${esc(run.incident_id)}`;const status=esc(run.status).toUpperCase();const runStatus=$("runStatus");runStatus.textContent=status;runStatus.className=`run-status ${statusClass(status)}`;$("runRevision").textContent=esc(run.revision);$("taskProgress").textContent=`${run.completed_task_count??tasks.filter(t=>t.status==="SUCCEEDED").length}/${run.task_count??tasks.length}`;$("taskProgressNote").textContent=`${tasks.length} specialist task${tasks.length===1?"":"s"}`;$("coordinatorStatus").textContent=esc(snapshot.coordinator?.status).toUpperCase();$("approvalStatus").textContent=esc(snapshot.approval?.status).toUpperCase();$("approvalNote").textContent=snapshot.approval?.revision?`Revision ${snapshot.approval.revision}`:"Approval gate";$("taskCount").textContent=`${tasks.length} task${tasks.length===1?"":"s"}`;$("taskRows").replaceChildren(...tasks.map(task=>{const row=document.createElement("tr");row.innerHTML=`<td class="task-id"></td><td class="role"></td><td><span class="status-pill"></span></td><td></td>`;row.children[0].textContent=esc(task.task_id);row.children[1].textContent=esc(task.target_agent_role);row.children[2].firstChild.textContent=esc(task.status);row.children[2].firstChild.className=`status-pill ${statusClass(task.status)}`;row.children[3].textContent=esc(task.attempt_count);return row;}));const chain=[['Coordinator',snapshot.coordinator?.status],['Fusion',snapshot.fusion?.proposed_action],['Risk',snapshot.risk?.decision],['Approval',snapshot.approval?.status]];$("decisionChain").replaceChildren(...chain.map(([label,value],index)=>{const item=document.createElement("div");item.className="chain-item";item.innerHTML=`<span class="chain-mark">${index+1}</span><div><div class="chain-label"></div><div class="chain-value"></div></div><span class="status-pill"></span>`;item.children[1].children[0].textContent=label;item.children[1].children[1].textContent=label==="Risk"?`${snapshot.risk?.risk_level??"Not available"} risk gate`:label==="Fusion"?`Round ${snapshot.fusion?.fusion_round??"-"}`:"Lifecycle state";item.children[2].textContent=esc(value);item.children[2].className=`status-pill ${statusClass(value)}`;return item;}));detail("approvalDetails",[["Approval key",snapshot.approval?.approval_key],["Status",snapshot.approval?.status],["Revision",snapshot.approval?.revision],["Action",snapshot.risk?.proposed_action]]);detail("coordinatorDetails",[["Execution",snapshot.coordinator?.execution_id],["Status",snapshot.coordinator?.status],["Revision",snapshot.coordinator?.revision],["Fusion round",snapshot.fusion?.fusion_round]]);$("updatedAt").textContent=`Loaded ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`}
-function detail(id,rows){$(id).replaceChildren(...rows.map(([key,value])=>{const row=document.createElement("div");row.className="detail-row";row.innerHTML='<span class="detail-key"></span><span class="detail-value"></span>';row.children[0].textContent=key;row.children[1].textContent=esc(value);return row;}))}
-function loadFile(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);render(data)}catch(error){showNotice(error.message||"Unable to load snapshot")}};reader.onerror=()=>showNotice("Unable to read snapshot file");reader.readAsText(file)}
-$("loadButton").addEventListener("click",()=>$("snapshotInput").click());$("loadNav").addEventListener("click",()=>{$("sidebar").classList.remove("open");$("snapshotInput").click()});$("snapshotInput").addEventListener("change",event=>loadFile(event.target.files[0]));$("menuButton").addEventListener("click",()=>$("sidebar").classList.toggle("open"));
-async function loadInitialSnapshot(){try{const response=await fetch("/api/snapshot",{headers:{Accept:"application/json"}});if(!response.ok)throw new Error(`Snapshot API returned ${response.status}`);const data=await response.json();render(data);$("updatedAt").textContent="Live snapshot · API";loadScenario()}catch(error){try{render(demoSnapshot);$("updatedAt").textContent="Demo fallback · API unavailable";showNotice("Live Snapshot unavailable; showing the bundled demo view.")}catch(fallbackError){showNotice(fallbackError.message)}}}
-async function loadScenario(){try{const response=await fetch("/api/scenario",{headers:{Accept:"application/json"}});if(!response.ok)throw new Error("Scenario unavailable");const scenario=await response.json();if(scenario.workflow_run_id!==$("runId").textContent||scenario.image_endpoint!=="/api/inspection-image")throw new Error("Scenario provenance mismatch");$("inspectionImage").src=scenario.image_endpoint;$("findingLabel").textContent=scenario.finding.label;$("findingSummary").textContent=scenario.finding.summary;$("findingSeverity").textContent=`Severity · ${scenario.finding.severity}`;$("affectedBatch").textContent=`Batch · ${scenario.affected_batch}`;$("recommendedAction").textContent=`Action · ${scenario.recommended_action}`;$("inspectionContext").hidden=false}catch(error){$("inspectionContext").hidden=true;showNotice("Recorded inspection context unavailable.")}}
-function localizeDashboard(){const replacements={"SUCCEEDED":"已完成","APPROVED":"已批准","PENDING":"待处理","RUNNING":"执行中","FAILED":"失败","REQUIRE_APPROVAL":"需要审批","HOLD_BATCH":"暂停批次","HIGH":"高风险","quality":"质量专家","production":"生产专家","sla":"SLA专家"};const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);nodes.forEach(node=>{let value=node.nodeValue;Object.entries(replacements).forEach(([from,to])=>{value=value.replaceAll(from,to)});node.nodeValue=value})}
-loadInitialSnapshot().finally(()=>{localizeDashboard();setTimeout(localizeDashboard,200)});
-const pipelineSteps=["工业产品图片","Vision Service","质量异常事件","Quality Agent","Production Agent","SLA / Business Agent","Incident Coordinator","Risk / Policy Agent","人工审批 / 执行"];
-function runInteractiveDemo(){const pipeline=$("pipeline"),output=$("agentOutput"),approve=$("approveAction");pipeline.replaceChildren(...pipelineSteps.map((label,index)=>{const item=document.createElement("div");item.className="pipeline-step";item.dataset.index=index;item.innerHTML=`<strong>${label}</strong><span>等待中</span>`;return item}));approve.disabled=true;let index=0;const outputs=["读取 3 张产品图，发现 1 张存在表面纹理异常。","质量 Agent：缺陷严重度 HIGH，建议隔离批次并复核。","Production Agent：批次 BATCH-2026-0817-A 可能影响当前生产计划。","SLA / Business Agent：若不处理，预计影响交付窗口，需要业务关注。","Incident Coordinator：汇总 3 个 Agent 结论，形成暂停批次建议。","Risk / Policy Agent：高风险动作必须经过人工审批。"];
-const timer=setInterval(()=>{if(index>0)pipeline.children[index-1].className="pipeline-step done";if(index<pipeline.children.length){const step=pipeline.children[index];step.className="pipeline-step active";step.querySelector("span").textContent="执行中";output.innerHTML=`<strong>Agent 输出</strong><div class="agent-line"><b>${outputs[Math.min(index,outputs.length-1)]}</b></div>`;index+=1}else{clearInterval(timer);pipeline.lastElementChild.className="pipeline-step done";pipeline.lastElementChild.querySelector("span").textContent="待审批";approve.disabled=false;output.innerHTML+=`<div class="agent-line"><b>系统已准备好审批：批准后将模拟执行“暂停批次”。</b></div>`}},650)}
-$("startPipeline").addEventListener("click",runInteractiveDemo);$("approveAction").addEventListener("click",()=>{const button=$("approveAction");button.disabled=true;button.textContent="已批准并执行";const last=$("pipeline").lastElementChild;if(last){last.className="pipeline-step done";last.querySelector("span").textContent="已执行"}$("agentOutput").innerHTML+=`<div class="agent-line"><b>业务动作回执：批次已暂停（演示模拟），Trace 已记录，可重新运行。</b></div>`});
-$("startPipeline").removeEventListener("click",runInteractiveDemo);$("startPipeline").addEventListener("click",async()=>{const button=$("startPipeline"),output=$("agentOutput");button.disabled=true;button.textContent="正在调用真实 Agent...";output.innerHTML="<strong>真实运行中</strong><p>正在调用 Vision、Quality、Production、SLA、Coordinator 和 Risk API。未配置 Key 或调用失败会明确停止。</p>";try{const response=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Agent 调用失败");output.innerHTML=`<strong>真实 Agent 输出</strong><div class="agent-line"><b>Vision Service：</b>${esc(data.vision)}</div>`+Object.entries(data.specialists).map(([role,value])=>`<div class="agent-line"><b>${role} Agent：</b>${esc(value)}</div>`).join("")+`<div class="agent-line"><b>Coordinator：</b>${esc(data.coordinator)}</div><div class="agent-line"><b>Risk / Policy：</b>${esc(data.risk)}</div><div class="agent-line"><b>Trace：</b>${data.trace.join(" → ")}</div>`;button.textContent="重新运行真实流程"}catch(error){output.innerHTML=`<strong>真实运行失败</strong><p>${esc(error.message)}</p>`;button.textContent="重试真实流程"}finally{button.disabled=false}});
-const selectedImages=new Set();let lastRun=null;function renderImageLibrary(images){$("imageGrid").replaceChildren(...images.map(image=>{const card=document.createElement("label");card.className="image-card";card.innerHTML=`<input type="checkbox" value="${esc(image.filename)}"><img src="${image.url}" alt="${esc(image.filename)}"><strong>${esc(image.filename)}</strong><small>${esc(image.product_id)} · ${esc(image.batch_id)}</small>`;const checkbox=card.querySelector("input");checkbox.addEventListener("change",()=>{checkbox.checked?selectedImages.add(image.filename):selectedImages.delete(image.filename);$("selectionCount").textContent=`已选择 ${selectedImages.size} 张`;$("runState").textContent=selectedImages.size?`已选择 ${selectedImages.size} 张产品，等待检测`:"等待选择产品"});return card}))}async function loadImageLibrary(){try{const response=await fetch("/api/images");const data=await response.json();renderImageLibrary(data.images||[])}catch(error){$("imageGrid").textContent="无法读取产品图片库"}}
-$("startPipeline").removeEventListener("click",runInteractiveDemo);$("startPipeline").addEventListener("click",async()=>{if(!selectedImages.size){$("runState").textContent="请先从图片库选择至少一张产品";return}const button=$("startPipeline"),output=$("agentOutput");button.disabled=true;$("retryPipeline").hidden=true;$("runState").textContent=`运行中：正在检测 ${selectedImages.size} 张产品`;output.innerHTML="<strong>真实 Agent 输出</strong><p>正在按选择的产品调用 Vision → Specialist → Coordinator → Risk。</p>";try{const response=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:[...selectedImages]})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Agent 调用失败");lastRun=data;$("runState").textContent=`已完成：${data.product_id} · ${data.batch_id}`;output.innerHTML=`<article class="agent-card"><h4>Vision Service</h4><p>${esc(data.vision)}</p></article>`+Object.entries(data.specialists).map(([role,value])=>`<article class="agent-card"><h4>${role} Agent</h4><p>${esc(value)}</p></article>`).join("")+`<article class="agent-card"><h4>Incident Coordinator</h4><p>${esc(data.coordinator)}</p></article><article class="agent-card"><h4>Risk / Policy Agent</h4><p>${esc(data.risk)}</p></article>`;$("tracePanel").innerHTML=`<strong>Trace</strong><p>${data.trace.join(" → ")}</p>`;$("approveAction").disabled=false;$("replayRun").disabled=false}catch(error){$("runState").textContent="运行失败：可点击重试";output.innerHTML=`<strong>真实运行失败</strong><p>${esc(error.message)}</p>`;$("retryPipeline").hidden=false}finally{button.disabled=false}});$("retryPipeline").addEventListener("click",()=>$('startPipeline').click());$("replayRun").addEventListener("click",()=>$('startPipeline').click());
-$("batchFolder").addEventListener("change",async event=>{const files=[...event.target.files].filter(file=>file.type.startsWith("image/"));selectedImages.clear();$("selectionCount").textContent=`已导入 ${files.length} 张`;const batchName=files[0]?.webkitRelativePath?.split("/")[0]||"未命名批次";window.factoryBatch={name:batchName,files};$("imageGrid").replaceChildren(...files.map((file,index)=>{const card=document.createElement("label");card.className="image-card";card.innerHTML=`<input type="checkbox" checked value="${index}"><img alt="${esc(file.name)}"><strong>${esc(file.name)}</strong><small>产品 ${index+1} · 批次 ${esc(batchName)}</small>`;card.querySelector("img").src=URL.createObjectURL(file);return card}));$("runState").textContent=`已导入批次 ${batchName}，共 ${files.length} 张产品图片，点击检测已选产品`});
-async function readAsData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({name:file.name,data:String(reader.result).split(",")[1]});reader.onerror=reject;reader.readAsDataURL(file)})}$("startPipeline").addEventListener("click",async()=>{if(!window.factoryBatch?.files?.length)return;const output=$("agentOutput");$("runState").textContent=`正在处理批次 ${window.factoryBatch.name}，共 ${window.factoryBatch.files.length} 张`;try{const images=await Promise.all(window.factoryBatch.files.map(readAsData));const response=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images})});const data=await response.json();if(!response.ok)throw new Error(data.error);lastRun=data;$("runState").textContent=`批次完成：${data.item_count||1} 个产品`;output.innerHTML=`<article class="agent-card"><h4>批次诊断结论</h4><p>${esc(data.coordinator||data.vision)}</p></article>`}catch(error){$("runState").textContent=`批次检测失败：${error.message}`}});
-$("productLibraryNav").addEventListener("click",()=>{$("imageLibrary").scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll(".nav-item").forEach(item=>item.classList.remove("active"));$("productLibraryNav").classList.add("active")});
-const viewElements=[...document.querySelector(".main-content").children].filter(element=>!element.classList.contains("topbar")&&!element.classList.contains("notice"));function switchView(view){viewElements.forEach(element=>{element.hidden=view==="library"?element.id!=="imageLibrary":element.id==="imageLibrary"});$("workflowNav").classList.toggle("active",view==="workflow");$("productLibraryNav").classList.toggle("active",view==="library");document.querySelector(".topbar h1").textContent=view==="library"?"产品库":"运行总览";document.querySelector(".breadcrumb").innerHTML=view==="library"?"产品库 <span>/</span> 产品列表":"工作流运行 <span>/</span> 总览"}$("workflowNav").addEventListener("click",()=>switchView("workflow"));$("productLibraryNav").addEventListener("click",()=>switchView("library"));switchView("workflow");const HISTORY_KEY="factoryops.run.history";function readHistory(){try{return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]")}catch{return[]}}function renderHistory(){const history=readHistory();$("historyCount").textContent=`${history.length} 次运行`;$("historyList").replaceChildren(...(history.length?history.map(record=>{const row=document.createElement("div");row.className="history-row";row.innerHTML=`<div><strong>${record.run_id}</strong><small>${new Date(record.created_at).toLocaleString()} · ${record.product_id} · ${record.batch_id}</small></div><button class="load-button" type="button">回放</button>`;row.querySelector("button").addEventListener("click",()=>{selectedImages.clear();record.images.forEach(image=>selectedImages.add(image));$("runState").textContent=`已载入 ${record.run_id}，点击 Replay 重新运行`;$("replayRun").disabled=false});return row}):[Object.assign(document.createElement("p"),{textContent:"暂无运行记录。"})]))}renderHistory();let persistedRun="";setInterval(()=>{if(lastRun&&lastRun!==persistedRun&&lastRun.mode==="live"){const history=readHistory();history.unshift({run_id:`RUN-${Date.now()}`,created_at:new Date().toISOString(),images:[lastRun.image],product_id:lastRun.product_id,batch_id:lastRun.batch_id,vision:lastRun.vision,specialists:lastRun.specialists,coordinator:lastRun.coordinator,risk:lastRun.risk,trace:lastRun.trace});localStorage.setItem(HISTORY_KEY,JSON.stringify(history.slice(0,20)));persistedRun=lastRun;renderHistory()}},500);
-fetch("/api/history").then(response=>response.json()).then(data=>{if(Array.isArray(data.runs)){localStorage.setItem("factoryops.run.history",JSON.stringify(data.runs));renderHistory()}}).catch(()=>{});
-function renderReplayHistory(){const history=readHistory();$("historyList").replaceChildren(...(history.length?history.map(record=>{const row=document.createElement("div");row.className="history-row";row.innerHTML=`<div><strong>${record.run_id}</strong><small>${new Date(record.created_at).toLocaleString()} · ${record.product_id} · ${record.batch_id}</small></div><button class="load-button" type="button">回放并重新运行</button>`;row.querySelector("button").addEventListener("click",()=>{selectedImages.clear();(record.images||[]).forEach(image=>selectedImages.add(image));$("runState").textContent=`正在回放 ${record.run_id}`;$("replayRun").disabled=false;$("replayRun").click()});return row}):[Object.assign(document.createElement("p"),{textContent:"暂无运行记录。"})]))}setTimeout(renderReplayHistory,1000);
-let renderedBatchRun="";setInterval(()=>{if(lastRun?.items?.length&&lastRun!==renderedBatchRun){$("runState").textContent=`已完成 ${lastRun.item_count} 个产品：批次 ${lastRun.batch_id}`;renderedBatchRun=lastRun}},300);
-let activeRequest=null;$("cancelPipeline").addEventListener("click",()=>{if(activeRequest){activeRequest.abort();activeRequest=null;$("cancelPipeline").hidden=true;$("runState").textContent="检测已取消"}});function showStoredRun(record){$("runState").textContent=`历史记录：${record.run_id}（仅查看，未调用模型）`;$("agentOutput").innerHTML=`<article class="agent-card"><h4>Vision Service</h4><p>${esc(record.vision)}</p></article>`+Object.entries(record.specialists||{}).map(([role,value])=>`<article class="agent-card"><h4>${role} Agent</h4><p>${esc(value)}</p></article>`).join("")+`<article class="agent-card"><h4>Incident Coordinator</h4><p>${esc(record.coordinator)}</p></article><article class="agent-card"><h4>Risk / Policy Agent</h4><p>${esc(record.risk)}</p></article>`;$("tracePanel").innerHTML=`<strong>历史 Trace</strong><p>${(record.trace||[]).join(" → ")}</p>`}setTimeout(()=>{const history=readHistory();$("historyList").replaceChildren(...(history.length?history.map(record=>{const row=document.createElement("div");row.className="history-row";row.innerHTML=`<div><strong>${record.run_id}</strong><small>${new Date(record.created_at).toLocaleString()} · ${record.product_id} · ${record.batch_id}</small></div><button class="load-button" type="button">查看记录</button>`;row.querySelector("button").addEventListener("click",()=>showStoredRun(record));return row}):[Object.assign(document.createElement("p"),{textContent:"暂无运行记录。"})]))},1200);
-const nativeFetch=window.fetch.bind(window);window.fetch=(url,options={})=>{if(String(url).endsWith("/api/run")){activeRequest=new AbortController();options={...options,signal:activeRequest.signal};$("cancelPipeline").hidden=false;return nativeFetch(url,options).finally(()=>{$("cancelPipeline").hidden=true;activeRequest=null})}return nativeFetch(url,options)};
-$("historyList").addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;const row=button.closest(".history-row");const runId=row?.querySelector("strong")?.textContent;const record=readHistory().find(item=>item.run_id===runId);if(record){event.preventDefault();event.stopImmediatePropagation();showStoredRun(record)}});
-setTimeout(()=>{renderHistory=renderReplayHistory;renderReplayHistory()},1500);
-$("historyList").addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;const row=button.closest(".history-row");const runId=row?.querySelector("strong")?.textContent;const record=readHistory().find(item=>item.run_id===runId);if(record){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();showStoredRun(record)}},true);new MutationObserver(()=>document.querySelectorAll("#historyList .history-row button").forEach(button=>{if(button.textContent!=="查看记录")button.textContent="查看记录"})).observe($("historyList"),{childList:true,subtree:true});
+const $ = id => document.getElementById(id);
+const clean = value => String(value ?? "暂无").replaceAll("**", "").replaceAll("### ", "").replaceAll("## ", "").replaceAll("# ", "").replaceAll("`", "");
+const demoSnapshot = {
+  run: {run_id: "RUN-2026-0817-0007", status: "SUCCEEDED", incident_id: "QI-2026-0817-0042", revision: 5, completed_task_count: 3, task_count: 3},
+  coordinator: {status: "SUCCEEDED", revision: 2, execution_id: "EXE-COORD-0007"},
+  tasks: [
+    {task_id: "TASK-Q-0007", target_agent_role: "quality", status: "SUCCEEDED", attempt_count: 1},
+    {task_id: "TASK-P-0007", target_agent_role: "production", status: "SUCCEEDED", attempt_count: 1},
+    {task_id: "TASK-S-0007", target_agent_role: "sla", status: "SUCCEEDED", attempt_count: 1},
+  ],
+  fusion: {proposed_action: "HOLD_BATCH", fusion_round: 1},
+  risk: {decision: "REQUIRE_APPROVAL", proposed_action: "HOLD_BATCH"},
+  approval: {status: "APPROVED", revision: 2, approval_key: "APR-2026-0817-0007"},
+};
+
+let batch = null;
+let activeRequest = null;
+let historyRecords = [];
+
+function notice(message) {
+  $("notice").textContent = message;
+  $("notice").hidden = false;
+  setTimeout(() => $("notice").hidden = true, 4500);
+}
+
+function details(id, rows) {
+  $(id).replaceChildren(...rows.map(([key, value]) => {
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    row.innerHTML = '<span class="detail-key"></span><span class="detail-value"></span>';
+    row.children[0].textContent = key;
+    row.children[1].textContent = clean(value);
+    return row;
+  }));
+}
+
+function renderSnapshot(snapshot) {
+  if (!snapshot?.run || !Array.isArray(snapshot.tasks)) throw new Error("快照必须包含 run 和 tasks");
+  const {run, tasks} = snapshot;
+  $("runId").textContent = clean(run.run_id);
+  $("incidentLine").textContent = `质量事件 · ${clean(run.incident_id)}`;
+  $("runStatus").textContent = clean(run.status);
+  $("runStatus").className = `run-status ${clean(run.status).toLowerCase()}`;
+  $("runRevision").textContent = clean(run.revision);
+  $("taskProgress").textContent = `${run.completed_task_count ?? 0}/${run.task_count ?? tasks.length}`;
+  $("taskProgressNote").textContent = `${tasks.length} 个专家任务`;
+  $("coordinatorStatus").textContent = clean(snapshot.coordinator?.status);
+  $("approvalStatus").textContent = clean(snapshot.approval?.status);
+  $("approvalNote").textContent = snapshot.approval?.revision ? `版本 ${snapshot.approval.revision}` : "审批关卡";
+  $("taskCount").textContent = `${tasks.length} 个任务`;
+  $("taskRows").replaceChildren(...tasks.map(task => {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td class="task-id"></td><td class="role"></td><td><span class="status-pill"></span></td><td></td>';
+    row.children[0].textContent = clean(task.task_id);
+    row.children[1].textContent = clean(task.target_agent_role);
+    row.children[2].firstChild.textContent = clean(task.status);
+    row.children[2].firstChild.className = `status-pill ${clean(task.status).toLowerCase()}`;
+    row.children[3].textContent = clean(task.attempt_count);
+    return row;
+  }));
+  const chain = [["协调器", snapshot.coordinator?.status], ["融合决策", snapshot.fusion?.proposed_action], ["风险检查", snapshot.risk?.decision], ["人工审批", snapshot.approval?.status]];
+  $("decisionChain").replaceChildren(...chain.map(([label, value], index) => {
+    const item = document.createElement("div");
+    item.className = "chain-item";
+    item.innerHTML = `<span class="chain-mark">${index + 1}</span><div><div class="chain-label"></div><div class="chain-value">生命周期状态</div></div><span class="status-pill"></span>`;
+    item.querySelector(".chain-label").textContent = label;
+    item.querySelector(".status-pill").textContent = clean(value);
+    return item;
+  }));
+  details("approvalDetails", [["审批编号", snapshot.approval?.approval_key], ["状态", snapshot.approval?.status], ["版本", snapshot.approval?.revision], ["动作", snapshot.risk?.proposed_action]]);
+  details("coordinatorDetails", [["执行编号", snapshot.coordinator?.execution_id], ["状态", snapshot.coordinator?.status], ["版本", snapshot.coordinator?.revision], ["融合轮次", snapshot.fusion?.fusion_round]]);
+}
+
+async function loadInitialSnapshot() {
+  try {
+    const response = await fetch("/api/snapshot", {cache: "no-store"});
+    if (!response.ok) throw new Error();
+    renderSnapshot(await response.json());
+    $("updatedAt").textContent = "实时快照 · API";
+  } catch {
+    renderSnapshot(demoSnapshot);
+    $("updatedAt").textContent = "演示快照 · API 不可用";
+  }
+}
+
+function switchView(view) {
+  const sections = [...document.querySelector(".main-content").children].filter(element => !element.classList.contains("topbar") && !element.classList.contains("notice"));
+  sections.forEach(element => { element.hidden = view === "library" ? element.id !== "imageLibrary" : element.id === "imageLibrary"; });
+  $("workflowNav").classList.toggle("active", view === "workflow");
+  $("productLibraryNav").classList.toggle("active", view === "library");
+  document.querySelector(".topbar h1").textContent = view === "library" ? "产品库" : "运行总览";
+}
+
+function fileData(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({name: file.name, data: String(reader.result).split(",")[1]});
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function resultCards(record) {
+  if (record.items?.length > 1) {
+    return `<article class="agent-card batch-summary"><h4>批次诊断结果</h4><p>本次共完成 ${record.item_count} 个产品。以下均为该次运行保存的结果。</p></article>` + record.items.map((item, index) =>
+      `<article class="agent-card"><h4>${index + 1}. ${clean(item.image)}</h4><p><b>视觉检测</b>\n${clean(item.vision)}\n\n<b>协调结论</b>\n${clean(item.coordinator)}\n\n<b>风险判断</b>\n${clean(item.risk)}</p></article>`).join("");
+  }
+  return `<article class="agent-card"><h4>Vision Service</h4><p>${clean(record.vision)}</p></article>` +
+    Object.entries(record.specialists || {}).map(([role, value]) => `<article class="agent-card"><h4>${clean(role)} Agent</h4><p>${clean(value)}</p></article>`).join("") +
+    `<article class="agent-card"><h4>Incident Coordinator</h4><p>${clean(record.coordinator)}</p></article>` +
+    `<article class="agent-card"><h4>Risk / Policy Agent</h4><p>${clean(record.risk)}</p></article>`;
+}
+
+function showStoredRun(record) {
+  $("runState").textContent = `历史记录：${record.run_id}（仅查看，不调用模型）`;
+  $("agentOutput").innerHTML = resultCards(record);
+  $("tracePanel").innerHTML = `<strong>历史 Trace</strong><p>${(record.trace || []).map(clean).join(" → ")}</p>`;
+}
+
+function renderHistory() {
+  $("historyCount").textContent = `${historyRecords.length} 次运行`;
+  if (!historyRecords.length) {
+    $("historyList").innerHTML = "<p>暂无运行记录。</p>";
+    return;
+  }
+  $("historyList").replaceChildren(...historyRecords.map(record => {
+    const row = document.createElement("div");
+    const text = document.createElement("div");
+    const title = document.createElement("strong");
+    const meta = document.createElement("small");
+    const button = document.createElement("button");
+    row.className = "history-row";
+    title.textContent = record.run_id;
+    meta.textContent = `${new Date(record.created_at).toLocaleString()} · ${record.product_id} · ${record.batch_id} · ${record.item_count || 1} 个产品`;
+    button.className = "load-button";
+    button.type = "button";
+    button.textContent = "查看记录";
+    button.addEventListener("click", () => showStoredRun(record));
+    text.append(title, meta);
+    row.append(text, button);
+    return row;
+  }));
+}
+
+function setHistory(records) {
+  historyRecords = [...records].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  renderHistory();
+}
+
+function addHistory(record) {
+  setHistory([record, ...historyRecords.filter(item => item.run_id !== record.run_id)]);
+}
+
+async function refreshHistory() {
+  const response = await fetch("/api/history", {cache: "no-store"});
+  if (!response.ok) throw new Error(`历史接口返回 ${response.status}`);
+  const data = await response.json();
+  setHistory(Array.isArray(data.runs) ? data.runs : []);
+}
+
+async function runBatch() {
+  if (!batch?.files.length || activeRequest) {
+    if (!batch?.files.length) $("runState").textContent = "请先在产品库选择一个批次文件夹";
+    return;
+  }
+  const controller = new AbortController();
+  activeRequest = controller;
+  $("startPipeline").disabled = true;
+  $("cancelPipeline").hidden = false;
+  $("retryPipeline").hidden = true;
+  $("runState").textContent = `正在处理批次 ${batch.name}，共 ${batch.files.length} 张`;
+  $("agentOutput").innerHTML = `<article class="agent-card"><h4>批次处理中</h4><p>正在逐张分析 ${batch.files.length} 个产品。完成前不会显示旧的 Agent 输出。</p></article>`;
+  $("tracePanel").replaceChildren();
+  try {
+    const images = await Promise.all(batch.files.map(fileData));
+    const response = await fetch("/api/run", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({images}), signal: controller.signal});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Agent 调用失败");
+    $("runState").textContent = `批次完成：${result.item_count || 1} 个产品 · ${result.run_id}`;
+    $("agentOutput").innerHTML = resultCards(result);
+    $("tracePanel").innerHTML = `<strong>Trace</strong><p>${(result.trace || []).map(clean).join(" → ")}</p>`;
+    addHistory(result);
+    try { await refreshHistory(); } catch (error) { notice(`结果已显示，但历史同步失败：${error.message}`); }
+  } catch (error) {
+    if (error.name === "AbortError") {
+      $("runState").textContent = "检测已取消";
+      $("agentOutput").innerHTML = '<article class="agent-card"><h4>检测已取消</h4><p>本次未完成，不会写入历史记录。</p></article>';
+    } else {
+      $("runState").textContent = "批次检测失败，可点击重试";
+      $("agentOutput").innerHTML = `<article class="agent-card"><h4>真实运行失败</h4><p>${clean(error.message)}</p></article>`;
+      $("retryPipeline").hidden = false;
+    }
+  } finally {
+    if (activeRequest === controller) activeRequest = null;
+    $("startPipeline").disabled = false;
+    $("cancelPipeline").hidden = true;
+  }
+}
+
+$("batchFolder").addEventListener("change", event => {
+  const files = [...event.target.files].filter(file => file.type.startsWith("image/"));
+  const name = files[0]?.webkitRelativePath?.split("/")[0] || "未命名批次";
+  batch = files.length ? {name, files} : null;
+  $("selectionCount").textContent = files.length ? `已导入 ${files.length} 张` : "未导入批次";
+  $("imageGrid").replaceChildren(...(files.length ? files.map((file, index) => {
+    const card = document.createElement("label");
+    card.className = "image-card";
+    card.innerHTML = `<input type="checkbox" checked disabled><img><strong>${clean(file.name)}</strong><small>产品 ${index + 1} · 批次 ${clean(name)}</small>`;
+    card.querySelector("img").src = URL.createObjectURL(file);
+    card.querySelector("img").alt = file.name;
+    return card;
+  }) : [Object.assign(document.createElement("p"), {textContent: "未找到图片。"})]));
+  $("runState").textContent = files.length ? `已导入批次 ${name}，共 ${files.length} 张产品图片` : "请选择包含产品图片的批次文件夹";
+});
+
+$("startPipeline").addEventListener("click", runBatch);
+$("retryPipeline").addEventListener("click", runBatch);
+$("replayRun").addEventListener("click", runBatch);
+$("cancelPipeline").addEventListener("click", () => activeRequest?.abort());
+$("approveAction").addEventListener("click", () => notice("审批动作已记录。此工作台不会直接修改生产系统。"));
+$("workflowNav").addEventListener("click", () => switchView("workflow"));
+$("productLibraryNav").addEventListener("click", () => switchView("library"));
+$("loadButton").addEventListener("click", () => $("snapshotInput").click());
+$("loadNav").addEventListener("click", () => $("snapshotInput").click());
+$("snapshotInput").addEventListener("change", event => {
+  const reader = new FileReader();
+  reader.onload = () => { try { renderSnapshot(JSON.parse(reader.result)); } catch (error) { notice(error.message); } };
+  if (event.target.files[0]) reader.readAsText(event.target.files[0]);
+});
+$("menuButton").addEventListener("click", () => $("sidebar").classList.toggle("open"));
+
+switchView("workflow");
+loadInitialSnapshot();
+refreshHistory().catch(error => notice(`无法读取历史记录：${error.message}`));
