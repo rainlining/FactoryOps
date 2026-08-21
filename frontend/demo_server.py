@@ -11,6 +11,21 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parent
 
 
+def load_local_config():
+    config = ROOT / ".env.local"
+    if not config.exists():
+        return
+    for line in config.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_config()
+
+
 class DemoHandler(SimpleHTTPRequestHandler):
     def _json(self, status, value):
         payload = json.dumps(value, ensure_ascii=False).encode("utf-8")

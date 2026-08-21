@@ -4,6 +4,8 @@
 
 在项目演示 worktree 中打开 PowerShell：
 
+首次使用时，复制 `frontend/.env.local.example` 为 `frontend/.env.local`，只填写一次 API Key 和模型名。`.env.local` 只保存在本机，不会提交到 Git。
+
 ```powershell
 .\scripts\start_factoryops_demo.ps1
 ```
