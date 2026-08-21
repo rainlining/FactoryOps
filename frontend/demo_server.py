@@ -91,6 +91,9 @@ class DemoHandler(SimpleHTTPRequestHandler):
 def call_agent(role, instruction, context, image_data=None):
     key = os.getenv(f"FACTORYOPS_{role.upper()}_API_KEY") or os.getenv("FACTORYOPS_API_KEY")
     endpoint = os.getenv(f"FACTORYOPS_{role.upper()}_API_URL", "https://api.openai.com/v1/chat/completions")
+    endpoint = endpoint.strip().strip('"').strip("'").rstrip("#").rstrip("/")
+    if endpoint.endswith("/v1") or endpoint.endswith("/compatible-mode"):
+        endpoint = f"{endpoint}/chat/completions"
     model = os.getenv(f"FACTORYOPS_{role.upper()}_MODEL", os.getenv("FACTORYOPS_MODEL", "gpt-4o-mini"))
     if not key:
         raise RuntimeError(f"未配置 {role} Agent API Key。请设置 FACTORYOPS_{role.upper()}_API_KEY。")
@@ -107,7 +110,8 @@ def call_agent(role, instruction, context, image_data=None):
             payload = json.loads(response.read())
     except Exception as error:
         status = getattr(error, "code", "unknown")
-        raise RuntimeError(f"{role} Agent 认证或请求失败（HTTP {status}）。请检查 API Key、接口地址和认证头配置。原始错误：{error}") from error
+        reason = getattr(error, "reason", str(error))
+        raise RuntimeError(f"{role} Agent 认证或请求失败（HTTP {status}）。请检查 API Key、接口地址和认证头配置。原因：{reason}") from error
     return payload["choices"][0]["message"]["content"]
 
 
