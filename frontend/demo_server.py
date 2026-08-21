@@ -98,6 +98,19 @@ class DemoHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):  # noqa: N802
+        if self.path == "/api/history/delete":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                request = json.loads(self.rfile.read(length) or b"{}")
+                run_ids = request.get("run_ids", [])
+                if not isinstance(run_ids, list) or not all(isinstance(run_id, str) for run_id in run_ids):
+                    raise ValueError("run_ids 必须是字符串数组")
+                with sqlite3.connect(DB_PATH) as db:
+                    deleted = sum(db.execute("DELETE FROM runs WHERE run_id = ?", (run_id,)).rowcount for run_id in set(run_ids))
+                self._json(200, {"deleted": deleted})
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                self._json(400, {"error": f"删除请求无效：{error}"})
+            return
         if self.path != "/api/run":
             self.send_error(405, "Only /api/run accepts POST")
             return

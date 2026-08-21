@@ -226,8 +226,7 @@ $("cancelPipeline").addEventListener("click", () => activeRequest?.abort());
 $("deleteHistory").addEventListener("click", async () => {
   const runIds = [...document.querySelectorAll(".history-select:checked")].map(input => input.value);
   if (!runIds.length) return;
-  if (!window.confirm(`确定删除选中的 ${runIds.length} 条历史记录吗？`)) return;
-  const response = await fetch("/api/history", {method: "DELETE", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_ids: runIds})});
+  const response = await fetch("/api/history/delete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_ids: runIds})});
   if (!response.ok) { notice("删除历史记录失败"); return; }
   await refreshHistory();
   notice(`已删除 ${runIds.length} 条历史记录`);
