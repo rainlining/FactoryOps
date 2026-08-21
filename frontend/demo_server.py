@@ -177,6 +177,9 @@ def run_pipeline(selected_images=None):
 
 
 if __name__ == "__main__":
+    # Serve dashboard.html and its assets from the frontend directory regardless
+    # of the directory from which the script was launched.
+    os.chdir(ROOT)
     server = ThreadingHTTPServer(("127.0.0.1", 4173), DemoHandler)
     print("FactoryOps demo server: http://127.0.0.1:4173/dashboard.html")
     server.serve_forever()
