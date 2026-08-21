@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
+LOCAL_CONFIG = {}
 
 
 def load_local_config():
@@ -24,6 +25,7 @@ def load_local_config():
         if key.strip().endswith("_API_URL"):
             cleaned = cleaned.rstrip("#").rstrip()
         # Project-local configuration must win over stale variables inherited by the server process.
+        LOCAL_CONFIG[key.strip()] = cleaned
         os.environ[key.strip()] = cleaned
 
 
@@ -90,12 +92,13 @@ class DemoHandler(SimpleHTTPRequestHandler):
 
 
 def call_agent(role, instruction, context, image_data=None):
-    key = os.getenv(f"FACTORYOPS_{role.upper()}_API_KEY") or os.getenv("FACTORYOPS_API_KEY")
-    endpoint = os.getenv(f"FACTORYOPS_{role.upper()}_API_URL", "https://api.openai.com/v1/chat/completions")
+    setting = lambda name, fallback=None: LOCAL_CONFIG.get(name, os.getenv(name, fallback))
+    key = setting(f"FACTORYOPS_{role.upper()}_API_KEY") or setting("FACTORYOPS_API_KEY")
+    endpoint = setting(f"FACTORYOPS_{role.upper()}_API_URL") or setting("FACTORYOPS_API_URL", "https://api.openai.com/v1/chat/completions")
     endpoint = endpoint.strip().strip('"').strip("'").rstrip("#").rstrip("/")
     if endpoint.endswith("/v1") or endpoint.endswith("/compatible-mode"):
         endpoint = f"{endpoint}/chat/completions"
-    model = os.getenv(f"FACTORYOPS_{role.upper()}_MODEL", os.getenv("FACTORYOPS_MODEL", "gpt-4o-mini"))
+    model = setting(f"FACTORYOPS_{role.upper()}_MODEL") or setting("FACTORYOPS_MODEL", "gpt-4o-mini")
     if not key:
         raise RuntimeError(f"未配置 {role} Agent API Key。请设置 FACTORYOPS_{role.upper()}_API_KEY。")
     user_content = [{"type": "text", "text": f"{instruction}\n\n上下文：{json.dumps(context, ensure_ascii=False)}"}]
