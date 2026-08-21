@@ -1,22 +1,22 @@
-# FactoryOps Executive Demo
+# FactoryOps 中文老板演示版
 
 ## Start
 
-From the repository root:
+在项目演示 worktree 中打开 PowerShell：
 
 ```powershell
 .\scripts\start_factoryops_demo.ps1
 ```
 
-Open `http://127.0.0.1:4173/dashboard.html`.
+然后打开 `http://127.0.0.1:4173/dashboard.html`。
 
-The page is a read-only recorded scenario. It shows a sheet-metal inspection image, a recorded surface-texture finding, affected batch `BATCH-2026-0817-A`, the `HOLD_BATCH` recommendation, the Agent decision chain and approval state.
+页面为中文只读录制场景，展示钣金检测图、表面纹理异常、受影响批次 `BATCH-2026-0817-A`、暂停批次建议、Agent 决策链和审批状态。
 
 ## Demo flow
 
-1. Start on the Run overview and point out the `SUCCEEDED` workflow status.
-2. Show the recorded inspection image and the high-severity finding.
-3. Walk through Specialist Tasks and the Coordinator/Fusion/Risk/Approval chain.
-4. Explain that no approval or business action controls are exposed in demo mode.
+1. 先查看“运行总览”和“已完成”状态。
+2. 查看检测图片和“高风险”缺陷。
+3. 依次查看专家任务、协调器、融合决策、风险评估和人工审批。
+4. 说明当前是只读演示，不会执行真实审批或业务动作。
 
-The underlying image remains in `dataset/` and is served only through the fixed read-only demo endpoint.
+底层图片保留在 `dataset/`，仅通过固定的只读演示接口提供。

@@ -1,33 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FactoryOps | Workflow Control</title>
+  <title>FactoryOps | 质量运营看板</title>
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="brand-mark">FO</span><div><strong>FactoryOps</strong><small>Quality Operations</small></div></div>
-      <div class="nav-label">WORKSPACE</div>
-      <button class="nav-item active" type="button"><span class="nav-icon">◈</span>Workflow runs</button>
-      <button class="nav-item" type="button" id="loadNav"><span class="nav-icon">↥</span>Load snapshot</button>
-      <div class="sidebar-footer"><span class="live-dot"></span><span>Local demo mode</span></div>
+      <div class="brand"><span class="brand-mark">FO</span><div><strong>FactoryOps</strong><small>质量运营中心</small></div></div>
+      <div class="nav-label">工作区</div>
+      <button class="nav-item active" type="button"><span class="nav-icon">◈</span>工作流运行</button>
+      <button class="nav-item" type="button" id="loadNav"><span class="nav-icon">↥</span>加载快照</button>
+      <div class="sidebar-footer"><span class="live-dot"></span><span>本地演示模式</span></div>
     </aside>
     <main class="main-content">
       <header class="topbar">
-        <button class="mobile-menu" id="menuButton" type="button" aria-label="Open navigation">☰</button>
-        <div><div class="breadcrumb">WORKFLOW RUNS <span>/</span> OVERVIEW</div><h1>Run overview</h1></div>
-        <div class="top-actions"><span class="updated" id="updatedAt">Snapshot loaded</span><button class="load-button" id="loadButton" type="button">Load snapshot</button><input id="snapshotInput" type="file" accept="application/json,.json" hidden></div>
+        <button class="mobile-menu" id="menuButton" type="button" aria-label="打开导航">☰</button>
+        <div><div class="breadcrumb">工作流运行 <span>/</span> 总览</div><h1>运行总览</h1></div>
+        <div class="top-actions"><span class="updated" id="updatedAt">快照已加载</span><button class="load-button" id="loadButton" type="button">加载快照</button><input id="snapshotInput" type="file" accept="application/json,.json" hidden></div>
       </header>
       <div class="notice" id="notice" role="status" hidden></div>
-      <section class="run-heading"><div><span class="eyebrow">ACTIVE WORKFLOW</span><h2 id="runId">Loading run...</h2><p id="incidentLine">Quality incident</p></div><div class="run-status" id="runStatus">UNKNOWN</div></section>
-      <section class="inspection-context" id="inspectionContext" hidden><img id="inspectionImage" alt="Recorded sheet metal inspection"><div><span class="eyebrow">RECORDED INSPECTION</span><h2 id="findingLabel">Surface anomaly</h2><p id="findingSummary"></p><div class="finding-meta"><span id="findingSeverity"></span><span id="affectedBatch"></span><span id="recommendedAction"></span></div></div></section>
-      <section class="metric-grid" aria-label="Run summary"><article class="metric"><span class="metric-label">Run revision</span><strong id="runRevision">-</strong><span class="metric-note">Current lifecycle</span></article><article class="metric"><span class="metric-label">Task completion</span><strong id="taskProgress">-</strong><span class="metric-note" id="taskProgressNote">Specialist tasks</span></article><article class="metric"><span class="metric-label">Coordinator</span><strong id="coordinatorStatus">-</strong><span class="metric-note">Execution state</span></article><article class="metric"><span class="metric-label">Approval</span><strong id="approvalStatus">-</strong><span class="metric-note" id="approvalNote">Decision state</span></article></section>
-      <section class="content-grid"><article class="panel tasks-panel"><div class="panel-header"><div><span class="eyebrow">SPECIALIST WORK</span><h3>Task readiness</h3></div><span class="count-chip" id="taskCount">0 tasks</span></div><div class="table-wrap"><table><thead><tr><th>Task</th><th>Role</th><th>Status</th><th>Attempt</th></tr></thead><tbody id="taskRows"></tbody></table></div></article><article class="panel chain-panel"><div class="panel-header"><div><span class="eyebrow">DECISION CHAIN</span><h3>Control gates</h3></div></div><div class="chain" id="decisionChain"></div></article></section>
-      <section class="bottom-grid"><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">APPROVAL CONTEXT</span><h3>Human decision</h3></div></div><div class="detail-list" id="approvalDetails"></div></article><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">EXECUTION PROVENANCE</span><h3>Coordinator record</h3></div></div><div class="detail-list" id="coordinatorDetails"></div></article></section>
-      <footer class="footer">FactoryOps local demo · Read-only presentation · No business actions available</footer>
+      <section class="run-heading"><div><span class="eyebrow">当前工作流</span><h2 id="runId">正在加载运行...</h2><p id="incidentLine">质量异常</p></div><div class="run-status" id="runStatus">未知</div></section>
+      <section class="inspection-context" id="inspectionContext" hidden><img id="inspectionImage" alt="钣金产品录制检测图"><div><span class="eyebrow">录制检测结果</span><h2 id="findingLabel">表面异常</h2><p id="findingSummary"></p><div class="finding-meta"><span id="findingSeverity"></span><span id="affectedBatch"></span><span id="recommendedAction"></span></div></div></section>
+      <section class="metric-grid" aria-label="运行摘要"><article class="metric"><span class="metric-label">运行版本</span><strong id="runRevision">-</strong><span class="metric-note">当前生命周期</span></article><article class="metric"><span class="metric-label">任务完成度</span><strong id="taskProgress">-</strong><span class="metric-note" id="taskProgressNote">专家任务</span></article><article class="metric"><span class="metric-label">协调器</span><strong id="coordinatorStatus">-</strong><span class="metric-note">执行状态</span></article><article class="metric"><span class="metric-label">审批</span><strong id="approvalStatus">-</strong><span class="metric-note" id="approvalNote">决策状态</span></article></section>
+      <section class="content-grid"><article class="panel tasks-panel"><div class="panel-header"><div><span class="eyebrow">专家任务</span><h3>任务就绪情况</h3></div><span class="count-chip" id="taskCount">0 个任务</span></div><div class="table-wrap"><table><thead><tr><th>任务</th><th>角色</th><th>状态</th><th>尝试次数</th></tr></thead><tbody id="taskRows"></tbody></table></div></article><article class="panel chain-panel"><div class="panel-header"><div><span class="eyebrow">决策链</span><h3>控制关卡</h3></div></div><div class="chain" id="decisionChain"></div></article></section>
+      <section class="bottom-grid"><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">审批信息</span><h3>人工决策</h3></div></div><div class="detail-list" id="approvalDetails"></div></article><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">执行溯源</span><h3>协调器记录</h3></div></div><div class="detail-list" id="coordinatorDetails"></div></article></section>
+      <footer class="footer">FactoryOps 本地演示 · 只读展示 · 不执行真实业务动作</footer>
     </main>
   </div>
   <script src="dashboard.js"></script>
