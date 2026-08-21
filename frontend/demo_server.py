@@ -155,17 +155,21 @@ def call_agent(role, instruction, context, image_data=None):
 
 
 def run_pipeline(selected_images=None):
-    name = Path((selected_images or ["000_regular.png"])[0]).name
-    image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / name
-    if not image.exists():
-        raise RuntimeError("检测图片不存在。")
-    encoded = base64.b64encode(image.read_bytes()).decode()
-    vision = call_agent("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"batch": "BATCH-2026-0817-A"}, encoded)
-    context = {"vision_result": vision, "batch": "BATCH-2026-0817-A"}
-    specialists = {role: call_agent(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context) for role in ("quality", "production", "sla")}
-    fusion = call_agent("coordinator", "汇总三个专家结果，形成一个明确的业务建议。", {**context, "specialists": specialists})
-    risk = call_agent("risk", "检查该建议是否需要人工审批，并说明风险规则依据。", {**context, "specialists": specialists, "fusion": fusion})
-    return {"mode": "live", "image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": "BATCH-2026-0817-A", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]}
+    results = []
+    for selected in (selected_images or ["000_regular.png"]):
+        name = Path(selected).name
+        image = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private" / name
+        if not image.exists():
+            raise RuntimeError(f"检测图片不存在：{name}")
+        encoded = base64.b64encode(image.read_bytes()).decode()
+        vision = call_agent("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"batch": "BATCH-2026-0817-A", "image": name}, encoded)
+        context = {"vision_result": vision, "batch": "BATCH-2026-0817-A", "image": name}
+        specialists = {role: call_agent(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context) for role in ("quality", "production", "sla")}
+        fusion = call_agent("coordinator", "汇总三个专家结果，形成一个明确的业务建议。", {**context, "specialists": specialists})
+        risk = call_agent("risk", "检查该建议是否需要人工审批，并说明风险规则依据。", {**context, "specialists": specialists, "fusion": fusion})
+        results.append({"image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": "BATCH-2026-0817-A", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]})
+    first = results[0]
+    return {"mode": "live", "image": first["image"], "product_id": first["product_id"], "batch_id": first["batch_id"], "vision": first["vision"], "specialists": first["specialists"], "coordinator": first["coordinator"], "risk": first["risk"], "trace": first["trace"], "items": results, "item_count": len(results)}
 
     def do_DELETE(self):  # noqa: N802
         self.send_error(405, "Read-only demo server")
