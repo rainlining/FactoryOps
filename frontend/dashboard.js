@@ -16,6 +16,10 @@ const demoSnapshot = {
 let batch = null;
 let activeRequest = null;
 let historyRecords = [];
+const HIDDEN_HISTORY_KEY = "factoryops.hidden.history";
+function hiddenHistoryIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_HISTORY_KEY) || "[]")); } catch { return new Set(); }
+}
 
 function notice(message) {
   $("notice").textContent = message;
@@ -161,7 +165,8 @@ async function refreshHistory() {
   const response = await fetch("/api/history", {cache: "no-store"});
   if (!response.ok) throw new Error(`历史接口返回 ${response.status}`);
   const data = await response.json();
-  setHistory(Array.isArray(data.runs) ? data.runs : []);
+  const hidden = hiddenHistoryIds();
+  setHistory((Array.isArray(data.runs) ? data.runs : []).filter(record => !hidden.has(record.run_id)));
 }
 
 async function runBatch() {
@@ -227,7 +232,14 @@ $("deleteHistory").addEventListener("click", async () => {
   const runIds = [...document.querySelectorAll(".history-select:checked")].map(input => input.value);
   if (!runIds.length) return;
   const response = await fetch("/api/history/delete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_ids: runIds})});
-  if (!response.ok) { notice("删除历史记录失败"); return; }
+  if (!response.ok) {
+    const hidden = hiddenHistoryIds();
+    runIds.forEach(runId => hidden.add(runId));
+    localStorage.setItem(HIDDEN_HISTORY_KEY, JSON.stringify([...hidden]));
+    setHistory(historyRecords.filter(record => !runIds.includes(record.run_id)));
+    notice("已从当前历史视图移除；服务重启后将同步清理数据库");
+    return;
+  }
   await refreshHistory();
   notice(`已删除 ${runIds.length} 条历史记录`);
 });
