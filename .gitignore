@@ -5,3 +5,4 @@ __pycache__/
 *.egg-info/
 **/target/
 frontend/.env.local
+frontend/demo_runs.sqlite3

@@ -5,10 +5,13 @@ from pathlib import Path
 import base64
 import json
 import os
+import sqlite3
+from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
+DB_PATH = ROOT / "demo_runs.sqlite3"
 LOCAL_CONFIG = {}
 
 
@@ -32,6 +35,14 @@ def load_local_config():
 load_local_config()
 
 
+def init_db():
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL)")
+
+
+init_db()
+
+
 class DemoHandler(SimpleHTTPRequestHandler):
     def _json(self, status, value):
         payload = json.dumps(value, ensure_ascii=False).encode("utf-8")
@@ -43,6 +54,11 @@ class DemoHandler(SimpleHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):  # noqa: N802
+        if self.path == "/api/history":
+            with sqlite3.connect(DB_PATH) as db:
+                rows = db.execute("SELECT payload FROM runs ORDER BY created_at DESC LIMIT 50").fetchall()
+            self._json(200, {"runs": [json.loads(row[0]) for row in rows]})
+            return
         if self.path == "/api/images":
             folder = ROOT.parent.parent.parent / "dataset" / "sheet_metal" / "sheet_metal" / "test_private"
             images = [{"image_id": p.name, "filename": p.name, "product_id": f"P-{p.stem.upper()}", "batch_id": "BATCH-2026-0817-A", "url": f"/api/product-image/{p.name}"} for p in sorted(folder.glob("*.png"))]
@@ -94,6 +110,10 @@ class DemoHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             request = json.loads(self.rfile.read(length) or b"{}")
             result = run_pipeline(request.get("images"))
+            result["run_id"] = f"RUN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+            result["created_at"] = datetime.now(timezone.utc).isoformat()
+            with sqlite3.connect(DB_PATH) as db:
+                db.execute("INSERT INTO runs(run_id, created_at, payload) VALUES (?, ?, ?)", (result["run_id"], result["created_at"], json.dumps(result, ensure_ascii=False)))
         except RuntimeError as error:
             self._json(400, {"error": str(error)})
             return
