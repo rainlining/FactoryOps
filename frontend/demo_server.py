@@ -23,7 +23,8 @@ def load_local_config():
         cleaned = value.strip().strip('"').strip("'").strip()
         if key.strip().endswith("_API_URL"):
             cleaned = cleaned.rstrip("#").rstrip()
-        os.environ.setdefault(key.strip(), cleaned)
+        # Project-local configuration must win over stale variables inherited by the server process.
+        os.environ[key.strip()] = cleaned
 
 
 load_local_config()
