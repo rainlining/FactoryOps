@@ -128,6 +128,25 @@ class DemoHandler(SimpleHTTPRequestHandler):
     def do_PUT(self):  # noqa: N802
         self.send_error(405, "Read-only demo server")
 
+    def do_DELETE(self):  # noqa: N802
+        if self.path != "/api/history":
+            self.send_error(405, "Only /api/history accepts DELETE")
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            request = json.loads(self.rfile.read(length) or b"{}")
+            run_ids = request.get("run_ids", [])
+            if not isinstance(run_ids, list) or not all(isinstance(run_id, str) for run_id in run_ids):
+                raise ValueError("run_ids 必须是字符串数组")
+            with sqlite3.connect(DB_PATH) as db:
+                deleted = 0
+                for run_id in set(run_ids):
+                    cursor = db.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+                    deleted += cursor.rowcount
+            self._json(200, {"deleted": deleted})
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            self._json(400, {"error": f"删除请求无效：{error}"})
+
 
 def call_agent(role, instruction, context, image_data=None):
     setting = lambda name, fallback=None: LOCAL_CONFIG.get(name, os.getenv(name, fallback))
@@ -174,10 +193,6 @@ def run_pipeline(selected_images=None):
         results.append({"image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": "BATCH-2026-0817-A", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]})
     first = results[0]
     return {"mode": "live", "image": first["image"], "product_id": first["product_id"], "batch_id": first["batch_id"], "vision": first["vision"], "specialists": first["specialists"], "coordinator": first["coordinator"], "risk": first["risk"], "trace": first["trace"], "items": results, "item_count": len(results)}
-
-    def do_DELETE(self):  # noqa: N802
-        self.send_error(405, "Read-only demo server")
-
 
 if __name__ == "__main__":
     # Serve dashboard.html and its assets from the frontend directory regardless

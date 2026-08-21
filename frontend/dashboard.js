@@ -119,6 +119,7 @@ function showStoredRun(record) {
 
 function renderHistory() {
   $("historyCount").textContent = `${historyRecords.length} 次运行`;
+  $("deleteHistory").disabled = !historyRecords.length;
   if (!historyRecords.length) {
     $("historyList").innerHTML = "<p>暂无运行记录。</p>";
     return;
@@ -126,10 +127,14 @@ function renderHistory() {
   $("historyList").replaceChildren(...historyRecords.map(record => {
     const row = document.createElement("div");
     const text = document.createElement("div");
+    const checkbox = document.createElement("input");
     const title = document.createElement("strong");
     const meta = document.createElement("small");
     const button = document.createElement("button");
     row.className = "history-row";
+    checkbox.type = "checkbox";
+    checkbox.className = "history-select";
+    checkbox.value = record.run_id;
     title.textContent = record.run_id;
     meta.textContent = `${new Date(record.created_at).toLocaleString()} · ${record.product_id} · ${record.batch_id} · ${record.item_count || 1} 个产品`;
     button.className = "load-button";
@@ -137,6 +142,7 @@ function renderHistory() {
     button.textContent = "查看记录";
     button.addEventListener("click", () => showStoredRun(record));
     text.append(title, meta);
+    row.prepend(checkbox);
     row.append(text, button);
     return row;
   }));
@@ -217,6 +223,15 @@ $("startPipeline").addEventListener("click", runBatch);
 $("retryPipeline").addEventListener("click", runBatch);
 $("replayRun").addEventListener("click", runBatch);
 $("cancelPipeline").addEventListener("click", () => activeRequest?.abort());
+$("deleteHistory").addEventListener("click", async () => {
+  const runIds = [...document.querySelectorAll(".history-select:checked")].map(input => input.value);
+  if (!runIds.length) return;
+  if (!window.confirm(`确定删除选中的 ${runIds.length} 条历史记录吗？`)) return;
+  const response = await fetch("/api/history", {method: "DELETE", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_ids: runIds})});
+  if (!response.ok) { notice("删除历史记录失败"); return; }
+  await refreshHistory();
+  notice(`已删除 ${runIds.length} 条历史记录`);
+});
 $("approveAction").addEventListener("click", () => notice("审批动作已记录。此工作台不会直接修改生产系统。"));
 $("workflowNav").addEventListener("click", () => switchView("workflow"));
 $("productLibraryNav").addEventListener("click", () => switchView("library"));
