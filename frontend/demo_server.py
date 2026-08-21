@@ -44,6 +44,9 @@ init_db()
 
 
 class DemoHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(ROOT), **kwargs)
+
     def _json(self, status, value):
         payload = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
