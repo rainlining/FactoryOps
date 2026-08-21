@@ -20,7 +20,10 @@ def load_local_config():
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        cleaned = value.strip().strip('"').strip("'").strip()
+        if key.strip().endswith("_API_URL"):
+            cleaned = cleaned.rstrip("#").rstrip()
+        os.environ.setdefault(key.strip(), cleaned)
 
 
 load_local_config()
@@ -95,9 +98,16 @@ def call_agent(role, instruction, context, image_data=None):
     if image_data:
         user_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}})
     body = {"model": model, "temperature": 0, "messages": [{"role": "system", "content": f"你是 FactoryOps 的 {role} Agent。只返回中文、结构化、可审计的判断。"}, {"role": "user", "content": user_content if image_data else user_content[0]["text"]}]}
-    request = Request(endpoint, data=json.dumps(body).encode(), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
-    with urlopen(request, timeout=45) as response:
-        payload = json.loads(response.read())
+    auth_header = os.getenv(f"FACTORYOPS_{role.upper()}_AUTH_HEADER", os.getenv("FACTORYOPS_AUTH_HEADER", "Authorization"))
+    auth_prefix = os.getenv(f"FACTORYOPS_{role.upper()}_AUTH_PREFIX", os.getenv("FACTORYOPS_AUTH_PREFIX", "Bearer"))
+    headers = {"Content-Type": "application/json", auth_header: f"{auth_prefix} {key}".strip()}
+    request = Request(endpoint, data=json.dumps(body).encode(), headers=headers, method="POST")
+    try:
+        with urlopen(request, timeout=45) as response:
+            payload = json.loads(response.read())
+    except Exception as error:
+        status = getattr(error, "code", "unknown")
+        raise RuntimeError(f"{role} Agent 认证或请求失败（HTTP {status}）。请检查 API Key、接口地址和认证头配置。原始错误：{error}") from error
     return payload["choices"][0]["message"]["content"]
 
 
