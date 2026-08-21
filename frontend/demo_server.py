@@ -205,7 +205,10 @@ def run_pipeline(selected_images=None):
         risk = call_agent("risk", "检查该建议是否需要人工审批，并说明风险规则依据。", {**context, "specialists": specialists, "fusion": fusion})
         results.append({"image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": "BATCH-2026-0817-A", "vision": vision, "specialists": specialists, "coordinator": fusion, "risk": risk, "trace": ["vision", "quality", "production", "sla", "coordinator", "risk"]})
     first = results[0]
-    return {"mode": "live", "image": first["image"], "product_id": first["product_id"], "batch_id": first["batch_id"], "vision": first["vision"], "specialists": first["specialists"], "coordinator": first["coordinator"], "risk": first["risk"], "trace": first["trace"], "items": results, "item_count": len(results)}
+    batch_context = {"batch": first["batch_id"], "product_count": len(results), "products": [{"image": item["image"], "vision": item["vision"], "specialists": item["specialists"], "product_coordinator": item["coordinator"], "product_risk": item["risk"]} for item in results]}
+    batch_coordinator = call_agent("coordinator", "汇总整个生产批次的所有产品检测证据，只给出一个批次级结论、主要异常、影响范围和建议动作。", batch_context)
+    batch_risk = call_agent("risk", "针对整个生产批次的汇总结论进行风险与审批判断，只给出一个批次级风险结论和是否需要人工审批。", {**batch_context, "batch_coordinator": batch_coordinator})
+    return {"mode": "live", "image": first["image"], "product_id": first["product_id"], "batch_id": first["batch_id"], "vision": first["vision"], "specialists": first["specialists"], "coordinator": batch_coordinator, "risk": batch_risk, "trace": ["批次逐张检测", "批次 Coordinator 汇总", "批次 Risk 审查"], "items": results, "item_count": len(results)}
 
 if __name__ == "__main__":
     # Serve dashboard.html and its assets from the frontend directory regardless

@@ -106,8 +106,8 @@ function fileData(file) {
 
 function resultCards(record) {
   if (record.items?.length > 1) {
-    return `<article class="agent-card batch-summary"><h4>批次诊断结果</h4><p>本次共完成 ${record.item_count} 个产品。以下均为该次运行保存的结果。</p></article>` + record.items.map((item, index) =>
-      `<article class="agent-card"><h4>${index + 1}. ${clean(item.image)}</h4><p><b>视觉检测</b>\n${clean(item.vision)}\n\n<b>协调结论</b>\n${clean(item.coordinator)}\n\n<b>风险判断</b>\n${clean(item.risk)}</p></article>`).join("");
+    return `<article class="agent-card batch-summary"><h4>批次诊断结论 · ${clean(record.batch_id)}</h4><p>本次已完成 ${record.item_count} 个产品的逐张检测。</p><p><b>批次 Coordinator</b>\n${clean(record.coordinator)}</p><p><b>批次 Risk / Policy</b>\n${clean(record.risk)}</p></article>` +
+      `<article class="agent-card"><h4>产品检测明细（证据）</h4><p>${record.items.map((item, index) => `${index + 1}. ${clean(item.image)}：${clean(item.vision)}`).join("\n\n")}</p></article>`;
   }
   return `<article class="agent-card"><h4>Vision Service</h4><p>${clean(record.vision)}</p></article>` +
     Object.entries(record.specialists || {}).map(([role, value]) => `<article class="agent-card"><h4>${clean(role)} Agent</h4><p>${clean(value)}</p></article>`).join("") +
