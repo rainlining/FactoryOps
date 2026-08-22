@@ -30,6 +30,17 @@ class ProgressStoreTest(unittest.TestCase):
         self.assertFalse(restored["transport"]["kafka_used"])
         self.assertEqual(restored["progress_events"][-1]["completed_units"], 1)
 
+    def test_worktree_runtime_uses_repository_shared_local_state(self):
+        root = Path("C:/repo/.worktrees/feature/frontend")
+        self.assertEqual(
+            demo_server.resolve_shared_state_dir(root),
+            Path("C:/repo/.factoryops-local"),
+        )
+        self.assertEqual(
+            demo_server.resolve_shared_state_dir(Path("C:/repo/frontend")),
+            Path("C:/repo/.factoryops-local"),
+        )
+
     def test_completed_batch_result_is_restored_with_events(self):
         run = demo_server.create_run("batch-003", 2)
         demo_server.append_progress_event(
@@ -158,6 +169,12 @@ class ProgressStoreTest(unittest.TestCase):
         self.assertEqual(replay["items"][0]["revision"], 1)
         self.assertEqual(changed["items"][0]["revision"], 2)
         self.assertEqual(len(demo_server.get_batch_queue()["items"]), 3)
+        with __import__("sqlite3").connect(demo_server.DB_PATH) as db:
+            stored = db.execute(
+                "SELECT images FROM batch_queue_items LIMIT 1"
+            ).fetchone()[0]
+        self.assertNotIn("YQ==", stored)
+        self.assertTrue((demo_server.DB_PATH.parent / "queue-images").exists())
 
     def test_route_batch_outcome_fails_closed_and_routes_approval(self):
         self.assertEqual(

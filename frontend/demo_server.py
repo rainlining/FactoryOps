@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import sqlite3
@@ -13,7 +14,19 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "demo_runs.sqlite3"
+
+
+def resolve_shared_state_dir(root):
+    worktree_root = root.parent
+    if worktree_root.parent.name == ".worktrees":
+        return worktree_root.parent.parent / ".factoryops-local"
+    return worktree_root / ".factoryops-local"
+
+
+SHARED_STATE_DIR = resolve_shared_state_dir(ROOT)
+SHARED_STATE_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = SHARED_STATE_DIR / "demo_runs.sqlite3"
+CONFIG_PATH = SHARED_STATE_DIR / ".env.local"
 LOCAL_CONFIG = {}
 EVENT_LOCK = threading.Lock()
 QUEUE_LOCK = threading.Lock()
@@ -21,7 +34,7 @@ QUEUE_WORKER = None
 
 
 def load_local_config():
-    config = ROOT / ".env.local"
+    config = CONFIG_PATH
     if not config.exists():
         return
     for line in config.read_text(encoding="utf-8").splitlines():
@@ -276,7 +289,7 @@ def scan_batch_queue(root_name, batches):
             (root_name, now),
         )
         for batch in batches:
-            images = batch.get("images") or []
+            images = _store_queue_images(batch.get("images") or [])
             if (
                 not batch.get("batch_id")
                 or not batch.get("manifest_digest")
@@ -310,6 +323,40 @@ def scan_batch_queue(root_name, batches):
             affected.extend(_select_queue_items(db, "WHERE item_id=?", (item_id,)))
     current = get_batch_queue()
     return {**current, "items": affected}
+
+
+def _store_queue_images(images):
+    artifact_dir = DB_PATH.parent / "queue-images"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    stored = []
+    for image in images:
+        if "data" not in image:
+            stored.append(image)
+            continue
+        payload = base64.b64decode(image["data"], validate=True)
+        digest = image.get("sha256") or hashlib.sha256(payload).hexdigest()
+        artifact = artifact_dir / digest
+        if not artifact.exists():
+            artifact.write_bytes(payload)
+        stored.append(
+            {key: value for key, value in image.items() if key != "data"}
+            | {"artifact": digest}
+        )
+    return stored
+
+
+def _hydrate_queue_images(images):
+    hydrated = []
+    for image in images:
+        if "data" in image:
+            hydrated.append(image)
+            continue
+        artifact = DB_PATH.parent / "queue-images" / image["artifact"]
+        hydrated.append(
+            {key: value for key, value in image.items() if key != "artifact"}
+            | {"data": base64.b64encode(artifact.read_bytes()).decode()}
+        )
+    return hydrated
 
 
 def get_batch_queue():
@@ -426,7 +473,7 @@ def _run_queue(agent_caller):
                 if not claimed:
                     continue
             item_id, batch_id, images_json, retry_of = row
-            images = json.loads(images_json)
+            images = _hydrate_queue_images(json.loads(images_json))
             try:
                 run = create_run(batch_id, len(images))
                 with sqlite3.connect(DB_PATH) as db:

@@ -38,6 +38,14 @@ class DashboardContractTest(unittest.TestCase):
         self.assertIn('crypto.subtle.digest("SHA-256"', script)
         self.assertIn('fetch("/api/batch-queues/scan"', script)
 
+    def test_queue_actions_report_results_and_terminal_polling_stops(self):
+        script = (ROOT / "dashboard.js").read_text(encoding="utf-8")
+        self.assertIn("连续检测已启动", script)
+        self.assertIn("已创建重试批次", script)
+        self.assertIn("已发送取消请求", script)
+        self.assertIn("clearInterval(queuePolling)", script)
+        self.assertIn("失败原因：", script)
+
 
 if __name__ == "__main__":
     unittest.main()
