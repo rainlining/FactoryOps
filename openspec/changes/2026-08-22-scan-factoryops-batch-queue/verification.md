@@ -1,7 +1,7 @@
 # Verification：扫描 FactoryOps 批次队列
 
 - `status`: `technically-verified`
-- `implementation_head`: 待本次恢复修复提交后填写
+- `implementation_head`: `de609d4f1193837ee909128069f834e85deaac2f`
 
 ## 实际验证
 
