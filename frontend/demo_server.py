@@ -550,25 +550,52 @@ def recover_batch_queue():
         rows = db.execute(
             "SELECT item_id,status,run_id FROM batch_queue_items WHERE status IN ('STARTING','RUNNING')"
         ).fetchall()
-        for item_id, status, run_id in rows:
-            run = get_run(run_id) if run_id else None
-            if run and run["status"] == "SUCCEEDED":
-                outcome = route_batch_outcome(run.get("result") or {})
-                final = outcome
-                error = None if final != "FAILED" else "重启恢复时批次结论无法安全路由"
-            elif run and run["status"] in {"FAILED", "CANCELLED"}:
-                final, outcome, error = run["status"], run["status"], None
-            else:
-                final, outcome, error = (
+    for item_id, status, run_id in rows:
+        run = get_run(run_id) if run_id else None
+        if run and run["status"] == "SUCCEEDED":
+            outcome = route_batch_outcome(run.get("result") or {})
+            final = outcome
+            error = None if final != "FAILED" else "重启恢复时批次结论无法安全路由"
+        elif run and run["status"] in {"FAILED", "CANCELLED"}:
+            final, outcome, error = run["status"], run["status"], None
+        else:
+            final, outcome, error = (
+                "FAILED",
+                "FAILED",
+                f"服务重启中断了 {status} 批次；请显式重试",
+            )
+            if run and run["status"] in {"PENDING", "RUNNING"}:
+                append_progress_event(
+                    run_id,
+                    "COMPLETED",
+                    "system",
                     "FAILED",
-                    "FAILED",
-                    f"服务重启中断了 {status} 批次；请显式重试",
+                    0,
+                    run["product_count"],
+                    "服务重启中断了活动调用",
                 )
+                save_run_result(
+                    run_id,
+                    {
+                        "mode": "live",
+                        "run_id": run_id,
+                        "batch_id": run["batch_id"],
+                        "item_count": run["product_count"],
+                        "items": [],
+                        "coordinator": "服务重启，未形成结论",
+                        "risk": "未执行",
+                        "error": "restart-interrupted",
+                        "trace": ["服务重启中断"],
+                        "transport": {"mode": "http-local", "kafka_used": False},
+                    },
+                    "FAILED",
+                )
+        with sqlite3.connect(DB_PATH) as db:
             db.execute(
                 "UPDATE batch_queue_items SET status=?,outcome=?,error=?,updated_at=? WHERE item_id=?",
                 (final, outcome, error, utc_now(), item_id),
             )
-            recovered += 1
+        recovered += 1
     return recovered
 
 
@@ -1271,7 +1298,10 @@ if __name__ == "__main__":
     # Serve dashboard.html and its assets from the frontend directory regardless
     # of the directory from which the script was launched.
     os.chdir(ROOT)
+    resume_dispatch = get_batch_queue()["status"] == "RUNNING"
     recover_batch_queue()
+    if resume_dispatch:
+        start_queue()
     server = ThreadingHTTPServer(("127.0.0.1", 4173), DemoHandler)
     print("FactoryOps demo server: http://127.0.0.1:4173/dashboard.html")
     server.serve_forever()

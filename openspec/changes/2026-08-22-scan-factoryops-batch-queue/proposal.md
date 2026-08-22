@@ -1,7 +1,7 @@
 # Proposal：扫描 FactoryOps 批次队列
 
 - `change_id`: `2026-08-22-scan-factoryops-batch-queue`
-- `status`: `proposed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `delegated`
 - `depends_on`: `2026-08-22-visualize-batch-agent-collaboration`
 

@@ -334,6 +334,35 @@ class ProgressStoreTest(unittest.TestCase):
             demo_server.get_batch_queue()["items"][0]["status"], "CANCELLED"
         )
 
+    def test_recovery_closes_orphan_run_and_can_continue_remaining_queue(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "lost",
+                    "display_name": "lost",
+                    "manifest_digest": "lost",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                },
+                {
+                    "batch_id": "next",
+                    "display_name": "next",
+                    "manifest_digest": "next",
+                    "images": [{"name": "b.png", "data": "Yg=="}],
+                },
+            ],
+        )
+        lost = demo_server.create_run("lost", 1)
+        with __import__("sqlite3").connect(demo_server.DB_PATH) as db:
+            db.execute(
+                "UPDATE batch_queue_items SET status='RUNNING',run_id=? WHERE item_id=?",
+                (lost["run_id"], queue["items"][0]["item_id"]),
+            )
+            db.execute("UPDATE batch_queue_control SET status='RUNNING' WHERE id=1")
+        self.assertTrue(demo_server.recover_batch_queue())
+        self.assertEqual(demo_server.get_run(lost["run_id"])["status"], "FAILED")
+        self.assertEqual(demo_server.get_batch_queue()["items"][1]["status"], "QUEUED")
+
 
 if __name__ == "__main__":
     unittest.main()
