@@ -40,7 +40,9 @@ load_local_config()
 def init_db():
     with sqlite3.connect(DB_PATH) as db:
         db.execute("CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL)")
-        db.execute("CREATE TABLE IF NOT EXISTS run_jobs (run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, batch_id TEXT NOT NULL, product_count INTEGER NOT NULL, status TEXT NOT NULL, result TEXT)")
+        db.execute("CREATE TABLE IF NOT EXISTS run_jobs (run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, batch_id TEXT NOT NULL, product_count INTEGER NOT NULL, status TEXT NOT NULL, result TEXT, cancel_requested INTEGER NOT NULL DEFAULT 0)")
+        if "cancel_requested" not in {row[1] for row in db.execute("PRAGMA table_info(run_jobs)")}:
+            db.execute("ALTER TABLE run_jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0")
         db.execute("CREATE TABLE IF NOT EXISTS progress_events (run_id TEXT NOT NULL, sequence INTEGER NOT NULL, occurred_at TEXT NOT NULL, stage TEXT NOT NULL, agent_role TEXT NOT NULL, status TEXT NOT NULL, completed_units INTEGER NOT NULL, total_units INTEGER NOT NULL, product_ref TEXT, summary TEXT NOT NULL, PRIMARY KEY (run_id, sequence))")
 
 
@@ -80,6 +82,22 @@ def get_run(run_id):
             return None
         events = db.execute("SELECT sequence, occurred_at, stage, agent_role, status, completed_units, total_units, product_ref, summary FROM progress_events WHERE run_id = ? ORDER BY sequence", (run_id,)).fetchall()
     return {"run_id": row[0], "created_at": row[1], "updated_at": row[2], "batch_id": row[3], "product_count": row[4], "status": row[5], "result": json.loads(row[6]) if row[6] else None, "transport": {"mode": "http-local", "kafka_used": False}, "progress_events": [{"sequence": event[0], "occurred_at": event[1], "stage": event[2], "agent_role": event[3], "status": event[4], "completed_units": event[5], "total_units": event[6], "product_ref": event[7], "summary": event[8]} for event in events]}
+
+
+class RunCancelled(Exception):
+    pass
+
+
+def request_cancel(run_id):
+    with sqlite3.connect(DB_PATH) as db:
+        return db.execute("UPDATE run_jobs SET cancel_requested = 1, updated_at = ? WHERE run_id = ? AND status IN ('PENDING', 'RUNNING')", (utc_now(), run_id)).rowcount == 1
+
+
+def ensure_not_cancelled(run_id):
+    with sqlite3.connect(DB_PATH) as db:
+        requested = db.execute("SELECT cancel_requested FROM run_jobs WHERE run_id = ?", (run_id,)).fetchone()
+    if requested and requested[0]:
+        raise RunCancelled()
 
 
 class DemoHandler(SimpleHTTPRequestHandler):
@@ -159,6 +177,11 @@ class DemoHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):  # noqa: N802
+        if self.path.startswith("/api/runs/") and self.path.endswith("/cancel"):
+            run_id = self.path.strip("/").split("/")[2]
+            accepted = request_cancel(run_id)
+            self._json(202 if accepted else 409, {"accepted": accepted, "run_id": run_id})
+            return
         if self.path == "/api/runs":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -278,24 +301,32 @@ def process_batch_run(run_id, batch_id, selected_images, agent_caller=call_agent
             encoded = selected["data"] if uploaded else base64.b64encode(image.read_bytes()).decode()
             append_progress_event(run_id, "VISION", "vision", "RUNNING", index - 1, total, f"正在检测第 {index} 个产品", name)
             vision = agent_caller("vision", "分析这张工业产品图片，指出缺陷、严重程度和置信度。", {"batch": batch_id, "image": name}, encoded)
+            ensure_not_cancelled(run_id)
             append_progress_event(run_id, "VISION", "vision", "SUCCEEDED", index, total, f"第 {index} 个产品视觉检测完成", name)
             context = {"vision_result": vision, "batch": batch_id, "image": name}
             specialists = {}
             for role in ("quality", "production", "sla"):
                 append_progress_event(run_id, "SPECIALISTS", role, "RUNNING", index - 1, total, f"{role} 正在分析第 {index} 个产品", name)
                 specialists[role] = agent_caller(role, "根据视觉异常判断对本角色负责领域的影响，并给出建议。", context)
+                ensure_not_cancelled(run_id)
                 append_progress_event(run_id, "SPECIALISTS", role, "SUCCEEDED", index, total, f"{role} 已完成第 {index} 个产品", name)
             results.append({"image": name, "product_id": f"P-{Path(name).stem.upper()}", "batch_id": batch_id, "vision": vision, "specialists": specialists})
         batch_context = {"batch": batch_id, "product_count": total, "products": results}
         append_progress_event(run_id, "COORDINATOR", "coordinator", "RUNNING", 0, 1, "正在汇总整个批次")
         fusion = agent_caller("coordinator", "汇总整个生产批次的所有产品证据，给出唯一批次结论、主要异常、影响范围和建议动作。", batch_context)
+        ensure_not_cancelled(run_id)
         append_progress_event(run_id, "COORDINATOR", "coordinator", "SUCCEEDED", 1, 1, "批次结论已形成")
         append_progress_event(run_id, "RISK", "risk", "RUNNING", 0, 1, "正在审查批次风险")
         risk = agent_caller("risk", "针对整个生产批次结论进行风险与审批判断。", {**batch_context, "batch_coordinator": fusion})
+        ensure_not_cancelled(run_id)
         append_progress_event(run_id, "RISK", "risk", "SUCCEEDED", 1, 1, "批次风险审查完成")
         result = {"mode": "live", "run_id": run_id, "batch_id": batch_id, "product_id": f"BATCH-{batch_id}", "item_count": total, "items": results, "coordinator": fusion, "risk": risk, "trace": ["批次读取", "Vision 逐张检测", "Specialist 协作", "Coordinator 批次汇总", "Risk 批次审查"], "transport": {"mode": "http-local", "kafka_used": False}}
         append_progress_event(run_id, "COMPLETED", "system", "SUCCEEDED", total, total, "批次审查完成")
         complete_run(run_id, result)
+    except RunCancelled:
+        append_progress_event(run_id, "COMPLETED", "system", "CANCELLED", 0, total, "批次检测已取消")
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("UPDATE run_jobs SET status = 'CANCELLED', updated_at = ? WHERE run_id = ?", (utc_now(), run_id))
     except Exception as error:
         append_progress_event(run_id, "COMPLETED", "system", "FAILED", 0, total, str(error))
         with sqlite3.connect(DB_PATH) as db:

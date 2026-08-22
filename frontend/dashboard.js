@@ -116,6 +116,12 @@ async function pollRun(runId) {
     $("runState").textContent = `运行失败：${run.progress_events.at(-1)?.summary || "未知错误"}`;
     $("startPipeline").disabled = false;
     $("cancelPipeline").hidden = true;
+  } else if (run.status === "CANCELLED") {
+    clearInterval(polling); polling = null;
+    $("runState").textContent = "批次检测已取消；已完成事件仍保留在历史中";
+    $("startPipeline").disabled = false;
+    $("cancelPipeline").hidden = true;
+    await refreshHistory();
   }
 }
 
@@ -183,7 +189,11 @@ $("batchFolder").addEventListener("change", event => {
 });
 
 $("startPipeline").addEventListener("click", () => runBatch().catch(error => notice(error.message)));
-$("cancelPipeline").addEventListener("click", () => notice("取消请求尚未得到服务端确认；当前 Run 将继续保留真实状态。"));
+$("cancelPipeline").addEventListener("click", async () => {
+  if (!currentRun?.run_id) return;
+  const response = await fetch(`/api/runs/${currentRun.run_id}/cancel`, {method: "POST"});
+  notice(response.ok ? "取消请求已发送；当前 Agent 调用结束后停止" : "当前运行已无法取消");
+});
 $("deleteHistory").addEventListener("click", async () => {
   const runIds = [...document.querySelectorAll(".history-select:checked")].map(input => input.value);
   if (!runIds.length) return;

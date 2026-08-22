@@ -59,6 +59,23 @@ class ProgressStoreTest(unittest.TestCase):
         self.assertIn("SPECIALISTS", [event["stage"] for event in restored["progress_events"]])
         self.assertEqual(restored["progress_events"][-1]["stage"], "COMPLETED")
 
+    def test_cancellation_stops_before_batch_conclusion(self):
+        run = demo_server.create_run("batch-cancel", 2)
+        images = [{"name": "one.png", "data": "aW1hZ2U="}, {"name": "two.png", "data": "aW1hZ2U="}]
+        calls = []
+
+        def cancelling_agent(role, instruction, context, image_data=None):
+            calls.append(role)
+            demo_server.request_cancel(run["run_id"])
+            return "已返回"
+
+        demo_server.process_batch_run(run["run_id"], "batch-cancel", images, cancelling_agent)
+        restored = demo_server.get_run(run["run_id"])
+
+        self.assertEqual(restored["status"], "CANCELLED")
+        self.assertNotIn("coordinator", calls)
+        self.assertEqual(restored["progress_events"][-1]["status"], "CANCELLED")
+
 
 if __name__ == "__main__":
     unittest.main()
