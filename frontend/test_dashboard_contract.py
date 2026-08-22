@@ -55,6 +55,10 @@ class DashboardContractTest(unittest.TestCase):
         for decision in ("APPROVE", "REJECT", "RECHECK", "ESCALATE"):
             self.assertIn(decision, script)
         self.assertIn("待业务系统执行", script)
+        refresh_queue = script.split("async function refreshQueue()", 1)[1].split(
+            "async function showQueueRun", 1
+        )[0]
+        self.assertIn("await refreshApprovals()", refresh_queue)
 
 
 if __name__ == "__main__":

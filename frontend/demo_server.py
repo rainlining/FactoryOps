@@ -577,6 +577,11 @@ def decide_batch_approval(item_id, command):
             if row[8] == command_id and row[9] == canonical_command:
                 return _approval_snapshot(row, evidence, replayed=True)
             raise ApprovalConflict("该审批已经完成，不能提交不同决定")
+        command_owner = db.execute(
+            "SELECT item_id FROM batch_approvals WHERE command_id=?", (command_id,)
+        ).fetchone()
+        if command_owner and command_owner[0] != item_id:
+            raise ApprovalConflict("该命令身份已经用于其他审批")
         now = utc_now()
         if decision == "RECHECK":
             source = db.execute(

@@ -16,7 +16,7 @@
 
 ## 验证与限制
 
-前端 25 passed、Contract 154 passed、Ruff/format/node/py_compile/diff-check 通过；浏览器实际读取现有 5 个待审批批次并展开证据。未替用户作出审批。Java Business API 执行、真实 PLC/MES 和 Kafka 不在本 Change 内。
+前端 26 passed、Contract 154 passed、Ruff/format/node/py_compile/diff-check 通过；浏览器实际读取现有 5 个待审批批次并展开证据。独立审查的 2 个 Important（自动刷新、跨审批 command identity 冲突）已修复。未替用户作出审批。Java Business API 执行、真实 PLC/MES 和 Kafka 不在本 Change 内。
 
 ## 建议 Review 路线
 

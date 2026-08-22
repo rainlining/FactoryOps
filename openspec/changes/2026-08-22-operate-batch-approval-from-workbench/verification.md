@@ -5,11 +5,11 @@
 ## TDD 证据
 
 - RED：`decide_batch_approval` 缺失导致 2 个服务测试 Error；`approvalPanel` 缺失导致前端 Contract Test Fail。
-- GREEN：审批状态机、持久化和 UI 完成后，前端测试 25 passed。
+- GREEN：审批状态机、持久化和 UI 完成后，前端测试 25 passed；独立审查修复后 26 passed。
 
 ## 实际验证
 
-- `python -m unittest discover -s frontend -p 'test_*.py' -v`：25 passed。
+- `python -m unittest discover -s frontend -p 'test_*.py' -v`：26 passed。
 - `python -m pytest -q contracts`：154 passed。
 - `python -m ruff check frontend`：All checks passed。
 - `python -m ruff format --check frontend`：3 files already formatted。
@@ -28,3 +28,7 @@
 
 - `APPROVE` 只记录为 `APPROVED_ACTION_PENDING`；未连接 PLC/MES 时不会宣称已经执行物理动作。
 - Java Business API 的真实副作用执行不在本 Change 范围内。
+
+## 独立审查
+
+首轮 0 Critical、2 Important：队列完成后审批列表未自动刷新；跨审批复用 `command_id` 会泄漏 SQLite 唯一键异常。均已通过回归修复：`refreshQueue` 同步刷新审批中心；事务在写入前按全局 command identity 分类并稳定返回冲突。

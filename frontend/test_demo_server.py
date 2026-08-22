@@ -14,23 +14,24 @@ class ProgressStoreTest(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def waiting_approval_item(self):
+    def waiting_approval_item(self, suffix=""):
+        batch_id = f"batch-risk{suffix}"
         queue = demo_server.scan_batch_queue(
             "factoryops",
             [
                 {
-                    "batch_id": "batch-risk",
+                    "batch_id": batch_id,
                     "display_name": "高风险批次",
-                    "manifest_digest": "risk-v1",
+                    "manifest_digest": f"risk-v1{suffix}",
                     "images": [{"name": "a.png", "data": "YQ=="}],
                 }
             ],
         )
-        run = demo_server.create_run("batch-risk", 1)
+        run = demo_server.create_run(batch_id, 1)
         demo_server.complete_run(
             run["run_id"],
             {
-                "batch_id": "batch-risk",
+                "batch_id": batch_id,
                 "item_count": 1,
                 "coordinator": "建议暂停本批次",
                 "risk": '{"decision":"HOLD_BATCH","requires_human_approval":true,"risk_level":"HIGH","policy_refs":["QUALITY-1"]}',
@@ -115,6 +116,31 @@ class ProgressStoreTest(unittest.TestCase):
         )
         self.assertEqual(items[1]["retry_of"], run_id)
         self.assertEqual(items[1]["revision"], 2)
+
+    def test_command_id_cannot_be_reused_across_approvals(self):
+        first_id, _ = self.waiting_approval_item("-one")
+        second_id, _ = self.waiting_approval_item("-two")
+        demo_server.decide_batch_approval(
+            first_id,
+            {
+                "command_id": "CMD-SHARED",
+                "decision": "REJECT",
+                "actor": "quality-owner",
+                "comment": "拒绝第一项",
+            },
+        )
+
+        with self.assertRaisesRegex(demo_server.ApprovalConflict, "其他审批"):
+            demo_server.decide_batch_approval(
+                second_id,
+                {
+                    "command_id": "CMD-SHARED",
+                    "decision": "APPROVE",
+                    "actor": "quality-owner",
+                    "comment": "批准第二项",
+                },
+            )
+        self.assertEqual(demo_server.get_batch_approval(second_id)["status"], "PENDING")
 
     def test_approval_rejects_non_pending_item_and_invalid_identity(self):
         queue = demo_server.scan_batch_queue(
