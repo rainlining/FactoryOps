@@ -187,6 +187,12 @@ class ProgressStoreTest(unittest.TestCase):
             ),
             "QA_ACCEPTED",
         )
+        self.assertEqual(
+            demo_server.route_batch_outcome(
+                {"coordinator": "PASS，检验合格", "risk": "无异常"}
+            ),
+            "FAILED",
+        )
 
     def test_cancel_queued_item_never_creates_a_run(self):
         queue = demo_server.scan_batch_queue(
@@ -228,7 +234,13 @@ class ProgressStoreTest(unittest.TestCase):
 
         def fake_agent(role, instruction, context, image_data=None):
             if context.get("batch") == "batch-risk" and role in {"coordinator", "risk"}:
-                return "建议 HOLD_BATCH，需要人工审批"
+                return (
+                    '{"decision":"HOLD_BATCH","requires_human_approval":true,"risk_level":"HIGH","policy_refs":["QUALITY-1"]}'
+                    if role == "risk"
+                    else "建议 HOLD_BATCH"
+                )
+            if role == "risk":
+                return '{"decision":"PASS","requires_human_approval":false,"risk_level":"LOW","policy_refs":[]}'
             return "检验合格，无异常，PASS"
 
         self.assertTrue(demo_server.start_queue(fake_agent))
@@ -239,6 +251,88 @@ class ProgressStoreTest(unittest.TestCase):
             [item["status"] for item in items], ["WAITING_FOR_APPROVAL", "QA_ACCEPTED"]
         )
         self.assertTrue(all(item["run_id"] for item in items))
+        good_events = demo_server.get_run(items[1]["run_id"])["progress_events"]
+        self.assertEqual(
+            [event for event in good_events if event["stage"] == "APPROVAL"][-1][
+                "status"
+            ],
+            "SUCCEEDED",
+        )
+
+    def test_recovery_fails_stale_active_item_instead_of_leaving_it_stuck(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-stale",
+                    "display_name": "batch-stale",
+                    "manifest_digest": "stale",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        item_id = queue["items"][0]["item_id"]
+        with __import__("sqlite3").connect(demo_server.DB_PATH) as db:
+            db.execute(
+                "UPDATE batch_queue_items SET status='STARTING' WHERE item_id=?",
+                (item_id,),
+            )
+
+        self.assertEqual(demo_server.recover_batch_queue(), 1)
+        restored = demo_server.get_batch_queue()["items"][0]
+        self.assertEqual(restored["status"], "FAILED")
+        self.assertIn("重启", restored["error"])
+
+    def test_current_root_does_not_dispatch_batches_from_previous_root(self):
+        demo_server.scan_batch_queue(
+            "root-a",
+            [
+                {
+                    "batch_id": "a",
+                    "display_name": "a",
+                    "manifest_digest": "a",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        current = demo_server.scan_batch_queue(
+            "root-b",
+            [
+                {
+                    "batch_id": "b",
+                    "display_name": "b",
+                    "manifest_digest": "b",
+                    "images": [{"name": "b.png", "data": "Yg=="}],
+                }
+            ],
+        )
+        self.assertEqual([item["batch_id"] for item in current["items"]], ["b"])
+        self.assertEqual(
+            [item["batch_id"] for item in demo_server.get_batch_queue()["items"]], ["b"]
+        )
+
+    def test_starting_item_can_be_cancelled_before_model_call(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "a",
+                    "display_name": "a",
+                    "manifest_digest": "a",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        item_id = queue["items"][0]["item_id"]
+        with __import__("sqlite3").connect(demo_server.DB_PATH) as db:
+            db.execute(
+                "UPDATE batch_queue_items SET status='STARTING' WHERE item_id=?",
+                (item_id,),
+            )
+        self.assertTrue(demo_server.cancel_queue_item(item_id))
+        self.assertEqual(
+            demo_server.get_batch_queue()["items"][0]["status"], "CANCELLED"
+        )
 
 
 if __name__ == "__main__":
