@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const clean = value => String(value ?? "暂无").replaceAll("**", "").replaceAll("`", "");
+const clean = value => String(value ?? "暂无").replaceAll("**", "").replaceAll("`", "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 let batch = null;
 let currentRun = null;
 let polling = null;
@@ -64,8 +64,9 @@ function renderTopology(events) {
     const role = node.dataset.role;
     const roleEvents = events.filter(event => event.agent_role === role);
     const latest = roleEvents.at(-1);
+    const duration = roleEvents.length > 1 ? Math.max(0, (new Date(latest.occurred_at) - new Date(roleEvents[0].occurred_at)) / 1000).toFixed(1) : null;
     node.className = `agent-node ${latest?.status?.toLowerCase() || "pending"}`;
-    node.querySelector("small").textContent = latest?.summary || node.querySelector("small").dataset.initial || "等待上游证据";
+    node.querySelector("small").textContent = latest ? `${latest.summary}${duration ? ` · ${duration}s` : ""}` : node.querySelector("small").dataset.initial || "等待上游证据";
     if (!node.querySelector("small").dataset.initial) node.querySelector("small").dataset.initial = node.querySelector("small").textContent;
   }
 }
@@ -109,12 +110,14 @@ async function pollRun(runId) {
     clearInterval(polling); polling = null;
     showResult(run.result, run.progress_events);
     $("startPipeline").disabled = false;
+    $("startPipeline").textContent = "重新检测当前批次";
     $("cancelPipeline").hidden = true;
     await refreshHistory();
   } else if (run.status === "FAILED") {
     clearInterval(polling); polling = null;
     $("runState").textContent = `运行失败：${run.progress_events.at(-1)?.summary || "未知错误"}`;
     $("startPipeline").disabled = false;
+    $("startPipeline").textContent = "重试整个批次";
     $("cancelPipeline").hidden = true;
   } else if (run.status === "CANCELLED") {
     clearInterval(polling); polling = null;
@@ -132,7 +135,8 @@ async function runBatch() {
   $("agentOutput").innerHTML = '<p class="empty">批次正在运行，最终结论将在所有 Agent 完成协作后显示。</p>';
   $("tracePanel").innerHTML = "<p>正在等待第一条真实运行事件……</p>";
   const images = await Promise.all(batch.files.map(fileData));
-  const response = await fetch("/api/runs", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batch_id: batch.name, images})});
+  const retryOf = currentRun?.status === "FAILED" ? currentRun.run_id : null;
+  const response = await fetch("/api/runs", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batch_id: batch.name, images, retry_of: retryOf})});
   const run = await response.json();
   if (!response.ok) { $("startPipeline").disabled = false; throw new Error(run.error); }
   startedAt = Date.now();
