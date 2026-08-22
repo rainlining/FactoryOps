@@ -2,42 +2,74 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FactoryOps | 质量运营看板</title>
-  <link rel="stylesheet" href="dashboard.css">
-  <style>.demo-controls{margin-top:16px}.pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 19px 18px}.pipeline-step{min-height:62px;border:1px solid #dce3e8;border-radius:5px;padding:9px;background:#fafbfc;font-size:11px;color:#6c7a86}.pipeline-step strong{display:block;color:#17212b;font-size:12px;margin-bottom:6px}.pipeline-step.active{border-color:#2b7a78;background:#dff1ef}.pipeline-step.done{border-color:#9acac5}.agent-output{margin:0 19px 18px;padding:14px;background:#17242f;color:#e7f1f1;border-radius:6px;line-height:1.55}.agent-output p{margin:6px 0 0;color:#b9cdd0;font-size:12px}.agent-line{padding:8px 0;border-top:1px solid #38505a}.agent-line b{color:#fff}@media(max-width:680px){.pipeline{grid-template-columns:repeat(2,1fr)}} </style>
-  <style>.image-library{margin-bottom:16px}.image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:0 19px 18px}.image-card{display:flex;flex-direction:column;gap:5px;border:1px solid #dce3e8;border-radius:6px;padding:8px;cursor:pointer}.image-card:has(input:checked){border-color:#2b7a78;background:#dff1ef}.image-card img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:4px}.image-card strong{font-size:11px;overflow:hidden;text-overflow:ellipsis}.image-card small{color:#6c7a86;font-size:10px}.image-card input{position:absolute}.run-state{margin:0 19px 14px;padding:10px;background:#f4f6f8;color:#52636d;border-radius:5px}.agent-cards{display:grid;grid-template-columns:1fr;gap:10px;margin:0 19px 18px}.agent-card{background:#f8fafb;border:1px solid #dce3e8;border-radius:6px;padding:14px}.agent-card h4{margin:0 0 9px;font-size:13px;color:#17212b;border-bottom:1px solid #dce3e8;padding-bottom:8px}.agent-card p{margin:0;color:#52636d;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:230px;overflow:auto;padding-right:8px}.trace-panel{margin:0 19px 18px;padding:12px;background:#eef5f5;border-left:3px solid #2b7a78;font-size:12px}.trace-panel p{margin:6px 0 0;line-height:1.7}@media(max-width:680px){.agent-cards{grid-template-columns:1fr}}</style>
-<style>.history-list{padding:0 19px 18px}.history-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid #edf0f2}.history-row strong,.history-row small{display:block}.history-row strong{font-size:12px}.history-row small{margin-top:4px;color:#6c7a86;font-size:11px}.agent-cards{display:block!important}.agent-card{margin-bottom:10px;box-shadow:0 2px 8px rgba(21,34,45,.04)}.agent-card p{max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word}</style>
-<style>.agent-output{max-height:620px;overflow:auto}.agent-output .agent-line{display:block;padding:14px 4px;border-top:1px solid #dce3e8;line-height:1.7;word-break:break-word}.agent-output .agent-line b{display:block;color:#17212b;margin-bottom:6px}.agent-output strong{display:block;margin-bottom:10px;color:#17212b}</style>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FactoryOps｜批次质量作战室</title>
+  <link rel="stylesheet" href="dashboard.css?v=20260822">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="brand-mark">FO</span><div><strong>FactoryOps</strong><small>质量运营中心</small></div></div>
-      <div class="nav-label">工作区</div>
-      <button class="nav-item active" type="button" id="workflowNav"><span class="nav-icon">◈</span>工作流运行</button>
-      <button class="nav-item" type="button" id="productLibraryNav"><span class="nav-icon">▦</span>产品库</button>
-      <button class="nav-item" type="button" id="loadNav"><span class="nav-icon">↥</span>加载快照</button>
-      <div class="sidebar-footer"><span class="live-dot"></span><span>本地演示模式</span></div>
-    </aside>
-    <main class="main-content">
-      <header class="topbar">
-        <button class="mobile-menu" id="menuButton" type="button" aria-label="打开导航">☰</button>
-        <div><div class="breadcrumb">工作流运行 <span>/</span> 总览</div><h1>运行总览</h1></div>
-        <div class="top-actions"><span class="updated" id="updatedAt">快照已加载</span><button class="load-button" id="loadButton" type="button">加载快照</button><input id="snapshotInput" type="file" accept="application/json,.json" hidden></div>
-      </header>
-      <div class="notice" id="notice" role="status" hidden></div>
-      <section class="run-heading"><div><span class="eyebrow">当前工作流</span><h2 id="runId">正在加载运行...</h2><p id="incidentLine">质量异常</p></div><div class="run-status" id="runStatus">未知</div></section>
-      <section class="inspection-context" id="inspectionContext" hidden><img id="inspectionImage" alt="钣金产品录制检测图"><div><span class="eyebrow">录制检测结果</span><h2 id="findingLabel">表面异常</h2><p id="findingSummary"></p><div class="finding-meta"><span id="findingSeverity"></span><span id="affectedBatch"></span><span id="recommendedAction"></span></div></div></section>
-      <section class="panel image-library" id="imageLibrary"><div class="panel-header"><div><span class="eyebrow">产品图片库</span><h3>导入一个生产批次</h3></div><div class="top-actions"><label class="load-button" for="batchFolder">选择批次文件夹</label><input id="batchFolder" type="file" webkitdirectory directory multiple accept="image/png,image/jpeg" hidden><span class="count-chip" id="selectionCount">未导入批次</span></div></div><p class="library-help">选择一个外部文件夹作为一个批次。系统会读取其中全部产品图片，不会自动开始检测。</p><div class="image-grid" id="imageGrid"><p>请选择批次文件夹开始。</p></div></section>
-      <section class="metric-grid" aria-label="运行摘要"><article class="metric"><span class="metric-label">运行版本</span><strong id="runRevision">-</strong><span class="metric-note">当前生命周期</span></article><article class="metric"><span class="metric-label">任务完成度</span><strong id="taskProgress">-</strong><span class="metric-note" id="taskProgressNote">专家任务</span></article><article class="metric"><span class="metric-label">协调器</span><strong id="coordinatorStatus">-</strong><span class="metric-note">执行状态</span></article><article class="metric"><span class="metric-label">审批</span><strong id="approvalStatus">-</strong><span class="metric-note" id="approvalNote">决策状态</span></article></section>
-      <section class="content-grid"><article class="panel tasks-panel"><div class="panel-header"><div><span class="eyebrow">专家任务</span><h3>任务就绪情况</h3></div><span class="count-chip" id="taskCount">0 个任务</span></div><div class="table-wrap"><table><thead><tr><th>任务</th><th>角色</th><th>状态</th><th>尝试次数</th></tr></thead><tbody id="taskRows"></tbody></table></div></article><article class="panel chain-panel"><div class="panel-header"><div><span class="eyebrow">决策链</span><h3>控制关卡</h3></div></div><div class="chain" id="decisionChain"></div></article></section>
-      <section class="bottom-grid"><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">审批信息</span><h3>人工决策</h3></div></div><div class="detail-list" id="approvalDetails"></div></article><article class="panel detail-panel"><div class="panel-header"><div><span class="eyebrow">执行溯源</span><h3>协调器记录</h3></div></div><div class="detail-list" id="coordinatorDetails"></div></article></section>
-      <section class="panel demo-controls"><div class="panel-header"><div><span class="eyebrow">端到端运行</span><h3>真实 Agent 流水线</h3></div><div class="top-actions"><button class="load-button" id="startPipeline" type="button">检测已选产品</button><button class="load-button" id="cancelPipeline" type="button" hidden>取消检测</button><button class="load-button" id="retryPipeline" type="button" hidden>重试失败项</button><button class="load-button" id="approveAction" type="button" disabled>批准暂停批次</button><button class="load-button" id="replayRun" type="button" disabled>Replay 重新运行</button></div></div><div class="run-state" id="runState">等待选择产品</div><div class="pipeline" id="pipeline" aria-live="polite"></div><div class="agent-cards" id="agentOutput"><strong>Agent 输出</strong><p>选择产品后开始运行，每个 Agent 的输出会独立显示。</p></div><div class="trace-panel" id="tracePanel"></div></section>
-      <section class="panel run-history"><div class="panel-header"><div><span class="eyebrow">运行记录</span><h3>历史检测与回放</h3></div><div class="top-actions"><span class="count-chip" id="historyCount">0 次运行</span><button class="load-button" id="deleteHistory" type="button" disabled>删除选中记录</button></div></div><div id="historyList" class="history-list"><p>暂无运行记录。</p></div></section>
-      <footer class="footer">FactoryOps 本地演示 · 只读展示 · 不执行真实业务动作</footer>
-    </main>
-  </div>
-  <script src="dashboard.js?v=ccd1a93"></script>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="brand-mark">FO</span><div><strong>FactoryOps</strong><small>智能质量运营中心</small></div></div>
+    <div class="nav-label">工作区</div>
+    <button class="nav-item active" id="workflowNav" type="button">◈ 批次作战室</button>
+    <button class="nav-item" id="productLibraryNav" type="button">▦ 产品库</button>
+    <div class="sidebar-footer"><span class="live-dot"></span>真实 Agent 模式</div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="mobile-menu" id="menuButton" type="button">☰</button>
+      <div><span class="eyebrow">FACTORYOPS CONTROL ROOM</span><h1 id="pageTitle">批次质量作战室</h1></div>
+      <span class="transport-badge" id="transportBadge">本次本地运行未经过 Kafka</span>
+    </header>
+    <div class="notice" id="notice" hidden></div>
+
+    <section class="panel image-library" id="imageLibrary" hidden>
+      <div class="panel-header"><div><span class="eyebrow">产品图片库</span><h2>导入生产批次</h2></div><div class="top-actions"><label class="primary-button" for="batchFolder">选择批次文件夹</label><input id="batchFolder" type="file" webkitdirectory directory multiple accept="image/png,image/jpeg" hidden><span class="count-chip" id="selectionCount">未导入</span></div></div>
+      <p class="library-help">一个文件夹代表一个生产批次。系统读取其中所有图片，但不会自动开始检测。</p>
+      <div class="image-grid" id="imageGrid"><p class="empty">请选择包含产品照片的文件夹。</p></div>
+    </section>
+
+    <div id="workflowView">
+      <section class="batch-hero">
+        <div><span class="eyebrow">当前批次</span><h2 id="batchName">尚未选择批次</h2><p id="runState">请先前往产品库导入一个批次</p></div>
+        <div class="top-actions"><button class="primary-button" id="startPipeline" type="button">开始批次检测</button><button class="secondary-button" id="cancelPipeline" type="button" hidden>取消检测</button></div>
+      </section>
+
+      <section class="panel progress-panel">
+        <div class="progress-head"><div><span class="eyebrow">真实运行进度</span><h3 id="progressLabel">等待开始</h3></div><strong id="progressPercent">0%</strong></div>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="batchProgress"></span></div>
+        <div class="progress-meta"><span id="progressUnits">0 / 0</span><span id="elapsedTime">已耗时 00:00</span><span id="lastActivity">尚无运行事件</span></div>
+      </section>
+
+      <section class="panel collaboration-panel">
+        <div class="panel-header"><div><span class="eyebrow">多 Agent 协作</span><h3>从检测证据到批次决策</h3></div><span class="count-chip">真实状态</span></div>
+        <div class="agent-topology" id="agentTopology">
+          <article class="agent-node" data-role="vision"><span>01</span><strong>Vision</strong><small>等待图片证据</small></article>
+          <div class="connector">→</div>
+          <div class="specialist-stack">
+            <article class="agent-node" data-role="quality"><span>02A</span><strong>Quality</strong><small>等待视觉结果</small></article>
+            <article class="agent-node" data-role="production"><span>02B</span><strong>Production</strong><small>等待视觉结果</small></article>
+            <article class="agent-node" data-role="sla"><span>02C</span><strong>SLA / Business</strong><small>等待视觉结果</small></article>
+          </div>
+          <div class="connector">→</div>
+          <article class="agent-node" data-role="coordinator"><span>03</span><strong>Coordinator</strong><small>等待专家证据</small></article>
+          <div class="connector">→</div>
+          <article class="agent-node" data-role="risk"><span>04</span><strong>Risk / Policy</strong><small>等待批次结论</small></article>
+        </div>
+      </section>
+
+      <section class="panel conclusion-panel" id="batchConclusion">
+        <div class="panel-header"><div><span class="eyebrow">批次审查结论</span><h3>尚未形成结论</h3></div><span class="status-pill">等待运行</span></div>
+        <div id="agentOutput" class="conclusion-content"><p class="empty">完成整个批次后，这里会显示唯一的批次结论、风险和建议动作。</p></div>
+      </section>
+
+      <details class="panel technical-panel" id="technicalDetails"><summary>查看产品证据、Trace 与技术详情</summary><div id="tracePanel" class="technical-content"><p>本地 HTTP 运行不会伪造 Kafka topic、partition 或 offset。</p></div></details>
+
+      <section class="panel run-history"><div class="panel-header"><div><span class="eyebrow">已保存运行</span><h3>历史检测与回放</h3></div><div class="top-actions"><span class="count-chip" id="historyCount">0 次运行</span><button class="secondary-button" id="deleteHistory" type="button" disabled>删除选中记录</button></div></div><div id="historyList" class="history-list"><p class="empty">暂无历史记录。</p></div></section>
+    </div>
+  </main>
+</div>
+<script src="dashboard.js?v=20260822"></script>
 </body>
 </html>
