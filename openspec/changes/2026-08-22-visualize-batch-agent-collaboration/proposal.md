@@ -1,7 +1,7 @@
 # Proposal：可视化批次 Agent 协作
 
 - `change_id`: `2026-08-22-visualize-batch-agent-collaboration`
-- `status`: `design-reviewed`
+- `status`: `review-handoff-ready`
 - `learning_level`: `delegated`
 - `depends_on`: `2026-08-21-executive-demo-packaging`
 
