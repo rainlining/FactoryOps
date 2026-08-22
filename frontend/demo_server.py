@@ -37,6 +37,10 @@ QUEUE_LOCK = threading.Lock()
 QUEUE_WORKER = None
 
 
+class ApprovalConflict(RuntimeError):
+    pass
+
+
 def load_local_config():
     config = CONFIG_PATH
     if not config.exists():
@@ -79,6 +83,12 @@ def init_db():
         )
         db.execute(
             "CREATE TABLE IF NOT EXISTS batch_queue_items (item_id INTEGER PRIMARY KEY AUTOINCREMENT, root_name TEXT NOT NULL, batch_id TEXT NOT NULL, display_name TEXT NOT NULL, revision INTEGER NOT NULL, manifest_digest TEXT NOT NULL, images TEXT NOT NULL, status TEXT NOT NULL, run_id TEXT, retry_of TEXT, outcome TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(root_name, batch_id, manifest_digest))"
+        )
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS batch_approvals (approval_id TEXT PRIMARY KEY, item_id INTEGER NOT NULL UNIQUE, run_id TEXT NOT NULL, status TEXT NOT NULL, decision TEXT, actor TEXT, comment TEXT, recommended_action TEXT NOT NULL, command_id TEXT UNIQUE, command_json TEXT, revision INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES batch_queue_items(item_id))"
+        )
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS batch_approval_history (approval_id TEXT NOT NULL, revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(approval_id, revision))"
         )
 
 
@@ -433,6 +443,188 @@ def parse_risk_decision(value):
     return parsed
 
 
+def _approval_evidence(run_id):
+    run = get_run(run_id)
+    if not run or not run.get("result"):
+        raise ValueError("待审批批次缺少可审计的运行证据")
+    result = run["result"]
+    risk = parse_risk_decision(result.get("risk")) or {}
+    return {
+        "batch_id": result.get("batch_id") or run.get("batch_id"),
+        "item_count": result.get("item_count", 0),
+        "coordinator": result.get("coordinator", "暂无批次结论"),
+        "risk": result.get("risk", "暂无风险结论"),
+        "recommended_action": result.get("decision")
+        or risk.get("decision")
+        or "ESCALATE",
+        "risk_level": result.get("risk_level") or risk.get("risk_level") or "UNKNOWN",
+        "policy_refs": result.get("policy_refs") or risk.get("policy_refs") or [],
+    }
+
+
+def _approval_snapshot(row, evidence, replayed=False):
+    return {
+        "approval_id": row[0],
+        "item_id": row[1],
+        "run_id": row[2],
+        "status": row[3],
+        "decision": row[4],
+        "actor": row[5],
+        "comment": row[6],
+        "recommended_action": row[7],
+        "command_id": row[8],
+        "revision": row[10],
+        "created_at": row[11],
+        "updated_at": row[12],
+        "evidence": evidence,
+        "replayed": replayed,
+    }
+
+
+def _approval_row(db, item_id):
+    return db.execute(
+        "SELECT approval_id,item_id,run_id,status,decision,actor,comment,recommended_action,command_id,command_json,revision,created_at,updated_at FROM batch_approvals WHERE item_id=?",
+        (item_id,),
+    ).fetchone()
+
+
+def _ensure_pending_approval(db, item_id):
+    row = _approval_row(db, item_id)
+    if row:
+        return row
+    item = db.execute(
+        "SELECT run_id,status FROM batch_queue_items WHERE item_id=?", (item_id,)
+    ).fetchone()
+    if not item or item[1] != "WAITING_FOR_APPROVAL":
+        raise ValueError("当前批次不是待审批状态")
+    if not item[0]:
+        raise ValueError("待审批批次缺少 Run")
+    evidence = _approval_evidence(item[0])
+    now = utc_now()
+    approval_id = f"APR-WB-{item_id:08d}"
+    db.execute(
+        "INSERT INTO batch_approvals(approval_id,item_id,run_id,status,recommended_action,revision,created_at,updated_at) VALUES (?,?,?,'PENDING',?,1,?,?)",
+        (approval_id, item_id, item[0], evidence["recommended_action"], now, now),
+    )
+    row = _approval_row(db, item_id)
+    snapshot = _approval_snapshot(row, evidence)
+    db.execute(
+        "INSERT INTO batch_approval_history(approval_id,revision,snapshot_json,recorded_at) VALUES (?,?,?,?)",
+        (approval_id, 1, json.dumps(snapshot, ensure_ascii=False), now),
+    )
+    return row
+
+
+def get_batch_approval(item_id):
+    with sqlite3.connect(DB_PATH) as db:
+        row = _ensure_pending_approval(db, item_id)
+        evidence = _approval_evidence(row[2])
+        history = [
+            json.loads(value[0])
+            for value in db.execute(
+                "SELECT snapshot_json FROM batch_approval_history WHERE approval_id=? ORDER BY revision",
+                (row[0],),
+            ).fetchall()
+        ]
+    return {**_approval_snapshot(row, evidence), "history": history}
+
+
+def list_batch_approvals():
+    with sqlite3.connect(DB_PATH) as db:
+        item_ids = [
+            row[0]
+            for row in db.execute(
+                "SELECT item_id FROM batch_queue_items WHERE status='WAITING_FOR_APPROVAL' ORDER BY item_id"
+            ).fetchall()
+        ]
+        for item_id in item_ids:
+            _ensure_pending_approval(db, item_id)
+        rows = db.execute(
+            "SELECT approval_id,item_id,run_id,status,decision,actor,comment,recommended_action,command_id,command_json,revision,created_at,updated_at FROM batch_approvals ORDER BY created_at DESC"
+        ).fetchall()
+    return [_approval_snapshot(row, _approval_evidence(row[2])) for row in rows]
+
+
+def decide_batch_approval(item_id, command):
+    decision = str(command.get("decision") or "").upper()
+    actor = str(command.get("actor") or "").strip()
+    comment = str(command.get("comment") or "").strip()
+    command_id = str(command.get("command_id") or "").strip()
+    if decision not in {"APPROVE", "REJECT", "RECHECK", "ESCALATE"}:
+        raise ValueError("审批决定无效")
+    if not actor or len(actor) > 80:
+        raise ValueError("审批人不能为空且不得超过 80 字")
+    if not command_id or len(command_id) > 100:
+        raise ValueError("审批命令身份无效")
+    if len(comment) > 500:
+        raise ValueError("审批意见不得超过 500 字")
+    canonical_command = json.dumps(
+        {"decision": decision, "actor": actor, "comment": comment},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    terminal = {
+        "APPROVE": "APPROVED_ACTION_PENDING",
+        "REJECT": "APPROVAL_REJECTED",
+        "RECHECK": "RECHECK_REQUESTED",
+        "ESCALATE": "ESCALATED",
+    }[decision]
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = _ensure_pending_approval(db, item_id)
+        evidence = _approval_evidence(row[2])
+        if row[3] != "PENDING":
+            if row[8] == command_id and row[9] == canonical_command:
+                return _approval_snapshot(row, evidence, replayed=True)
+            raise ApprovalConflict("该审批已经完成，不能提交不同决定")
+        now = utc_now()
+        if decision == "RECHECK":
+            source = db.execute(
+                "SELECT root_name,batch_id,display_name,revision,manifest_digest,images,run_id FROM batch_queue_items WHERE item_id=?",
+                (item_id,),
+            ).fetchone()
+            db.execute(
+                "INSERT INTO batch_queue_items(root_name,batch_id,display_name,revision,manifest_digest,images,status,retry_of,created_at,updated_at) VALUES (?,?,?,?,?,?,'QUEUED',?,?,?)",
+                (
+                    source[0],
+                    source[1],
+                    source[2],
+                    source[3] + 1,
+                    f"{source[4]}-approval-recheck-{item_id}",
+                    source[5],
+                    source[6],
+                    now,
+                    now,
+                ),
+            )
+        updated = db.execute(
+            "UPDATE batch_approvals SET status=?,decision=?,actor=?,comment=?,command_id=?,command_json=?,revision=2,updated_at=? WHERE item_id=? AND status='PENDING' AND revision=1",
+            (
+                terminal,
+                decision,
+                actor,
+                comment,
+                command_id,
+                canonical_command,
+                now,
+                item_id,
+            ),
+        ).rowcount
+        if updated != 1:
+            raise ApprovalConflict("审批状态已被其他操作改变")
+        db.execute(
+            "UPDATE batch_queue_items SET status=?,outcome=?,updated_at=? WHERE item_id=? AND status='WAITING_FOR_APPROVAL'",
+            (terminal, terminal, now, item_id),
+        )
+        row = _approval_row(db, item_id)
+        snapshot = _approval_snapshot(row, evidence)
+        db.execute(
+            "INSERT INTO batch_approval_history(approval_id,revision,snapshot_json,recorded_at) VALUES (?,?,?,?)",
+            (row[0], 2, json.dumps(snapshot, ensure_ascii=False), now),
+        )
+    return snapshot
+
+
 def cancel_queue_item(item_id):
     with sqlite3.connect(DB_PATH) as db:
         row = db.execute(
@@ -672,6 +864,19 @@ class DemoHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/batch-approvals":
+            self._json(200, {"approvals": list_batch_approvals()})
+            return
+        if parsed.path.startswith("/api/batch-approvals/"):
+            item_id = parsed.path.rsplit("/", 1)[-1]
+            if not item_id.isdigit():
+                self._json(400, {"error": "审批事项身份无效"})
+                return
+            try:
+                self._json(200, get_batch_approval(int(item_id)))
+            except ValueError as error:
+                self._json(404, {"error": str(error)})
+            return
         if parsed.path == "/api/batch-queues/current":
             self._json(200, get_batch_queue())
             return
@@ -794,6 +999,22 @@ class DemoHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        if self.path.startswith("/api/batch-approvals/") and self.path.endswith(
+            "/decision"
+        ):
+            parts = self.path.strip("/").split("/")
+            if len(parts) != 4 or not parts[2].isdigit():
+                self._json(400, {"error": "审批事项身份无效"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                request = json.loads(self.rfile.read(length) or b"{}")
+                self._json(200, decide_batch_approval(int(parts[2]), request))
+            except ApprovalConflict as error:
+                self._json(409, {"error": str(error)})
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                self._json(400, {"error": str(error)})
+            return
         if self.path == "/api/batch-queues/scan":
             try:
                 length = int(self.headers.get("Content-Length", "0"))

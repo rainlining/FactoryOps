@@ -46,6 +46,16 @@ class DashboardContractTest(unittest.TestCase):
         self.assertIn("clearInterval(queuePolling)", script)
         self.assertIn("失败原因：", script)
 
+    def test_pending_approval_workspace_exposes_evidence_and_decisions(self):
+        html = (ROOT / "dashboard.html").read_text(encoding="utf-8")
+        script = (ROOT / "dashboard.js").read_text(encoding="utf-8")
+        for element_id in ("approvalPanel", "approvalList", "approvalDetail"):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("/api/batch-approvals", script)
+        for decision in ("APPROVE", "REJECT", "RECHECK", "ESCALATE"):
+            self.assertIn(decision, script)
+        self.assertIn("待业务系统执行", script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,141 @@ class ProgressStoreTest(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def waiting_approval_item(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-risk",
+                    "display_name": "高风险批次",
+                    "manifest_digest": "risk-v1",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        run = demo_server.create_run("batch-risk", 1)
+        demo_server.complete_run(
+            run["run_id"],
+            {
+                "batch_id": "batch-risk",
+                "item_count": 1,
+                "coordinator": "建议暂停本批次",
+                "risk": '{"decision":"HOLD_BATCH","requires_human_approval":true,"risk_level":"HIGH","policy_refs":["QUALITY-1"]}',
+                "decision": "HOLD_BATCH",
+                "requires_human_approval": True,
+                "risk_level": "HIGH",
+                "policy_refs": ["QUALITY-1"],
+                "items": [],
+            },
+        )
+        with __import__("sqlite3").connect(demo_server.DB_PATH) as db:
+            db.execute(
+                "UPDATE batch_queue_items SET status='WAITING_FOR_APPROVAL',outcome='WAITING_FOR_APPROVAL',run_id=? WHERE item_id=?",
+                (run["run_id"], queue["items"][0]["item_id"]),
+            )
+        return queue["items"][0]["item_id"], run["run_id"]
+
+    def test_approval_decision_is_persisted_and_identical_command_is_idempotent(self):
+        item_id, run_id = self.waiting_approval_item()
+        command = {
+            "command_id": "CMD-APPROVE-1",
+            "decision": "APPROVE",
+            "actor": "老板助理",
+            "comment": "同意暂停该批次并等待业务系统执行",
+        }
+
+        applied = demo_server.decide_batch_approval(item_id, command)
+        replay = demo_server.decide_batch_approval(item_id, command)
+
+        self.assertEqual(applied["status"], "APPROVED_ACTION_PENDING")
+        self.assertEqual(applied["run_id"], run_id)
+        self.assertFalse(applied["replayed"])
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(
+            demo_server.get_batch_queue()["items"][0]["status"],
+            "APPROVED_ACTION_PENDING",
+        )
+        detail = demo_server.get_batch_approval(item_id)
+        self.assertEqual(len(detail["history"]), 2)
+        self.assertEqual(detail["evidence"]["risk_level"], "HIGH")
+
+    def test_terminal_approval_rejects_conflicting_command(self):
+        item_id, _ = self.waiting_approval_item()
+        demo_server.decide_batch_approval(
+            item_id,
+            {
+                "command_id": "CMD-1",
+                "decision": "REJECT",
+                "actor": "quality-owner",
+                "comment": "证据不足",
+            },
+        )
+
+        with self.assertRaises(demo_server.ApprovalConflict):
+            demo_server.decide_batch_approval(
+                item_id,
+                {
+                    "command_id": "CMD-2",
+                    "decision": "APPROVE",
+                    "actor": "quality-owner",
+                    "comment": "改为批准",
+                },
+            )
+
+    def test_recheck_approval_atomically_creates_derived_queue_item(self):
+        item_id, run_id = self.waiting_approval_item()
+
+        decided = demo_server.decide_batch_approval(
+            item_id,
+            {
+                "command_id": "CMD-RECHECK-1",
+                "decision": "RECHECK",
+                "actor": "quality-owner",
+                "comment": "重新拍照检测",
+            },
+        )
+
+        items = demo_server.get_batch_queue()["items"]
+        self.assertEqual(decided["status"], "RECHECK_REQUESTED")
+        self.assertEqual(
+            [item["status"] for item in items], ["RECHECK_REQUESTED", "QUEUED"]
+        )
+        self.assertEqual(items[1]["retry_of"], run_id)
+        self.assertEqual(items[1]["revision"], 2)
+
+    def test_approval_rejects_non_pending_item_and_invalid_identity(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "good",
+                    "manifest_digest": "good",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "待审批"):
+            demo_server.decide_batch_approval(
+                queue["items"][0]["item_id"],
+                {
+                    "command_id": "CMD-X",
+                    "decision": "APPROVE",
+                    "actor": "owner",
+                    "comment": "ok",
+                },
+            )
+        item_id, _ = self.waiting_approval_item()
+        with self.assertRaisesRegex(ValueError, "审批人"):
+            demo_server.decide_batch_approval(
+                item_id,
+                {
+                    "command_id": "CMD-Y",
+                    "decision": "APPROVE",
+                    "actor": "",
+                    "comment": "ok",
+                },
+            )
+
     def test_progress_events_are_monotonic_and_http_transport_is_explicit(self):
         run = demo_server.create_run("batch-002", 10)
         first = demo_server.append_progress_event(

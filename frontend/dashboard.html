@@ -35,6 +35,13 @@
         <div class="panel-header"><div><span class="eyebrow">连续检测队列</span><h3 id="queueSummary">尚未导入批次根目录</h3></div><div class="top-actions"><button class="primary-button" id="startQueue" type="button">开始连续检测</button><button class="secondary-button" id="pauseQueue" type="button">暂停派发</button></div></div>
         <div class="queue-list" id="queueList"><p class="empty">请从产品库选择包含多个批次文件夹的根目录。</p></div>
       </section>
+      <section class="panel approval-panel" id="approvalPanel">
+        <div class="panel-header"><div><span class="eyebrow">人工审批中心</span><h3>待审批与处置记录</h3></div><span class="count-chip" id="approvalCount">0 项待处理</span></div>
+        <div class="approval-workspace">
+          <div class="approval-list" id="approvalList"><p class="empty">当前没有待审批批次。</p></div>
+          <aside class="approval-detail" id="approvalDetail"><p class="empty">选择一个审批事项，查看 Risk 证据并作出决定。</p></aside>
+        </div>
+      </section>
       <section class="batch-hero">
         <div><span class="eyebrow">当前批次</span><h2 id="batchName">尚未选择批次</h2><p id="runState">请先前往产品库导入一个批次</p></div>
         <div class="top-actions"><button class="primary-button" id="startPipeline" type="button">开始批次检测</button><button class="secondary-button" id="cancelPipeline" type="button" hidden>取消检测</button></div>
