@@ -6,3 +6,4 @@ __pycache__/
 **/target/
 frontend/.env.local
 frontend/demo_runs.sqlite3
+/.factoryops-local/

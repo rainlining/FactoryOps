@@ -40,6 +40,26 @@ class ProgressStoreTest(unittest.TestCase):
             demo_server.resolve_shared_state_dir(Path("C:/repo/frontend")),
             Path("C:/repo/.factoryops-local"),
         )
+        self.assertEqual(
+            demo_server.resolve_shared_state_dir(
+                Path("C:/repo/FactoryOps.worktrees/feature/frontend")
+            ),
+            Path("C:/repo/FactoryOps/.factoryops-local"),
+        )
+
+    def test_queue_artifacts_reject_untrusted_paths_and_digest_mismatch(self):
+        with self.assertRaisesRegex(ValueError, "必须包含图片数据"):
+            demo_server._store_queue_images(
+                [{"name": "x", "artifact": "../.env.local"}]
+            )
+        with self.assertRaisesRegex(ValueError, "摘要不匹配"):
+            demo_server._store_queue_images(
+                [{"name": "x", "data": "YQ==", "sha256": "0" * 64}]
+            )
+        with self.assertRaisesRegex(ValueError, "Artifact 标识无效"):
+            demo_server._hydrate_queue_images(
+                [{"name": "x", "artifact": "../.env.local"}]
+            )
 
     def test_completed_batch_result_is_restored_with_events(self):
         run = demo_server.create_run("batch-003", 2)

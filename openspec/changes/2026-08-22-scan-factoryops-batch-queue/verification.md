@@ -30,3 +30,10 @@
 - 迁移证据：旧库实际包含 2 条同步 Run、2 条异步 Run；页面恢复显示其中 3 条已完成运行，另 1 条 `RUNNING` 不伪装为可回放的完成记录。通用与 Vision API Key 均通过非敏感布尔检查确认已加载，未输出值。
 - UI 修复：开始、取消、重试均显示明确结果；后端错误直接呈现；失败行显示失败原因；队列进入终态后停止轮询。
 - 新增回归后局部测试：19 passed；Contract：154 passed；Ruff、Node 语法、Python 编译和 diff check 结果见最终提交验证。
+
+### 独立安全复审修复
+
+- 复审发现 Artifact 标识可被客户端伪造并形成路径越界风险；现已改为服务端按字节计算 SHA-256，拒绝摘要不匹配、API 的 artifact-only 输入以及非 64 位小写十六进制旧 Artifact 行，并在读取前验证解析后的父目录。
+- `.factoryops-local/` 已写入版本化 `.gitignore`，`git check-ignore` 实际命中；不再仅依赖单机 `.git/info/exclude`。
+- 共享目录解析新增 `FactoryOps.worktrees/<branch>` sibling 布局回归。
+- 修复后局部测试：20 passed。

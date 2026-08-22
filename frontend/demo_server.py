@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +21,9 @@ def resolve_shared_state_dir(root):
     worktree_root = root.parent
     if worktree_root.parent.name == ".worktrees":
         return worktree_root.parent.parent / ".factoryops-local"
+    if worktree_root.parent.name.endswith(".worktrees"):
+        repository_name = worktree_root.parent.name.removesuffix(".worktrees")
+        return worktree_root.parent.parent / repository_name / ".factoryops-local"
     return worktree_root / ".factoryops-local"
 
 
@@ -331,10 +335,11 @@ def _store_queue_images(images):
     stored = []
     for image in images:
         if "data" not in image:
-            stored.append(image)
-            continue
+            raise ValueError("批次清单必须包含图片数据")
         payload = base64.b64decode(image["data"], validate=True)
-        digest = image.get("sha256") or hashlib.sha256(payload).hexdigest()
+        digest = hashlib.sha256(payload).hexdigest()
+        if image.get("sha256") and image["sha256"].lower() != digest:
+            raise ValueError("图片摘要不匹配")
         artifact = artifact_dir / digest
         if not artifact.exists():
             artifact.write_bytes(payload)
@@ -351,7 +356,13 @@ def _hydrate_queue_images(images):
         if "data" in image:
             hydrated.append(image)
             continue
-        artifact = DB_PATH.parent / "queue-images" / image["artifact"]
+        artifact_id = image.get("artifact", "")
+        if not re.fullmatch(r"[0-9a-f]{64}", artifact_id):
+            raise ValueError("Artifact 标识无效")
+        artifact_dir = (DB_PATH.parent / "queue-images").resolve()
+        artifact = (artifact_dir / artifact_id).resolve()
+        if artifact.parent != artifact_dir:
+            raise ValueError("Artifact 路径越界")
         hydrated.append(
             {key: value for key, value in image.items() if key != "artifact"}
             | {"data": base64.b64encode(artifact.read_bytes()).decode()}

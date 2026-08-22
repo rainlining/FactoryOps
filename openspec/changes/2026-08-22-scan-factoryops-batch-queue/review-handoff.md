@@ -23,6 +23,8 @@
 
 本次恢复修复将运行态统一到仓库根目录 `.factoryops-local/`，避免切换 worktree 后丢失 API 配置与历史。旧历史已迁移，页面实际恢复 3 条已完成运行；1 条遗留 `RUNNING` 记录保留在数据库但不作为完成回放展示。队列图片改为 Artifact 引用，避免 SQLite 保存 base64。按钮现在提供开始、取消、重试及失败原因反馈，终态停止轮询。密钥文件和运行数据库均未纳入 Git。
 
+独立复审的 1 Critical、2 Important 已修复：Artifact 路径与摘要现在由服务端校验并失败关闭；`.factoryops-local/` 已纳入版本化忽略；共享路径同时覆盖内部 `.worktrees` 和 sibling `FactoryOps.worktrees`。新增安全回归后局部为 20 passed。
+
 ## Review 恢复
 
 ```powershell
