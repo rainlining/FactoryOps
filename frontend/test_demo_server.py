@@ -113,6 +113,133 @@ class ProgressStoreTest(unittest.TestCase):
         self.assertEqual(deleted, 1)
         self.assertIsNone(demo_server.get_run(run["run_id"]))
 
+    def test_scan_batch_queue_is_idempotent_and_revisions_changed_content(self):
+        first = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-001",
+                    "display_name": "batch-001",
+                    "manifest_digest": "aaa",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                },
+                {
+                    "batch_id": "batch-002",
+                    "display_name": "batch-002",
+                    "manifest_digest": "bbb",
+                    "images": [{"name": "b.png", "data": "Yg=="}],
+                },
+            ],
+        )
+        replay = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-001",
+                    "display_name": "batch-001",
+                    "manifest_digest": "aaa",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                },
+            ],
+        )
+        changed = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-001",
+                    "display_name": "batch-001",
+                    "manifest_digest": "ccc",
+                    "images": [{"name": "c.png", "data": "Yw=="}],
+                },
+            ],
+        )
+
+        self.assertEqual(first["summary"]["total"], 2)
+        self.assertEqual(replay["items"][0]["revision"], 1)
+        self.assertEqual(changed["items"][0]["revision"], 2)
+        self.assertEqual(len(demo_server.get_batch_queue()["items"]), 3)
+
+    def test_route_batch_outcome_fails_closed_and_routes_approval(self):
+        self.assertEqual(
+            demo_server.route_batch_outcome(
+                {"decision": "PASS", "requires_human_approval": False}
+            ),
+            "QA_ACCEPTED",
+        )
+        self.assertEqual(
+            demo_server.route_batch_outcome(
+                {"decision": "STOP_LINE", "requires_human_approval": True}
+            ),
+            "WAITING_FOR_APPROVAL",
+        )
+        self.assertEqual(
+            demo_server.route_batch_outcome(
+                {"decision": "RECHECK", "requires_human_approval": False}
+            ),
+            "RECHECK_REQUIRED",
+        )
+        self.assertEqual(
+            demo_server.route_batch_outcome({"decision": "unknown"}), "FAILED"
+        )
+        self.assertNotEqual(
+            demo_server.route_batch_outcome(
+                {"coordinator": "批次不合格，发现异常", "risk": "需要进一步判断"}
+            ),
+            "QA_ACCEPTED",
+        )
+
+    def test_cancel_queued_item_never_creates_a_run(self):
+        queue = demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-001",
+                    "display_name": "batch-001",
+                    "manifest_digest": "aaa",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                }
+            ],
+        )
+        item_id = queue["items"][0]["item_id"]
+
+        self.assertTrue(demo_server.cancel_queue_item(item_id))
+        restored = demo_server.get_batch_queue()["items"][0]
+        self.assertEqual(restored["status"], "CANCELLED")
+        self.assertIsNone(restored["run_id"])
+
+    def test_queue_continues_after_an_approval_outcome(self):
+        demo_server.scan_batch_queue(
+            "factoryops",
+            [
+                {
+                    "batch_id": "batch-risk",
+                    "display_name": "batch-risk",
+                    "manifest_digest": "risk",
+                    "images": [{"name": "a.png", "data": "YQ=="}],
+                },
+                {
+                    "batch_id": "batch-good",
+                    "display_name": "batch-good",
+                    "manifest_digest": "good",
+                    "images": [{"name": "b.png", "data": "Yg=="}],
+                },
+            ],
+        )
+
+        def fake_agent(role, instruction, context, image_data=None):
+            if context.get("batch") == "batch-risk" and role in {"coordinator", "risk"}:
+                return "建议 HOLD_BATCH，需要人工审批"
+            return "检验合格，无异常，PASS"
+
+        self.assertTrue(demo_server.start_queue(fake_agent))
+        demo_server.QUEUE_WORKER.join(timeout=5)
+        items = demo_server.get_batch_queue()["items"]
+
+        self.assertEqual(
+            [item["status"] for item in items], ["WAITING_FOR_APPROVAL", "QA_ACCEPTED"]
+        )
+        self.assertTrue(all(item["run_id"] for item in items))
+
 
 if __name__ == "__main__":
     unittest.main()

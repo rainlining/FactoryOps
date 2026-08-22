@@ -5,6 +5,8 @@ let currentRun = null;
 let polling = null;
 let startedAt = null;
 let historyRecords = [];
+let queueRecords = [];
+let queuePolling = null;
 
 function notice(message) {
   $("notice").textContent = message;
@@ -29,6 +31,43 @@ function fileData(file) {
     reader.readAsDataURL(file);
   });
 }
+
+function groupBatchFiles(files) {
+  const groups = new Map(); let rootName = "factoryops"; let ignored = 0;
+  for (const file of files) {
+    const parts = String(file.webkitRelativePath || file.name).split("/").filter(Boolean);
+    if (parts.length !== 3 || !file.type.startsWith("image/")) { ignored += 1; continue; }
+    rootName = parts[0];
+    if (!groups.has(parts[1])) groups.set(parts[1], []);
+    groups.get(parts[1]).push(file);
+  }
+  return {rootName, ignored, batches: [...groups].map(([displayName, batchFiles]) => ({displayName, files: batchFiles}))};
+}
+
+async function sha256(value) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(part => part.toString(16).padStart(2, "0")).join("");
+}
+
+async function buildBatchManifest(candidate) {
+  const entries = [];
+  for (const file of candidate.files) entries.push({file, relative_path:file.webkitRelativePath, size:file.size, sha256:await sha256(await file.arrayBuffer())});
+  entries.sort((a,b)=>a.relative_path.localeCompare(b.relative_path));
+  const images = await Promise.all(entries.map(async entry=>({...await fileData(entry.file),relative_path:entry.relative_path,size:entry.size,sha256:entry.sha256})));
+  return {batch_id:candidate.displayName.replace(/[^a-zA-Z0-9._-]/g,"-")||"batch",display_name:candidate.displayName,manifest_digest:await sha256(entries.map(entry=>`${entry.relative_path}:${entry.size}:${entry.sha256}`).join("\n")),images};
+}
+
+const queueStatusNames={QUEUED:"待检测",STARTING:"正在启动",RUNNING:"检测中",QA_ACCEPTED:"质检通过",RECHECK_REQUIRED:"待复检",WAITING_FOR_APPROVAL:"待审批",FAILED:"失败",CANCELLED:"已取消"};
+function renderQueue(queue){
+  queueRecords=queue.items||[];const summary=queue.summary||{};
+  $("queueSummary").textContent=`${queue.root_name||"未选择目录"} · ${summary.total||0} 个批次 · 通过 ${summary.QA_ACCEPTED||0} · 待审批 ${summary.WAITING_FOR_APPROVAL||0} · 失败 ${summary.FAILED||0}`;
+  $("startQueue").disabled=!queueRecords.some(item=>item.status==="QUEUED");$("pauseQueue").disabled=queue.status!=="RUNNING";
+  $("queueList").replaceChildren(...(queueRecords.length?queueRecords.map(item=>{const row=document.createElement("article");row.className="queue-row";row.innerHTML='<div><strong></strong><small></small></div><span></span><span></span><span class="queue-state"></span><div class="top-actions"></div>';row.querySelector("strong").textContent=item.display_name;row.querySelector("small").textContent=`revision ${item.revision}${item.run_id?` · ${item.run_id}`:""}`;const spans=row.querySelectorAll(":scope > span");spans[0].textContent=`${item.image_count} 张`;spans[1].textContent=item.outcome||"—";spans[2].textContent=queueStatusNames[item.status]||item.status;spans[2].classList.add(item.status.toLowerCase());const actions=row.querySelector(".top-actions");if(item.run_id){const view=document.createElement("button");view.className="secondary-button";view.textContent="查看";view.onclick=()=>showQueueRun(item.run_id);actions.append(view)}if(["FAILED","CANCELLED"].includes(item.status)){const retry=document.createElement("button");retry.className="secondary-button";retry.textContent="重试";retry.onclick=()=>queueAction(item.item_id,"retry");actions.append(retry)}if(["QUEUED","RUNNING","STARTING"].includes(item.status)){const cancel=document.createElement("button");cancel.className="secondary-button";cancel.textContent="取消";cancel.onclick=()=>queueAction(item.item_id,"cancel");actions.append(cancel)}return row}):[Object.assign(document.createElement("p"),{className:"empty",textContent:"队列为空。"})]));
+}
+async function refreshQueue(){const response=await fetch("/api/batch-queues/current",{cache:"no-store"});if(!response.ok)throw new Error("无法读取批次队列");const queue=await response.json();renderQueue(queue);const active=queueRecords.find(item=>["STARTING","RUNNING"].includes(item.status)&&item.run_id);if(active)await showQueueRun(active.run_id,false);return queue}
+async function showQueueRun(runId,switchToWorkflow=true){const response=await fetch(`/api/runs/${runId}`,{cache:"no-store"});if(!response.ok)return;const run=await response.json();currentRun=run;renderProgress(run);if(run.result)showResult(run.result,run.progress_events||[]);if(switchToWorkflow)switchView("workflow")}
+async function queueAction(itemId,action){const response=await fetch(`/api/batch-queue-items/${itemId}/${action}`,{method:"POST"});if(!response.ok)notice("当前批次无法执行该操作");await refreshQueue()}
 
 function stageProgress(events, productCount) {
   const succeeded = (stage, role) => events.filter(event => event.stage === stage && event.status === "SUCCEEDED" && (!role || event.agent_role === role));
@@ -178,19 +217,18 @@ async function refreshHistory() {
 }
 
 $("batchFolder").addEventListener("change", event => {
-  const files = [...event.target.files].filter(file => file.type.startsWith("image/"));
-  const name = files[0]?.webkitRelativePath?.split("/")[0] || "未命名批次";
-  batch = files.length ? {name, files} : null;
-  $("selectionCount").textContent = `${files.length} 张`;
-  $("imageGrid").replaceChildren(...files.map((file, index) => {
+  const grouped=groupBatchFiles([...event.target.files]);
+  $("selectionCount").textContent=`${grouped.batches.length} 个批次`;
+  $("imageGrid").replaceChildren(...grouped.batches.flatMap(candidate=>candidate.files.map((file,index)=>{
     const card = document.createElement("article"); card.className = "image-card";
-    card.innerHTML = `<img><strong>${clean(file.name)}</strong><small>产品 ${index + 1} · ${clean(name)}</small>`;
+    card.innerHTML = `<img><strong>${clean(file.name)}</strong><small>产品 ${index + 1} · ${clean(candidate.displayName)}</small>`;
     card.querySelector("img").src = URL.createObjectURL(file); card.querySelector("img").alt = file.name; return card;
-  }));
-  $("batchName").textContent = `${name} · ${files.length} 个产品`;
-  $("runState").textContent = "批次已就绪，等待开始检测";
-  switchView("workflow");
+  })));
+  Promise.all(grouped.batches.map(buildBatchManifest)).then(async batches=>{const response=await fetch("/api/batch-queues/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({root_name:grouped.rootName,batches})});const data=await response.json();if(!response.ok)throw new Error(data.error);renderQueue(data);notice(`已导入 ${batches.length} 个批次，忽略 ${grouped.ignored} 个文件；尚未调用模型`);switchView("workflow")}).catch(error=>notice(error.message));
 });
+
+$("startQueue").addEventListener("click",async()=>{const response=await fetch("/api/batch-queues/current/start",{method:"POST"});if(!response.ok){notice("没有可启动的批次");return}if(!queuePolling)queuePolling=setInterval(()=>refreshQueue().catch(error=>notice(error.message)),900);await refreshQueue()});
+$("pauseQueue").addEventListener("click",async()=>{await fetch("/api/batch-queues/current/pause",{method:"POST"});await refreshQueue();notice("已暂停派发；正在运行的批次会继续完成")});
 
 $("startPipeline").addEventListener("click", () => runBatch().catch(error => notice(error.message)));
 $("cancelPipeline").addEventListener("click", async () => {
@@ -209,3 +247,4 @@ $("productLibraryNav").addEventListener("click", () => switchView("library"));
 $("menuButton").addEventListener("click", () => $("sidebar").classList.toggle("open"));
 setInterval(() => { if (startedAt && polling) $("elapsedTime").textContent = `已耗时 ${new Date(Date.now() - startedAt).toISOString().slice(14, 19)}`; }, 1000);
 refreshHistory().catch(error => notice(error.message));
+refreshQueue().catch(error => notice(error.message));

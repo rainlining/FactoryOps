@@ -29,6 +29,15 @@ class DashboardContractTest(unittest.TestCase):
         self.assertIn("showStoredRun(record)", script)
         self.assertNotIn('button.addEventListener("click", runBatch)', script)
 
+    def test_product_library_imports_a_root_into_a_batch_queue(self):
+        html = (ROOT / "dashboard.html").read_text(encoding="utf-8")
+        script = (ROOT / "dashboard.js").read_text(encoding="utf-8")
+        for element_id in ("queueSummary", "queueList", "startQueue", "pauseQueue"):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("function groupBatchFiles", script)
+        self.assertIn('crypto.subtle.digest("SHA-256"', script)
+        self.assertIn('fetch("/api/batch-queues/scan"', script)
+
 
 if __name__ == "__main__":
     unittest.main()

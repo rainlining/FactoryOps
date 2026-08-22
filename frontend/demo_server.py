@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "demo_runs.sqlite3"
 LOCAL_CONFIG = {}
 EVENT_LOCK = threading.Lock()
+QUEUE_LOCK = threading.Lock()
+QUEUE_WORKER = None
 
 
 def load_local_config():
@@ -54,6 +56,12 @@ def init_db():
             )
         db.execute(
             "CREATE TABLE IF NOT EXISTS progress_events (run_id TEXT NOT NULL, sequence INTEGER NOT NULL, occurred_at TEXT NOT NULL, stage TEXT NOT NULL, agent_role TEXT NOT NULL, status TEXT NOT NULL, completed_units INTEGER NOT NULL, total_units INTEGER NOT NULL, product_ref TEXT, summary TEXT NOT NULL, PRIMARY KEY (run_id, sequence))"
+        )
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS batch_queue_control (id INTEGER PRIMARY KEY CHECK (id = 1), root_name TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS batch_queue_items (item_id INTEGER PRIMARY KEY AUTOINCREMENT, root_name TEXT NOT NULL, batch_id TEXT NOT NULL, display_name TEXT NOT NULL, revision INTEGER NOT NULL, manifest_digest TEXT NOT NULL, images TEXT NOT NULL, status TEXT NOT NULL, run_id TEXT, retry_of TEXT, outcome TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(root_name, batch_id, manifest_digest))"
         )
 
 
@@ -222,6 +230,293 @@ def delete_runs(run_ids):
     return deleted
 
 
+def _queue_item(row):
+    return {
+        "item_id": row[0],
+        "root_name": row[1],
+        "batch_id": row[2],
+        "display_name": row[3],
+        "revision": row[4],
+        "manifest_digest": row[5],
+        "image_count": len(json.loads(row[6])),
+        "status": row[7],
+        "run_id": row[8],
+        "retry_of": row[9],
+        "outcome": row[10],
+        "error": row[11],
+        "created_at": row[12],
+        "updated_at": row[13],
+    }
+
+
+def _select_queue_items(db, where="", params=()):
+    return [
+        _queue_item(row)
+        for row in db.execute(
+            "SELECT item_id, root_name, batch_id, display_name, revision, manifest_digest, images, status, run_id, retry_of, outcome, error, created_at, updated_at FROM batch_queue_items "
+            + where
+            + " ORDER BY item_id",
+            params,
+        ).fetchall()
+    ]
+
+
+def scan_batch_queue(root_name, batches):
+    if not root_name or not isinstance(batches, list) or not batches:
+        raise ValueError("根目录至少包含一个有效批次")
+    affected = []
+    now = utc_now()
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute(
+            "INSERT INTO batch_queue_control(id, root_name, status, updated_at) VALUES (1, ?, 'PAUSED', ?) ON CONFLICT(id) DO UPDATE SET root_name=excluded.root_name, updated_at=excluded.updated_at",
+            (root_name, now),
+        )
+        for batch in batches:
+            images = batch.get("images") or []
+            if (
+                not batch.get("batch_id")
+                or not batch.get("manifest_digest")
+                or not images
+            ):
+                raise ValueError("批次必须包含身份、清单摘要和图片")
+            existing = db.execute(
+                "SELECT item_id FROM batch_queue_items WHERE root_name=? AND batch_id=? AND manifest_digest=?",
+                (root_name, batch["batch_id"], batch["manifest_digest"]),
+            ).fetchone()
+            if existing:
+                item_id = existing[0]
+            else:
+                revision = db.execute(
+                    "SELECT COALESCE(MAX(revision), 0) + 1 FROM batch_queue_items WHERE root_name=? AND batch_id=?",
+                    (root_name, batch["batch_id"]),
+                ).fetchone()[0]
+                item_id = db.execute(
+                    "INSERT INTO batch_queue_items(root_name,batch_id,display_name,revision,manifest_digest,images,status,created_at,updated_at) VALUES (?,?,?,?,?,?,'QUEUED',?,?)",
+                    (
+                        root_name,
+                        batch["batch_id"],
+                        batch.get("display_name") or batch["batch_id"],
+                        revision,
+                        batch["manifest_digest"],
+                        json.dumps(images, ensure_ascii=False),
+                        now,
+                        now,
+                    ),
+                ).lastrowid
+            affected.extend(_select_queue_items(db, "WHERE item_id=?", (item_id,)))
+    current = get_batch_queue()
+    return {**current, "items": affected}
+
+
+def get_batch_queue():
+    with sqlite3.connect(DB_PATH) as db:
+        control = db.execute(
+            "SELECT root_name, status, updated_at FROM batch_queue_control WHERE id=1"
+        ).fetchone()
+        items = _select_queue_items(db)
+    counts = {}
+    for item in items:
+        counts[item["status"]] = counts.get(item["status"], 0) + 1
+    return {
+        "root_name": control[0] if control else None,
+        "status": control[1] if control else "EMPTY",
+        "updated_at": control[2] if control else None,
+        "summary": {"total": len(items), **counts},
+        "items": items,
+    }
+
+
+def route_batch_outcome(result):
+    decision = str(result.get("decision") or "").upper()
+    inferred = not decision
+    if not decision:
+        evidence = f"{result.get('coordinator', '')} {result.get('risk', '')}".upper()
+        negative_evidence = evidence.replace("无异常", "")
+        if any(
+            word in evidence
+            for word in ("STOP_LINE", "HOLD_BATCH", "审批", "停线", "冻结")
+        ):
+            decision = "HOLD_BATCH"
+        elif any(
+            word in negative_evidence
+            for word in ("RECHECK", "复检", "证据不足", "不合格", "异常")
+        ):
+            decision = "RECHECK"
+        elif any(word in evidence for word in ("PASS", "合格", "无异常", "放行")):
+            decision = "PASS"
+    if result.get("requires_human_approval") is True or decision in {
+        "HOLD_BATCH",
+        "STOP_LINE",
+    }:
+        return "WAITING_FOR_APPROVAL"
+    if decision == "RECHECK":
+        return "RECHECK_REQUIRED"
+    if decision in {"PASS", "NO_ACTION", "QA_ACCEPTED"} and (
+        result.get("requires_human_approval") is False
+        or (inferred and result.get("requires_human_approval") is None)
+    ):
+        return "QA_ACCEPTED"
+    return "FAILED"
+
+
+def cancel_queue_item(item_id):
+    with sqlite3.connect(DB_PATH) as db:
+        row = db.execute(
+            "SELECT status, run_id FROM batch_queue_items WHERE item_id=?", (item_id,)
+        ).fetchone()
+        if not row:
+            return False
+        if row[0] == "QUEUED":
+            return (
+                db.execute(
+                    "UPDATE batch_queue_items SET status='CANCELLED', updated_at=? WHERE item_id=? AND status='QUEUED'",
+                    (utc_now(), item_id),
+                ).rowcount
+                == 1
+            )
+        return bool(row[1] and request_cancel(row[1]))
+
+
+def pause_queue():
+    with sqlite3.connect(DB_PATH) as db:
+        return (
+            db.execute(
+                "UPDATE batch_queue_control SET status='PAUSED', updated_at=? WHERE id=1",
+                (utc_now(),),
+            ).rowcount
+            == 1
+        )
+
+
+def _run_queue(agent_caller):
+    global QUEUE_WORKER
+    try:
+        while True:
+            with sqlite3.connect(DB_PATH) as db:
+                db.execute("BEGIN IMMEDIATE")
+                control = db.execute(
+                    "SELECT status FROM batch_queue_control WHERE id=1"
+                ).fetchone()
+                row = db.execute(
+                    "SELECT item_id,batch_id,images,retry_of FROM batch_queue_items WHERE status='QUEUED' ORDER BY item_id LIMIT 1"
+                ).fetchone()
+                if not control or control[0] != "RUNNING" or not row:
+                    return
+                claimed = db.execute(
+                    "UPDATE batch_queue_items SET status='STARTING', updated_at=? WHERE item_id=? AND status='QUEUED'",
+                    (utc_now(), row[0]),
+                ).rowcount
+                if not claimed:
+                    continue
+            item_id, batch_id, images_json, retry_of = row
+            images = json.loads(images_json)
+            try:
+                run = create_run(batch_id, len(images))
+                with sqlite3.connect(DB_PATH) as db:
+                    db.execute(
+                        "UPDATE batch_queue_items SET status='RUNNING', run_id=?, updated_at=? WHERE item_id=?",
+                        (run["run_id"], utc_now(), item_id),
+                    )
+                if retry_of:
+                    append_progress_event(
+                        run["run_id"],
+                        "INGEST",
+                        "system",
+                        "RETRYING",
+                        0,
+                        len(images),
+                        f"从 {retry_of} 重试",
+                    )
+                process_batch_run(run["run_id"], batch_id, images, agent_caller)
+                finished = get_run(run["run_id"])
+                outcome = (
+                    route_batch_outcome(finished.get("result") or {})
+                    if finished["status"] == "SUCCEEDED"
+                    else finished["status"]
+                )
+                status = (
+                    outcome
+                    if outcome
+                    in {"QA_ACCEPTED", "RECHECK_REQUIRED", "WAITING_FOR_APPROVAL"}
+                    else "FAILED"
+                    if outcome == "FAILED"
+                    else outcome
+                )
+                with sqlite3.connect(DB_PATH) as db:
+                    db.execute(
+                        "UPDATE batch_queue_items SET status=?, outcome=?, error=?, updated_at=? WHERE item_id=?",
+                        (
+                            status,
+                            outcome,
+                            None if status != "FAILED" else "批次结论无法安全路由",
+                            utc_now(),
+                            item_id,
+                        ),
+                    )
+            except (
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+                sqlite3.Error,
+            ) as error:
+                with sqlite3.connect(DB_PATH) as db:
+                    db.execute(
+                        "UPDATE batch_queue_items SET status='FAILED', error=?, updated_at=? WHERE item_id=?",
+                        (str(error), utc_now(), item_id),
+                    )
+    finally:
+        with QUEUE_LOCK:
+            QUEUE_WORKER = None
+
+
+def start_queue(agent_caller=None):
+    global QUEUE_WORKER
+    with sqlite3.connect(DB_PATH) as db:
+        if not db.execute(
+            "SELECT 1 FROM batch_queue_items WHERE status='QUEUED'"
+        ).fetchone():
+            return False
+        db.execute(
+            "UPDATE batch_queue_control SET status='RUNNING', updated_at=? WHERE id=1",
+            (utc_now(),),
+        )
+    with QUEUE_LOCK:
+        if QUEUE_WORKER and QUEUE_WORKER.is_alive():
+            return True
+        QUEUE_WORKER = threading.Thread(
+            target=_run_queue, args=(agent_caller or call_agent,), daemon=True
+        )
+        QUEUE_WORKER.start()
+    return True
+
+
+def retry_queue_item(item_id):
+    with sqlite3.connect(DB_PATH) as db:
+        row = db.execute(
+            "SELECT root_name,batch_id,display_name,revision,manifest_digest,images,run_id,status FROM batch_queue_items WHERE item_id=?",
+            (item_id,),
+        ).fetchone()
+        if not row or row[7] not in {"FAILED", "CANCELLED"}:
+            return None
+        now = utc_now()
+        new_id = db.execute(
+            "INSERT INTO batch_queue_items(root_name,batch_id,display_name,revision,manifest_digest,images,status,retry_of,created_at,updated_at) VALUES (?,?,?,?,?,?,'QUEUED',?,?,?)",
+            (
+                row[0],
+                row[1],
+                row[2],
+                row[3] + 1,
+                f"{row[4]}-retry-{item_id}",
+                row[5],
+                row[6],
+                now,
+                now,
+            ),
+        ).lastrowid
+        return _select_queue_items(db, "WHERE item_id=?", (new_id,))[0]
+
+
 class DemoHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -237,6 +532,9 @@ class DemoHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/batch-queues/current":
+            self._json(200, get_batch_queue())
+            return
         if parsed.path.startswith("/api/runs/"):
             parts = parsed.path.strip("/").split("/")
             run_id = parts[2] if len(parts) >= 3 else ""
@@ -356,6 +654,38 @@ class DemoHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        if self.path == "/api/batch-queues/scan":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                request = json.loads(self.rfile.read(length) or b"{}")
+                self._json(
+                    200,
+                    scan_batch_queue(request.get("root_name"), request.get("batches")),
+                )
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                self._json(400, {"error": str(error)})
+            return
+        if self.path == "/api/batch-queues/current/start":
+            accepted = start_queue()
+            self._json(202 if accepted else 409, {"accepted": accepted})
+            return
+        if self.path == "/api/batch-queues/current/pause":
+            self._json(200, {"paused": pause_queue()})
+            return
+        if self.path.startswith("/api/batch-queue-items/"):
+            parts = self.path.strip("/").split("/")
+            if len(parts) == 4 and parts[2].isdigit():
+                item_id = int(parts[2])
+                if parts[3] == "cancel":
+                    accepted = cancel_queue_item(item_id)
+                    self._json(202 if accepted else 409, {"accepted": accepted})
+                    return
+                if parts[3] == "retry":
+                    item = retry_queue_item(item_id)
+                    self._json(
+                        201 if item else 409, item or {"error": "当前批次不可重试"}
+                    )
+                    return
         if self.path.startswith("/api/runs/") and self.path.endswith("/cancel"):
             run_id = self.path.strip("/").split("/")[2]
             accepted = request_cancel(run_id)
